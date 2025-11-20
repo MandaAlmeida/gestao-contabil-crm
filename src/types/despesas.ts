@@ -6,6 +6,7 @@ export interface Despesa {
   data: string;
   fixo: boolean;
   pago: boolean;
+  ativo: boolean;
   createdAt: string;
   updatedAt: string;
 }

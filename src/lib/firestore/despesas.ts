@@ -5,7 +5,6 @@ import {
   getDoc,
   addDoc,
   updateDoc,
-  deleteDoc,
   query,
   orderBy,
 } from "firebase/firestore";
@@ -17,10 +16,12 @@ const COLLECTION_NAME = "despesas";
 export async function getDespesas(): Promise<Despesa[]> {
   const q = query(collection(db, COLLECTION_NAME), orderBy("data", "desc"));
   const querySnapshot = await getDocs(q);
-  return querySnapshot.docs.map((doc) => ({
-    id: doc.id,
-    ...doc.data(),
-  })) as Despesa[];
+  return querySnapshot.docs
+    .map((doc) => ({
+      id: doc.id,
+      ...doc.data(),
+    }))
+    .filter((despesa) => despesa.ativo !== false) as Despesa[];
 }
 
 export async function getDespesa(id: string): Promise<Despesa | null> {
@@ -37,6 +38,7 @@ export async function createDespesa(despesa: Omit<Despesa, "id" | "createdAt" | 
   const now = new Date().toISOString();
   const docRef = await addDoc(collection(db, COLLECTION_NAME), {
     ...despesa,
+    ativo: true,
     createdAt: now,
     updatedAt: now,
   });
@@ -53,6 +55,9 @@ export async function updateDespesa(id: string, updates: Partial<Omit<Despesa, "
 
 export async function deleteDespesa(id: string): Promise<void> {
   const docRef = doc(db, COLLECTION_NAME, id);
-  await deleteDoc(docRef);
+  await updateDoc(docRef, {
+    ativo: false,
+    updatedAt: new Date().toISOString(),
+  });
 }
 

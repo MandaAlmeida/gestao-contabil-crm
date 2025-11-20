@@ -5,7 +5,6 @@ import {
   getDoc,
   addDoc,
   updateDoc,
-  deleteDoc,
   query,
   orderBy,
 } from "firebase/firestore";
@@ -17,10 +16,12 @@ const COLLECTION_NAME = "sintegra";
 export async function getSintegras(): Promise<Sintegra[]> {
   const q = query(collection(db, COLLECTION_NAME), orderBy("dataPrazo", "desc"));
   const querySnapshot = await getDocs(q);
-  return querySnapshot.docs.map((doc) => ({
-    id: doc.id,
-    ...doc.data(),
-  })) as Sintegra[];
+  return querySnapshot.docs
+    .map((doc) => ({
+      id: doc.id,
+      ...doc.data(),
+    }))
+    .filter((sintegra) => sintegra.ativo !== false) as Sintegra[];
 }
 
 export async function getSintegra(id: string): Promise<Sintegra | null> {
@@ -37,6 +38,7 @@ export async function createSintegra(sintegra: Omit<Sintegra, "id" | "createdAt"
   const now = new Date().toISOString();
   const docRef = await addDoc(collection(db, COLLECTION_NAME), {
     ...sintegra,
+    ativo: true,
     createdAt: now,
     updatedAt: now,
   });
@@ -53,6 +55,9 @@ export async function updateSintegra(id: string, updates: Partial<Omit<Sintegra,
 
 export async function deleteSintegra(id: string): Promise<void> {
   const docRef = doc(db, COLLECTION_NAME, id);
-  await deleteDoc(docRef);
+  await updateDoc(docRef, {
+    ativo: false,
+    updatedAt: new Date().toISOString(),
+  });
 }
 

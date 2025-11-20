@@ -5,7 +5,6 @@ import {
   getDoc,
   addDoc,
   updateDoc,
-  deleteDoc,
   deleteField,
   query,
   orderBy,
@@ -25,7 +24,7 @@ export async function getUsuarios(): Promise<Usuario[]> {
       id: doc.id,
       ...doc.data(),
     })) as Usuario[];
-    return usuarios.filter((usuario) => usuario.ativo);
+    return usuarios.filter((usuario) => usuario.ativo !== false);
   } catch (error: any) {
     // Se orderBy falhar (índice não criado), tentar sem orderBy
     if (
@@ -39,7 +38,7 @@ export async function getUsuarios(): Promise<Usuario[]> {
         ...doc.data(),
       })) as Usuario[];
       return usuarios
-        .filter((usuario) => usuario.ativo)
+        .filter((usuario) => usuario.ativo !== false)
         .sort((a, b) => a.nome.localeCompare(b.nome));
     }
     throw error;
@@ -163,5 +162,8 @@ export async function updateUsuario(
 
 export async function deleteUsuario(id: string): Promise<void> {
   const docRef = doc(db, COLLECTION_NAME, id);
-  await deleteDoc(docRef);
+  await updateDoc(docRef, {
+    ativo: false,
+    updatedAt: new Date().toISOString(),
+  });
 }

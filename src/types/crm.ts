@@ -3,6 +3,7 @@ export interface Contabilidade {
   nome: string;
   cnpj: string;
   cidade: string;
+  ativo: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -16,6 +17,7 @@ export interface Cliente {
   contabilidade: string;
   responsavel: string;
   observacoes: string;
+  ativo: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -31,6 +33,7 @@ export interface Financeiro {
   dataPagamento?: string | null;
   meioPagamento: "Pix" | "Boleto";
   observacoes: string;
+  ativo: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -44,6 +47,7 @@ export interface Certificado {
   dataVencimento: string;
   status: "Válido" | "A Vencer" | "Vencido";
   observacoes: string;
+  ativo: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -57,6 +61,7 @@ export interface Renovacao {
   valorRenovacao: number;
   status: "Em Negociação" | "Renovado" | "Cancelado";
   observacoes: string;
+  ativo: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -69,6 +74,7 @@ export interface Sintegra {
   acesso: string;
   status: "Pendente" | "Em Andamento" | "Concluído";
   observacoes: string;
+  ativo: boolean;
   createdAt: string;
   updatedAt: string;
 }

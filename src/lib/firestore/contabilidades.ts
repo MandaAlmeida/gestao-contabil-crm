@@ -5,7 +5,6 @@ import {
   getDoc,
   addDoc,
   updateDoc,
-  deleteDoc,
   query,
   orderBy,
 } from "firebase/firestore";
@@ -17,10 +16,12 @@ const COLLECTION_NAME = "contabilidades";
 export async function getContabilidades(): Promise<Contabilidade[]> {
   const q = query(collection(db, COLLECTION_NAME), orderBy("nome", "asc"));
   const querySnapshot = await getDocs(q);
-  return querySnapshot.docs.map((doc) => ({
-    id: doc.id,
-    ...doc.data(),
-  })) as Contabilidade[];
+  return querySnapshot.docs
+    .map((doc) => ({
+      id: doc.id,
+      ...doc.data(),
+    }))
+    .filter((contabilidade) => contabilidade.ativo !== false) as Contabilidade[];
 }
 
 export async function getContabilidade(id: string): Promise<Contabilidade | null> {
@@ -39,6 +40,7 @@ export async function createContabilidade(
   const now = new Date().toISOString();
   const docRef = await addDoc(collection(db, COLLECTION_NAME), {
     ...contabilidade,
+    ativo: true,
     createdAt: now,
     updatedAt: now,
   });
@@ -58,6 +60,9 @@ export async function updateContabilidade(
 
 export async function deleteContabilidade(id: string): Promise<void> {
   const docRef = doc(db, COLLECTION_NAME, id);
-  await deleteDoc(docRef);
+  await updateDoc(docRef, {
+    ativo: false,
+    updatedAt: new Date().toISOString(),
+  });
 }
 

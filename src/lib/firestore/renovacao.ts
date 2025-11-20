@@ -5,7 +5,6 @@ import {
   getDoc,
   addDoc,
   updateDoc,
-  deleteDoc,
   query,
   orderBy,
 } from "firebase/firestore";
@@ -17,10 +16,12 @@ const COLLECTION_NAME = "renovacao";
 export async function getRenovacoes(): Promise<Renovacao[]> {
   const q = query(collection(db, COLLECTION_NAME), orderBy("dataRenovacao", "desc"));
   const querySnapshot = await getDocs(q);
-  return querySnapshot.docs.map((doc) => ({
-    id: doc.id,
-    ...doc.data(),
-  })) as Renovacao[];
+  return querySnapshot.docs
+    .map((doc) => ({
+      id: doc.id,
+      ...doc.data(),
+    }))
+    .filter((renovacao) => renovacao.ativo !== false) as Renovacao[];
 }
 
 export async function getRenovacao(id: string): Promise<Renovacao | null> {
@@ -37,6 +38,7 @@ export async function createRenovacao(renovacao: Omit<Renovacao, "id" | "created
   const now = new Date().toISOString();
   const docRef = await addDoc(collection(db, COLLECTION_NAME), {
     ...renovacao,
+    ativo: true,
     createdAt: now,
     updatedAt: now,
   });
@@ -53,6 +55,9 @@ export async function updateRenovacao(id: string, updates: Partial<Omit<Renovaca
 
 export async function deleteRenovacao(id: string): Promise<void> {
   const docRef = doc(db, COLLECTION_NAME, id);
-  await deleteDoc(docRef);
+  await updateDoc(docRef, {
+    ativo: false,
+    updatedAt: new Date().toISOString(),
+  });
 }
 
