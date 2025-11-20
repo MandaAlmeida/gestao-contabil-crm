@@ -1,10 +1,12 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Layout } from "@/components/Layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useLocalStorage } from "@/hooks/useLocalStorage";
+import { useClientes } from "@/hooks/useClientes";
+import { useCertificados } from "@/hooks/useCertificados";
 import { Cliente, Certificado } from "@/types/crm";
-import { Plus, Search, Edit, Trash2 } from "lucide-react";
+import { Plus, Search, Edit, Trash2, CheckCircle, Clock3, AlertTriangle } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -22,15 +24,83 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { normalizarCertificados, calcularStatusCertificado } from "@/lib/certificados";
+import { cn } from "@/lib/utils";
+
+const adicionarAno = (data?: string) => {
+  const baseDate = data ? new Date(data) : new Date();
+  if (Number.isNaN(baseDate.getTime())) {
+    return new Date();
+  }
+  const novaData = new Date(baseDate);
+  novaData.setFullYear(novaData.getFullYear() + 1);
+  return novaData;
+};
+
+const removerAno = (data: string) => {
+  const baseDate = data ? new Date(data) : new Date();
+  if (Number.isNaN(baseDate.getTime())) {
+    return new Date();
+  }
+  const novaData = new Date(baseDate);
+  novaData.setFullYear(novaData.getFullYear() - 1);
+  return novaData;
+};
+
+const formatarISO = (date: Date) => date.toISOString().split("T")[0];
+
+const STATUS_META: Record<Certificado["status"], { label: string; className: string; icon: LucideIcon }> = {
+  "Válido": {
+    label: "Válido",
+    className: "bg-success/10 text-success hover:bg-success/20",
+    icon: CheckCircle,
+  },
+  "A Vencer": {
+    label: "A vencer",
+    className: "bg-warning/10 text-warning hover:bg-warning/20",
+    icon: Clock3,
+  },
+  "Vencido": {
+    label: "Vencido",
+    className: "bg-destructive/10 text-destructive hover:bg-destructive/20",
+    icon: AlertTriangle,
+  },
+};
+
+const getToggleTitle = (status: Certificado["status"]) => {
+  switch (status) {
+    case "Válido":
+      return "Reverter vigência";
+    case "A Vencer":
+      return "Renovar certificado";
+    case "Vencido":
+      return "Renovar certificado";
+    default:
+      return "Atualizar status";
+  }
+};
 
 export default function Certificados() {
-  const [clientes] = useLocalStorage<Cliente[]>('crm-clientes', []);
-  const [certificados, setCertificados] = useLocalStorage<Certificado[]>('crm-certificados', []);
+  const { clientes } = useClientes();
+  const { certificados: certificadosRaw, createCertificado, updateCertificado, deleteCertificado } = useCertificados();
   const [searchTerm, setSearchTerm] = useState('');
-  const [searchResponsavel, setSearchResponsavel] = useState('');
+  const [searchResponsavel, setSearchResponsavel] = useState('todos');
+  const [filtroDataInicio, setFiltroDataInicio] = useState('');
+  const [filtroDataFim, setFiltroDataFim] = useState('');
+  const [filtroStatus, setFiltroStatus] = useState<Certificado['status'] | 'todos'>('todos');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<Certificado | null>(null);
   const { toast } = useToast();
+
+  const responsaveisDisponiveis = useMemo(
+    () => Array.from(new Set(clientes.map((cliente) => cliente.responsavel))).sort(),
+    [clientes]
+  );
+
+  const certificadosNormalizados = useMemo(
+    () => normalizarCertificados(certificadosRaw),
+    [certificadosRaw],
+  );
 
   const [formData, setFormData] = useState({
     clienteId: '',
@@ -51,7 +121,7 @@ export default function Certificados() {
     setEditingItem(null);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     const cliente = clientes.find(c => c.id === formData.clienteId);
@@ -69,37 +139,36 @@ export default function Certificados() {
       dataVencimento = currentDate.toISOString().split('T')[0];
     }
     
-    if (editingItem) {
-      setCertificados(certificados.map(c => 
-        c.id === editingItem.id 
-          ? {
-              ...formData,
-              id: c.id,
-              clienteNome: cliente.nome,
-              clienteCNPJ: cliente.cnpj,
-              dataVencimento,
-              createdAt: c.createdAt,
-              updatedAt: new Date().toISOString(),
-            }
-          : c
-      ));
-      toast({ title: "Certificado atualizado com sucesso!" });
-    } else {
-      const newItem: Certificado = {
-        ...formData,
-        id: crypto.randomUUID(),
-        clienteNome: cliente.nome,
-        clienteCNPJ: cliente.cnpj,
-        dataVencimento,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-      setCertificados([...certificados, newItem]);
-      toast({ title: "Certificado adicionado com sucesso!" });
+    try {
+      if (editingItem) {
+        await updateCertificado(editingItem.id, {
+          clienteId: formData.clienteId,
+          clienteNome: cliente.nome,
+          clienteCNPJ: cliente.cnpj,
+          tipoCertificado: formData.tipoCertificado,
+          dataVencimento,
+          status: formData.status,
+          observacoes: formData.observacoes,
+        });
+        toast({ title: "Certificado atualizado com sucesso!" });
+      } else {
+        await createCertificado({
+          clienteId: formData.clienteId,
+          clienteNome: cliente.nome,
+          clienteCNPJ: cliente.cnpj,
+          tipoCertificado: formData.tipoCertificado,
+          dataVencimento,
+          status: formData.status,
+          observacoes: formData.observacoes,
+        });
+        toast({ title: "Certificado adicionado com sucesso!" });
+      }
+      
+      resetForm();
+      setIsDialogOpen(false);
+    } catch (error) {
+      toast({ title: "Erro ao salvar certificado", variant: "destructive" });
     }
-    
-    resetForm();
-    setIsDialogOpen(false);
   };
 
   const handleEdit = (item: Certificado) => {
@@ -114,28 +183,73 @@ export default function Certificados() {
     setIsDialogOpen(true);
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
     if (confirm('Tem certeza que deseja excluir este certificado?')) {
-      setCertificados(certificados.filter(c => c.id !== id));
-      toast({ title: "Certificado excluído com sucesso!" });
+      try {
+        await deleteCertificado(id);
+        toast({ title: "Certificado excluído com sucesso!" });
+      } catch (error) {
+        toast({ title: "Erro ao excluir certificado", variant: "destructive" });
+      }
     }
   };
 
-  const filteredItems = certificados.filter(item => {
+  const filteredItems = certificadosNormalizados.filter(item => {
     const cliente = clientes.find(c => c.id === item.clienteId);
     const matchesSearch = item.clienteNome.toLowerCase().includes(searchTerm.toLowerCase()) ||
                           item.clienteCNPJ.includes(searchTerm);
-    const matchesResponsavel = searchResponsavel === '' || 
-                                (cliente && cliente.responsavel.toLowerCase().includes(searchResponsavel.toLowerCase()));
-    return matchesSearch && matchesResponsavel;
+    const matchesResponsavel = searchResponsavel === 'todos' || 
+                                (cliente && cliente.responsavel === searchResponsavel);
+    
+    // Filtro por data
+    const itemData = new Date(item.dataVencimento);
+    const matchesDataInicio = !filtroDataInicio || itemData >= new Date(filtroDataInicio);
+    const matchesDataFim = !filtroDataFim || itemData <= new Date(filtroDataFim);
+    
+    // Filtro por status
+    const matchesStatus = filtroStatus === 'todos' || item.status === filtroStatus;
+    
+    return matchesSearch && matchesResponsavel && matchesDataInicio && matchesDataFim && matchesStatus;
   });
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'Válido': return 'bg-success/10 text-success';
-      case 'A Vencer': return 'bg-warning/10 text-warning';
-      case 'Vencido': return 'bg-destructive/10 text-destructive';
-      default: return '';
+  const handleToggleStatus = async (item: Certificado) => {
+    const registroAtual = certificadosRaw.find((cert) => cert.id === item.id) ?? item;
+
+    if (registroAtual.status === "Válido") {
+      const dataAnterior = formatarISO(removerAno(registroAtual.dataVencimento));
+      const statusRecalculado = calcularStatusCertificado({ dataVencimento: dataAnterior });
+      
+      try {
+        await updateCertificado(item.id, {
+          status: statusRecalculado,
+          dataVencimento: dataAnterior,
+        });
+        toast({
+          title: "Status revertido.",
+          description:
+            statusRecalculado === "Vencido"
+              ? `${registroAtual.clienteNome} voltou a ficar vencido.`
+              : `${registroAtual.clienteNome} agora está a vencer.`,
+        });
+      } catch (error) {
+        toast({ title: "Erro ao atualizar status", variant: "destructive" });
+      }
+      return;
+    }
+
+    const novoVencimento = formatarISO(adicionarAno());
+    
+    try {
+      await updateCertificado(item.id, {
+        status: "Válido",
+        dataVencimento: novoVencimento,
+      });
+      toast({
+        title: "Certificado renovado!",
+        description: `${registroAtual.clienteNome} está válido até ${new Date(novoVencimento).toLocaleDateString("pt-BR")}.`,
+      });
+    } catch (error) {
+      toast({ title: "Erro ao renovar certificado", variant: "destructive" });
     }
   };
 
@@ -234,22 +348,95 @@ export default function Certificados() {
           </Dialog>
         </div>
 
-        <div className="mb-4 flex gap-4">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              placeholder="Buscar por cliente..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-9"
-            />
+        <div className="mb-4 space-y-4">
+          <div className="flex gap-4 items-end">
+            <div className="flex-1 space-y-1">
+              <Label
+                htmlFor="filtro-busca"
+                className="text-xs text-muted-foreground"
+              >
+                Buscar
+              </Label>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  id="filtro-busca"
+                  placeholder="Buscar por cliente..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-9"
+                />
+              </div>
+            </div>
+            <div className="w-64 space-y-1">
+              <Label htmlFor="filtro-responsavel" className="text-xs text-muted-foreground">Responsável</Label>
+              <Select value={searchResponsavel} onValueChange={setSearchResponsavel}>
+                <SelectTrigger id="filtro-responsavel">
+                  <SelectValue placeholder="Selecione o responsável" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todos os responsáveis</SelectItem>
+                  {responsaveisDisponiveis.map((responsavel) => (
+                    <SelectItem key={responsavel} value={responsavel}>
+                      {responsavel}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
-          <Input
-            placeholder="Filtrar por responsável..."
-            value={searchResponsavel}
-            onChange={(e) => setSearchResponsavel(e.target.value)}
-            className="w-64"
-          />
+          <div className="flex gap-4">
+            <div className="space-y-1">
+              <Label htmlFor="filtro-data-inicio" className="text-xs text-muted-foreground">Data Início</Label>
+              <Input
+                id="filtro-data-inicio"
+                type="date"
+                value={filtroDataInicio}
+                onChange={(e) => setFiltroDataInicio(e.target.value)}
+                className="w-40"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="filtro-data-fim" className="text-xs text-muted-foreground">Data Fim</Label>
+              <Input
+                id="filtro-data-fim"
+                type="date"
+                value={filtroDataFim}
+                onChange={(e) => setFiltroDataFim(e.target.value)}
+                className="w-40"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="filtro-status" className="text-xs text-muted-foreground">Status</Label>
+              <Select value={filtroStatus} onValueChange={(value) => setFiltroStatus(value as Certificado['status'] | 'todos')}>
+                <SelectTrigger className="w-40">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todos</SelectItem>
+                  <SelectItem value="Válido">Válido</SelectItem>
+                  <SelectItem value="A Vencer">A Vencer</SelectItem>
+                  <SelectItem value="Vencido">Vencido</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {(filtroDataInicio || filtroDataFim || filtroStatus !== 'todos' || searchResponsavel !== 'todos') && (
+              <div className="flex items-end">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setFiltroDataInicio('');
+                    setFiltroDataFim('');
+                    setFiltroStatus('todos');
+                    setSearchResponsavel('todos');
+                  }}
+                >
+                  Limpar Filtros
+                </Button>
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="rounded-md border">
@@ -272,9 +459,25 @@ export default function Certificados() {
                   <td className="p-3">{item.tipoCertificado}</td>
                   <td className="p-3">{new Date(item.dataVencimento).toLocaleDateString('pt-BR')}</td>
                   <td className="p-3">
-                    <span className={`rounded-full px-3 py-1 text-xs font-medium ${getStatusColor(item.status)}`}>
-                      {item.status}
-                    </span>
+                    {(() => {
+                      const meta = STATUS_META[item.status];
+                      const Icon = meta.icon;
+                      return (
+                        <button
+                          type="button"
+                          onClick={() => handleToggleStatus(item)}
+                          title={getToggleTitle(item.status)}
+                          className={cn(
+                            "flex items-center gap-2 rounded-full px-3 py-1 text-xs font-medium transition-colors",
+                            "border border-transparent focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
+                            meta.className,
+                          )}
+                        >
+                          <Icon className="h-4 w-4" />
+                          {meta.label}
+                        </button>
+                      );
+                    })()}
                   </td>
                   <td className="p-3">
                     <div className="flex gap-2">

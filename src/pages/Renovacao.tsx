@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Layout } from "@/components/Layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useLocalStorage } from "@/hooks/useLocalStorage";
+import { useClientes } from "@/hooks/useClientes";
+import { useRenovacao } from "@/hooks/useRenovacao";
 import { Cliente, Renovacao } from "@/types/crm";
 import { Plus, Search, Edit, Trash2 } from "lucide-react";
 import {
@@ -24,13 +25,21 @@ import {
 import { useToast } from "@/hooks/use-toast";
 
 export default function RenovacaoPage() {
-  const [clientes] = useLocalStorage<Cliente[]>('crm-clientes', []);
-  const [renovacoes, setRenovacoes] = useLocalStorage<Renovacao[]>('crm-renovacao', []);
+  const { clientes } = useClientes();
+  const { renovacoes, createRenovacao, updateRenovacao, deleteRenovacao } = useRenovacao();
   const [searchTerm, setSearchTerm] = useState('');
-  const [searchResponsavel, setSearchResponsavel] = useState('');
+  const [searchResponsavel, setSearchResponsavel] = useState('todos');
+  const [filtroDataInicio, setFiltroDataInicio] = useState('');
+  const [filtroDataFim, setFiltroDataFim] = useState('');
+  const [filtroStatus, setFiltroStatus] = useState<Renovacao['status'] | 'todos'>('todos');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<Renovacao | null>(null);
   const { toast } = useToast();
+
+  const responsaveisDisponiveis = useMemo(
+    () => Array.from(new Set(clientes.map((cliente) => cliente.responsavel))).sort(),
+    [clientes]
+  );
 
   const [formData, setFormData] = useState({
     clienteId: '',
@@ -51,7 +60,7 @@ export default function RenovacaoPage() {
     setEditingItem(null);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     const cliente = clientes.find(c => c.id === formData.clienteId);
@@ -69,39 +78,42 @@ export default function RenovacaoPage() {
       dataRenovacao = currentDate.toISOString().split('T')[0];
     }
     
-    if (editingItem) {
-      setRenovacoes(renovacoes.map(r => 
-        r.id === editingItem.id 
-          ? {
-              ...formData,
-              id: r.id,
-              clienteNome: cliente.nome,
-              clienteCNPJ: cliente.cnpj,
-              valorRenovacao: parseFloat(formData.valorRenovacao),
-              dataRenovacao,
-              createdAt: r.createdAt,
-              updatedAt: new Date().toISOString(),
-            }
-          : r
-      ));
-      toast({ title: "Renovação atualizada com sucesso!" });
-    } else {
-      const newItem: Renovacao = {
-        ...formData,
-        id: crypto.randomUUID(),
-        clienteNome: cliente.nome,
-        clienteCNPJ: cliente.cnpj,
-        valorRenovacao: parseFloat(formData.valorRenovacao),
-        dataRenovacao,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-      setRenovacoes([...renovacoes, newItem]);
-      toast({ title: "Renovação adicionada com sucesso!" });
+    const valorRenovacaoNumber = parseFloat(formData.valorRenovacao);
+    if (Number.isNaN(valorRenovacaoNumber)) {
+      toast({ title: "Informe um valor válido.", variant: "destructive" });
+      return;
     }
     
-    resetForm();
-    setIsDialogOpen(false);
+    try {
+      if (editingItem) {
+        await updateRenovacao(editingItem.id, {
+          clienteId: formData.clienteId,
+          clienteNome: cliente.nome,
+          clienteCNPJ: cliente.cnpj,
+          valorRenovacao: valorRenovacaoNumber,
+          dataRenovacao,
+          status: formData.status,
+          observacoes: formData.observacoes,
+        });
+        toast({ title: "Renovação atualizada com sucesso!" });
+      } else {
+        await createRenovacao({
+          clienteId: formData.clienteId,
+          clienteNome: cliente.nome,
+          clienteCNPJ: cliente.cnpj,
+          valorRenovacao: valorRenovacaoNumber,
+          dataRenovacao,
+          status: formData.status,
+          observacoes: formData.observacoes,
+        });
+        toast({ title: "Renovação adicionada com sucesso!" });
+      }
+      
+      resetForm();
+      setIsDialogOpen(false);
+    } catch (error) {
+      toast({ title: "Erro ao salvar renovação", variant: "destructive" });
+    }
   };
 
   const handleEdit = (item: Renovacao) => {
@@ -116,10 +128,14 @@ export default function RenovacaoPage() {
     setIsDialogOpen(true);
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
     if (confirm('Tem certeza que deseja excluir esta renovação?')) {
-      setRenovacoes(renovacoes.filter(r => r.id !== id));
-      toast({ title: "Renovação excluída com sucesso!" });
+      try {
+        await deleteRenovacao(id);
+        toast({ title: "Renovação excluída com sucesso!" });
+      } catch (error) {
+        toast({ title: "Erro ao excluir renovação", variant: "destructive" });
+      }
     }
   };
 
@@ -127,9 +143,18 @@ export default function RenovacaoPage() {
     const cliente = clientes.find(c => c.id === item.clienteId);
     const matchesSearch = item.clienteNome.toLowerCase().includes(searchTerm.toLowerCase()) ||
                           item.clienteCNPJ.includes(searchTerm);
-    const matchesResponsavel = searchResponsavel === '' || 
-                                (cliente && cliente.responsavel.toLowerCase().includes(searchResponsavel.toLowerCase()));
-    return matchesSearch && matchesResponsavel;
+    const matchesResponsavel = searchResponsavel === 'todos' || 
+                                (cliente && cliente.responsavel === searchResponsavel);
+    
+    // Filtro por data
+    const itemData = new Date(item.dataRenovacao);
+    const matchesDataInicio = !filtroDataInicio || itemData >= new Date(filtroDataInicio);
+    const matchesDataFim = !filtroDataFim || itemData <= new Date(filtroDataFim);
+    
+    // Filtro por status
+    const matchesStatus = filtroStatus === 'todos' || item.status === filtroStatus;
+    
+    return matchesSearch && matchesResponsavel && matchesDataInicio && matchesDataFim && matchesStatus;
   });
 
   const getStatusColor = (status: string) => {
@@ -235,22 +260,95 @@ export default function RenovacaoPage() {
           </Dialog>
         </div>
 
-        <div className="mb-4 flex gap-4">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              placeholder="Buscar por cliente..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-9"
-            />
+        <div className="mb-4 space-y-4">
+          <div className="flex gap-4 items-end">
+            <div className="flex-1 space-y-1">
+              <Label
+                htmlFor="filtro-busca"
+                className="text-xs text-muted-foreground"
+              >
+                Buscar
+              </Label>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  id="filtro-busca"
+                  placeholder="Buscar por cliente..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-9"
+                />
+              </div>
+            </div>
+            <div className="w-64 space-y-1">
+              <Label htmlFor="filtro-responsavel" className="text-xs text-muted-foreground">Responsável</Label>
+              <Select value={searchResponsavel} onValueChange={setSearchResponsavel}>
+                <SelectTrigger id="filtro-responsavel">
+                  <SelectValue placeholder="Selecione o responsável" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todos os responsáveis</SelectItem>
+                  {responsaveisDisponiveis.map((responsavel) => (
+                    <SelectItem key={responsavel} value={responsavel}>
+                      {responsavel}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
-          <Input
-            placeholder="Filtrar por responsável..."
-            value={searchResponsavel}
-            onChange={(e) => setSearchResponsavel(e.target.value)}
-            className="w-64"
-          />
+          <div className="flex gap-4">
+            <div className="space-y-1">
+              <Label htmlFor="filtro-data-inicio" className="text-xs text-muted-foreground">Data Início</Label>
+              <Input
+                id="filtro-data-inicio"
+                type="date"
+                value={filtroDataInicio}
+                onChange={(e) => setFiltroDataInicio(e.target.value)}
+                className="w-40"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="filtro-data-fim" className="text-xs text-muted-foreground">Data Fim</Label>
+              <Input
+                id="filtro-data-fim"
+                type="date"
+                value={filtroDataFim}
+                onChange={(e) => setFiltroDataFim(e.target.value)}
+                className="w-40"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="filtro-status" className="text-xs text-muted-foreground">Status</Label>
+              <Select value={filtroStatus} onValueChange={(value) => setFiltroStatus(value as Renovacao['status'] | 'todos')}>
+                <SelectTrigger className="w-40">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todos</SelectItem>
+                  <SelectItem value="Em Negociação">Em Negociação</SelectItem>
+                  <SelectItem value="Renovado">Renovado</SelectItem>
+                  <SelectItem value="Cancelado">Cancelado</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {(filtroDataInicio || filtroDataFim || filtroStatus !== 'todos' || searchResponsavel !== 'todos') && (
+              <div className="flex items-end">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setFiltroDataInicio('');
+                    setFiltroDataFim('');
+                    setFiltroStatus('todos');
+                    setSearchResponsavel('todos');
+                  }}
+                >
+                  Limpar Filtros
+                </Button>
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="rounded-md border">

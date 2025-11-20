@@ -1,3 +1,12 @@
+export interface Contabilidade {
+  id: string;
+  nome: string;
+  cnpj: string;
+  cidade: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface Cliente {
   id: string;
   nome: string;
@@ -18,8 +27,9 @@ export interface Financeiro {
   clienteCNPJ: string;
   dataVencimento: string;
   valorMensalidade: number;
-  status: 'Pago' | 'Pendente' | 'Atrasado' | 'Cancelado';
-  meioPagamento: 'Pix' | 'Boleto';
+  status: "Recebido" | "A Vencer" | "Vencido";
+  dataPagamento?: string | null;
+  meioPagamento: "Pix" | "Boleto";
   observacoes: string;
   createdAt: string;
   updatedAt: string;
@@ -30,9 +40,9 @@ export interface Certificado {
   clienteId: string;
   clienteNome: string;
   clienteCNPJ: string;
-  tipoCertificado: 'A1' | 'A3';
+  tipoCertificado: "A1" | "A3";
   dataVencimento: string;
-  status: 'Válido' | 'A Vencer' | 'Vencido';
+  status: "Válido" | "A Vencer" | "Vencido";
   observacoes: string;
   createdAt: string;
   updatedAt: string;
@@ -45,7 +55,7 @@ export interface Renovacao {
   clienteCNPJ: string;
   dataRenovacao: string;
   valorRenovacao: number;
-  status: 'Em Negociação' | 'Renovado' | 'Cancelado';
+  status: "Em Negociação" | "Renovado" | "Cancelado";
   observacoes: string;
   createdAt: string;
   updatedAt: string;
@@ -57,7 +67,7 @@ export interface Sintegra {
   clienteNome: string;
   dataPrazo: string;
   acesso: string;
-  status: 'Pendente' | 'Em Andamento' | 'Concluído';
+  status: "Pendente" | "Em Andamento" | "Concluído";
   observacoes: string;
   createdAt: string;
   updatedAt: string;

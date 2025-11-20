@@ -1,10 +1,12 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Layout } from "@/components/Layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useLocalStorage } from "@/hooks/useLocalStorage";
+import { useClientes } from "@/hooks/useClientes";
+import { useSintegra } from "@/hooks/useSintegra";
 import { Cliente, Sintegra } from "@/types/crm";
-import { Plus, Search, Edit, Trash2 } from "lucide-react";
+import { Plus, Search, Edit, Trash2, Clock3, RefreshCw, CheckCircle } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -22,15 +24,64 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { cn } from "@/lib/utils";
+
+const adicionarMes = (data: string) => {
+  const baseDate = data ? new Date(data) : new Date();
+  if (Number.isNaN(baseDate.getTime())) {
+    return new Date();
+  }
+  const novaData = new Date(baseDate);
+  novaData.setMonth(novaData.getMonth() + 1);
+  return novaData;
+};
+
+const removerMes = (data: string) => {
+  const baseDate = data ? new Date(data) : new Date();
+  if (Number.isNaN(baseDate.getTime())) {
+    return new Date();
+  }
+  const novaData = new Date(baseDate);
+  novaData.setMonth(novaData.getMonth() - 1);
+  return novaData;
+};
+
+const formatarISO = (date: Date) => date.toISOString().split("T")[0];
+
+const STATUS_META: Record<Sintegra["status"], { label: string; className: string; icon: LucideIcon }> = {
+  Pendente: {
+    label: "Pendente",
+    className: "bg-warning/10 text-warning hover:bg-warning/20",
+    icon: Clock3,
+  },
+  "Em Andamento": {
+    label: "Em andamento",
+    className: "bg-accent text-accent-foreground hover:bg-accent/80",
+    icon: RefreshCw,
+  },
+  "Concluído": {
+    label: "Concluído",
+    className: "bg-success/10 text-success hover:bg-success/20",
+    icon: CheckCircle,
+  },
+};
 
 export default function SintegraPage() {
-  const [clientes] = useLocalStorage<Cliente[]>('crm-clientes', []);
-  const [sintegras, setSintegras] = useLocalStorage<Sintegra[]>('crm-sintegra', []);
+  const { clientes } = useClientes();
+  const { sintegras, createSintegra, updateSintegra, deleteSintegra } = useSintegra();
   const [searchTerm, setSearchTerm] = useState('');
-  const [searchResponsavel, setSearchResponsavel] = useState('');
+  const [searchResponsavel, setSearchResponsavel] = useState('todos');
+  const [filtroDataInicio, setFiltroDataInicio] = useState('');
+  const [filtroDataFim, setFiltroDataFim] = useState('');
+  const [filtroStatus, setFiltroStatus] = useState<Sintegra['status'] | 'todos'>('todos');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<Sintegra | null>(null);
   const { toast } = useToast();
+
+  const responsaveisDisponiveis = useMemo(
+    () => Array.from(new Set(clientes.map((cliente) => cliente.responsavel))).sort(),
+    [clientes]
+  );
 
   const [formData, setFormData] = useState({
     clienteId: '',
@@ -51,7 +102,7 @@ export default function SintegraPage() {
     setEditingItem(null);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     const cliente = clientes.find(c => c.id === formData.clienteId);
@@ -69,35 +120,34 @@ export default function SintegraPage() {
       dataPrazo = currentDate.toISOString().split('T')[0];
     }
     
-    if (editingItem) {
-      setSintegras(sintegras.map(s => 
-        s.id === editingItem.id 
-          ? {
-              ...formData,
-              id: s.id,
-              clienteNome: cliente.nome,
-              dataPrazo,
-              createdAt: s.createdAt,
-              updatedAt: new Date().toISOString(),
-            }
-          : s
-      ));
-      toast({ title: "Sintegra atualizado com sucesso!" });
-    } else {
-      const newItem: Sintegra = {
-        ...formData,
-        id: crypto.randomUUID(),
-        clienteNome: cliente.nome,
-        dataPrazo,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-      setSintegras([...sintegras, newItem]);
-      toast({ title: "Sintegra adicionado com sucesso!" });
+    try {
+      if (editingItem) {
+        await updateSintegra(editingItem.id, {
+          clienteId: formData.clienteId,
+          clienteNome: cliente.nome,
+          dataPrazo,
+          acesso: formData.acesso,
+          status: formData.status,
+          observacoes: formData.observacoes,
+        });
+        toast({ title: "Sintegra atualizado com sucesso!" });
+      } else {
+        await createSintegra({
+          clienteId: formData.clienteId,
+          clienteNome: cliente.nome,
+          dataPrazo,
+          acesso: formData.acesso,
+          status: formData.status,
+          observacoes: formData.observacoes,
+        });
+        toast({ title: "Sintegra adicionado com sucesso!" });
+      }
+      
+      resetForm();
+      setIsDialogOpen(false);
+    } catch (error) {
+      toast({ title: "Erro ao salvar sintegra", variant: "destructive" });
     }
-    
-    resetForm();
-    setIsDialogOpen(false);
   };
 
   const handleEdit = (item: Sintegra) => {
@@ -112,29 +162,80 @@ export default function SintegraPage() {
     setIsDialogOpen(true);
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
     if (confirm('Tem certeza que deseja excluir este Sintegra?')) {
-      setSintegras(sintegras.filter(s => s.id !== id));
-      toast({ title: "Sintegra excluído com sucesso!" });
+      try {
+        await deleteSintegra(id);
+        toast({ title: "Sintegra excluído com sucesso!" });
+      } catch (error) {
+        toast({ title: "Erro ao excluir sintegra", variant: "destructive" });
+      }
+    }
+  };
+
+  const handleToggleStatus = async (item: Sintegra) => {
+    let novoStatus: Sintegra["status"];
+    let novaDataPrazo = item.dataPrazo;
+
+    if (item.status === "Pendente") {
+      novoStatus = "Em Andamento";
+    } else if (item.status === "Em Andamento") {
+      novoStatus = "Concluído";
+      novaDataPrazo = formatarISO(adicionarMes(item.dataPrazo));
+    } else {
+      novoStatus = "Pendente";
+      novaDataPrazo = formatarISO(removerMes(item.dataPrazo));
+    }
+
+    try {
+      await updateSintegra(item.id, {
+        status: novoStatus,
+        dataPrazo: novaDataPrazo,
+      });
+
+      toast({
+        title: "Status atualizado!",
+        description:
+          novoStatus === "Concluído"
+            ? `${item.clienteNome} concluído. Novo prazo: ${new Date(novaDataPrazo).toLocaleDateString("pt-BR")}.`
+            : novoStatus === "Em Andamento"
+              ? `${item.clienteNome} agora está em andamento.`
+              : `${item.clienteNome} voltou para pendente.`,
+      });
+    } catch (error) {
+      toast({ title: "Erro ao atualizar status", variant: "destructive" });
+    }
+  };
+
+  const getToggleTitle = (status: Sintegra["status"]) => {
+    switch (status) {
+      case "Pendente":
+        return "Marcar como em andamento";
+      case "Em Andamento":
+        return "Marcar como concluído";
+      case "Concluído":
+        return "Reabrir como pendente";
+      default:
+        return "Atualizar status";
     }
   };
 
   const filteredItems = sintegras.filter(item => {
     const cliente = clientes.find(c => c.id === item.clienteId);
     const matchesSearch = item.clienteNome.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesResponsavel = searchResponsavel === '' || 
-                                (cliente && cliente.responsavel.toLowerCase().includes(searchResponsavel.toLowerCase()));
-    return matchesSearch && matchesResponsavel;
+    const matchesResponsavel = searchResponsavel === 'todos' || 
+                                (cliente && cliente.responsavel === searchResponsavel);
+    
+    // Filtro por data
+    const itemData = new Date(item.dataPrazo);
+    const matchesDataInicio = !filtroDataInicio || itemData >= new Date(filtroDataInicio);
+    const matchesDataFim = !filtroDataFim || itemData <= new Date(filtroDataFim);
+    
+    // Filtro por status
+    const matchesStatus = filtroStatus === 'todos' || item.status === filtroStatus;
+    
+    return matchesSearch && matchesResponsavel && matchesDataInicio && matchesDataFim && matchesStatus;
   });
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'Concluído': return 'bg-success/10 text-success';
-      case 'Em Andamento': return 'bg-warning/10 text-warning';
-      case 'Pendente': return 'bg-muted text-muted-foreground';
-      default: return '';
-    }
-  };
 
   return (
     <Layout>
@@ -228,22 +329,95 @@ export default function SintegraPage() {
           </Dialog>
         </div>
 
-        <div className="mb-4 flex gap-4">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              placeholder="Buscar por cliente..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-9"
-            />
+        <div className="mb-4 space-y-4">
+          <div className="flex gap-4 items-end">
+            <div className="flex-1 space-y-1">
+              <Label
+                htmlFor="filtro-busca"
+                className="text-xs text-muted-foreground"
+              >
+                Buscar
+              </Label>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  id="filtro-busca"
+                  placeholder="Buscar por cliente..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-9"
+                />
+              </div>
+            </div>
+            <div className="w-64 space-y-1">
+              <Label htmlFor="filtro-responsavel" className="text-xs text-muted-foreground">Responsável</Label>
+              <Select value={searchResponsavel} onValueChange={setSearchResponsavel}>
+                <SelectTrigger id="filtro-responsavel">
+                  <SelectValue placeholder="Selecione o responsável" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todos os responsáveis</SelectItem>
+                  {responsaveisDisponiveis.map((responsavel) => (
+                    <SelectItem key={responsavel} value={responsavel}>
+                      {responsavel}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
-          <Input
-            placeholder="Filtrar por responsável..."
-            value={searchResponsavel}
-            onChange={(e) => setSearchResponsavel(e.target.value)}
-            className="w-64"
-          />
+          <div className="flex gap-4">
+            <div className="space-y-1">
+              <Label htmlFor="filtro-data-inicio" className="text-xs text-muted-foreground">Data Início</Label>
+              <Input
+                id="filtro-data-inicio"
+                type="date"
+                value={filtroDataInicio}
+                onChange={(e) => setFiltroDataInicio(e.target.value)}
+                className="w-40"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="filtro-data-fim" className="text-xs text-muted-foreground">Data Fim</Label>
+              <Input
+                id="filtro-data-fim"
+                type="date"
+                value={filtroDataFim}
+                onChange={(e) => setFiltroDataFim(e.target.value)}
+                className="w-40"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="filtro-status" className="text-xs text-muted-foreground">Status</Label>
+              <Select value={filtroStatus} onValueChange={(value) => setFiltroStatus(value as Sintegra['status'] | 'todos')}>
+                <SelectTrigger className="w-40">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todos</SelectItem>
+                  <SelectItem value="Pendente">Pendente</SelectItem>
+                  <SelectItem value="Em Andamento">Em Andamento</SelectItem>
+                  <SelectItem value="Concluído">Concluído</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {(filtroDataInicio || filtroDataFim || filtroStatus !== 'todos' || searchResponsavel !== 'todos') && (
+              <div className="flex items-end">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setFiltroDataInicio('');
+                    setFiltroDataFim('');
+                    setFiltroStatus('todos');
+                    setSearchResponsavel('todos');
+                  }}
+                >
+                  Limpar Filtros
+                </Button>
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="rounded-md border">
@@ -264,9 +438,25 @@ export default function SintegraPage() {
                   <td className="p-3">{new Date(item.dataPrazo).toLocaleDateString('pt-BR')}</td>
                   <td className="p-3">{item.acesso || '-'}</td>
                   <td className="p-3">
-                    <span className={`rounded-full px-3 py-1 text-xs font-medium ${getStatusColor(item.status)}`}>
-                      {item.status}
-                    </span>
+                    {(() => {
+                      const meta = STATUS_META[item.status];
+                      const Icon = meta.icon;
+                      return (
+                        <button
+                          type="button"
+                          onClick={() => handleToggleStatus(item)}
+                          title={getToggleTitle(item.status)}
+                          className={cn(
+                            "flex items-center gap-2 rounded-full px-3 py-1 text-xs font-medium transition-colors",
+                            "border border-transparent focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
+                            meta.className,
+                          )}
+                        >
+                          <Icon className="h-4 w-4" />
+                          {meta.label}
+                        </button>
+                      );
+                    })()}
                   </td>
                   <td className="p-3">
                     <div className="flex gap-2">

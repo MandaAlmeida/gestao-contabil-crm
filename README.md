@@ -4,6 +4,27 @@
 
 **URL**: https://lovable.dev/projects/b821792c-1d9d-4773-8b18-275681b79271
 
+## Configuração do Firebase
+
+1. Crie um arquivo `.env` na raiz do projeto e adicione as variáveis abaixo:
+
+   ```bash
+   VITE_FIREBASE_API_KEY=
+   VITE_FIREBASE_AUTH_DOMAIN=
+   VITE_FIREBASE_PROJECT_ID=
+   VITE_FIREBASE_STORAGE_BUCKET=
+   VITE_FIREBASE_MESSAGING_SENDER_ID=
+   VITE_FIREBASE_APP_ID=
+   VITE_FIREBASE_MEASUREMENT_ID=
+   VITE_USE_FIREBASE_EMULATORS=false
+   VITE_FIREBASE_EMULATOR_HOST=127.0.0.1
+   ```
+
+2. Preencha as variáveis `VITE_FIREBASE_*` com as chaves fornecidas pelo console do Firebase.
+3. (Opcional) Ajuste `VITE_USE_FIREBASE_EMULATORS` para `true` durante o desenvolvimento com emuladores locais e configure o host em `VITE_FIREBASE_EMULATOR_HOST`.
+
+> **Nota:** a inicialização do Firebase está preparada em `src/lib/firebase.ts`, mas não é carregada automaticamente. Quando quiser habilitar, importe a função/configuração no ponto desejado da aplicação.
+
 ## How can I edit this code?
 
 There are several ways of editing your application.

@@ -1,0 +1,320 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Função auxiliar para verificar autenticação
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // Função auxiliar para validar campos obrigatórios de timestamp
+    function hasValidTimestamps() {
+      let data = request.resource.data;
+      return 'createdAt' in data && 
+             'updatedAt' in data &&
+             data.createdAt is string &&
+             data.updatedAt is string;
+    }
+    
+    // Função auxiliar para proteger campos createdAt
+    function createdAtUnchanged() {
+      return resource.data.createdAt == request.resource.data.createdAt;
+    }
+    
+    // ==================== CONTABILIDADES ====================
+    match /contabilidades/{contabilidadeId} {
+      // Permitir leitura para usuários autenticados
+      allow read: if isAuthenticated();
+      
+      // Permitir criação para usuários autenticados com validação
+      allow create: if isAuthenticated() &&
+                      hasValidTimestamps() &&
+                      request.resource.data.nome is string &&
+                      request.resource.data.cnpj is string &&
+                      request.resource.data.cidade is string &&
+                      request.resource.data.nome.size() > 0 &&
+                      request.resource.data.cnpj.size() > 0 &&
+                      request.resource.data.cidade.size() > 0;
+      
+      // Permitir atualização para usuários autenticados
+      allow update: if isAuthenticated() &&
+                      request.resource.data.updatedAt is string &&
+                      createdAtUnchanged() &&
+                      request.resource.data.nome is string &&
+                      request.resource.data.cnpj is string &&
+                      request.resource.data.cidade is string &&
+                      request.resource.data.nome.size() > 0 &&
+                      request.resource.data.cnpj.size() > 0 &&
+                      request.resource.data.cidade.size() > 0;
+      
+      // Permitir exclusão para usuários autenticados
+      allow delete: if isAuthenticated();
+    }
+    
+    // ==================== CLIENTES ====================
+    match /clientes/{clienteId} {
+      // Permitir leitura para usuários autenticados
+      allow read: if isAuthenticated();
+      
+      // Permitir criação para usuários autenticados com validação
+      allow create: if isAuthenticated() &&
+                      hasValidTimestamps() &&
+                      request.resource.data.nome is string &&
+                      request.resource.data.cnpj is string &&
+                      request.resource.data.cidade is string &&
+                      request.resource.data.contato is string &&
+                      request.resource.data.contabilidade is string &&
+                      request.resource.data.responsavel is string &&
+                      request.resource.data.observacoes is string &&
+                      request.resource.data.nome.size() > 0 &&
+                      request.resource.data.cnpj.size() > 0 &&
+                      request.resource.data.cidade.size() > 0 &&
+                      request.resource.data.contato.size() > 0 &&
+                      request.resource.data.responsavel.size() > 0;
+      
+      // Permitir atualização para usuários autenticados
+      allow update: if isAuthenticated() &&
+                      request.resource.data.updatedAt is string &&
+                      createdAtUnchanged() &&
+                      request.resource.data.nome is string &&
+                      request.resource.data.cnpj is string &&
+                      request.resource.data.cidade is string &&
+                      request.resource.data.contato is string &&
+                      request.resource.data.contabilidade is string &&
+                      request.resource.data.responsavel is string &&
+                      request.resource.data.observacoes is string &&
+                      request.resource.data.nome.size() > 0 &&
+                      request.resource.data.cnpj.size() > 0 &&
+                      request.resource.data.cidade.size() > 0 &&
+                      request.resource.data.contato.size() > 0 &&
+                      request.resource.data.responsavel.size() > 0;
+      
+      // Permitir exclusão para usuários autenticados
+      allow delete: if isAuthenticated();
+    }
+    
+    // ==================== FINANCEIRO ====================
+    match /financeiro/{financeiroId} {
+      // Permitir leitura para usuários autenticados
+      allow read: if isAuthenticated();
+      
+      // Permitir criação para usuários autenticados com validação
+      allow create: if isAuthenticated() &&
+                      hasValidTimestamps() &&
+                      request.resource.data.clienteId is string &&
+                      request.resource.data.clienteNome is string &&
+                      request.resource.data.clienteCNPJ is string &&
+                      request.resource.data.dataVencimento is string &&
+                      request.resource.data.valorMensalidade is number &&
+                      request.resource.data.status is string &&
+                      request.resource.data.meioPagamento is string &&
+                      request.resource.data.observacoes is string &&
+                      request.resource.data.clienteId.size() > 0 &&
+                      request.resource.data.status in ['Recebido', 'A Vencer', 'Vencido'] &&
+                      request.resource.data.meioPagamento in ['Pix', 'Boleto'] &&
+                      request.resource.data.valorMensalidade >= 0;
+      
+      // Permitir atualização para usuários autenticados
+      allow update: if isAuthenticated() &&
+                      request.resource.data.updatedAt is string &&
+                      createdAtUnchanged() &&
+                      request.resource.data.clienteId is string &&
+                      request.resource.data.clienteNome is string &&
+                      request.resource.data.clienteCNPJ is string &&
+                      request.resource.data.dataVencimento is string &&
+                      request.resource.data.valorMensalidade is number &&
+                      request.resource.data.status is string &&
+                      request.resource.data.meioPagamento is string &&
+                      request.resource.data.observacoes is string &&
+                      request.resource.data.clienteId.size() > 0 &&
+                      request.resource.data.status in ['Recebido', 'A Vencer', 'Vencido'] &&
+                      request.resource.data.meioPagamento in ['Pix', 'Boleto'] &&
+                      request.resource.data.valorMensalidade >= 0;
+      
+      // Permitir exclusão para usuários autenticados
+      allow delete: if isAuthenticated();
+    }
+    
+    // ==================== CERTIFICADOS ====================
+    match /certificados/{certificadoId} {
+      // Permitir leitura para usuários autenticados
+      allow read: if isAuthenticated();
+      
+      // Permitir criação para usuários autenticados com validação
+      allow create: if isAuthenticated() &&
+                      hasValidTimestamps() &&
+                      request.resource.data.clienteId is string &&
+                      request.resource.data.clienteNome is string &&
+                      request.resource.data.clienteCNPJ is string &&
+                      request.resource.data.tipoCertificado is string &&
+                      request.resource.data.dataVencimento is string &&
+                      request.resource.data.status is string &&
+                      request.resource.data.observacoes is string &&
+                      request.resource.data.clienteId.size() > 0 &&
+                      request.resource.data.tipoCertificado in ['A1', 'A3'] &&
+                      request.resource.data.status in ['Válido', 'A Vencer', 'Vencido'];
+      
+      // Permitir atualização para usuários autenticados
+      allow update: if isAuthenticated() &&
+                      request.resource.data.updatedAt is string &&
+                      createdAtUnchanged() &&
+                      request.resource.data.clienteId is string &&
+                      request.resource.data.clienteNome is string &&
+                      request.resource.data.clienteCNPJ is string &&
+                      request.resource.data.tipoCertificado is string &&
+                      request.resource.data.dataVencimento is string &&
+                      request.resource.data.status is string &&
+                      request.resource.data.observacoes is string &&
+                      request.resource.data.clienteId.size() > 0 &&
+                      request.resource.data.tipoCertificado in ['A1', 'A3'] &&
+                      request.resource.data.status in ['Válido', 'A Vencer', 'Vencido'];
+      
+      // Permitir exclusão para usuários autenticados
+      allow delete: if isAuthenticated();
+    }
+    
+    // ==================== SINTEGRA ====================
+    match /sintegra/{sintegraId} {
+      // Permitir leitura para usuários autenticados
+      allow read: if isAuthenticated();
+      
+      // Permitir criação para usuários autenticados com validação
+      allow create: if isAuthenticated() &&
+                      hasValidTimestamps() &&
+                      request.resource.data.clienteId is string &&
+                      request.resource.data.clienteNome is string &&
+                      request.resource.data.dataPrazo is string &&
+                      request.resource.data.acesso is string &&
+                      request.resource.data.status is string &&
+                      request.resource.data.observacoes is string &&
+                      request.resource.data.clienteId.size() > 0 &&
+                      request.resource.data.status in ['Pendente', 'Em Andamento', 'Concluído'];
+      
+      // Permitir atualização para usuários autenticados
+      allow update: if isAuthenticated() &&
+                      request.resource.data.updatedAt is string &&
+                      createdAtUnchanged() &&
+                      request.resource.data.clienteId is string &&
+                      request.resource.data.clienteNome is string &&
+                      request.resource.data.dataPrazo is string &&
+                      request.resource.data.acesso is string &&
+                      request.resource.data.status is string &&
+                      request.resource.data.observacoes is string &&
+                      request.resource.data.clienteId.size() > 0 &&
+                      request.resource.data.status in ['Pendente', 'Em Andamento', 'Concluído'];
+      
+      // Permitir exclusão para usuários autenticados
+      allow delete: if isAuthenticated();
+    }
+    
+    // ==================== DESPESAS ====================
+    match /despesas/{despesaId} {
+      // Permitir leitura para usuários autenticados
+      allow read: if isAuthenticated();
+      
+      // Permitir criação para usuários autenticados com validação
+      allow create: if isAuthenticated() &&
+                      hasValidTimestamps() &&
+                      request.resource.data.descricao is string &&
+                      request.resource.data.valor is number &&
+                      request.resource.data.data is string &&
+                      request.resource.data.fixo is bool &&
+                      request.resource.data.pago is bool &&
+                      request.resource.data.descricao.size() > 0 &&
+                      request.resource.data.valor >= 0;
+      
+      // Permitir atualização para usuários autenticados
+      allow update: if isAuthenticated() &&
+                      request.resource.data.updatedAt is string &&
+                      createdAtUnchanged() &&
+                      request.resource.data.descricao is string &&
+                      request.resource.data.valor is number &&
+                      request.resource.data.data is string &&
+                      request.resource.data.fixo is bool &&
+                      request.resource.data.pago is bool &&
+                      request.resource.data.descricao.size() > 0 &&
+                      request.resource.data.valor >= 0;
+      
+      // Permitir exclusão para usuários autenticados
+      allow delete: if isAuthenticated();
+    }
+    
+    // ==================== RENOVACAO ====================
+    match /renovacao/{renovacaoId} {
+      // Permitir leitura para usuários autenticados
+      allow read: if isAuthenticated();
+      
+      // Permitir criação para usuários autenticados com validação
+      allow create: if isAuthenticated() &&
+                      hasValidTimestamps() &&
+                      request.resource.data.clienteId is string &&
+                      request.resource.data.clienteNome is string &&
+                      request.resource.data.clienteCNPJ is string &&
+                      request.resource.data.dataRenovacao is string &&
+                      request.resource.data.valorRenovacao is number &&
+                      request.resource.data.status is string &&
+                      request.resource.data.observacoes is string &&
+                      request.resource.data.clienteId.size() > 0 &&
+                      request.resource.data.status in ['Em Negociação', 'Renovado', 'Cancelado'] &&
+                      request.resource.data.valorRenovacao >= 0;
+      
+      // Permitir atualização para usuários autenticados
+      allow update: if isAuthenticated() &&
+                      request.resource.data.updatedAt is string &&
+                      createdAtUnchanged() &&
+                      request.resource.data.clienteId is string &&
+                      request.resource.data.clienteNome is string &&
+                      request.resource.data.clienteCNPJ is string &&
+                      request.resource.data.dataRenovacao is string &&
+                      request.resource.data.valorRenovacao is number &&
+                      request.resource.data.status is string &&
+                      request.resource.data.observacoes is string &&
+                      request.resource.data.clienteId.size() > 0 &&
+                      request.resource.data.status in ['Em Negociação', 'Renovado', 'Cancelado'] &&
+                      request.resource.data.valorRenovacao >= 0;
+      
+      // Permitir exclusão para usuários autenticados
+      allow delete: if isAuthenticated();
+    }
+    
+    // ==================== USUÁRIOS ====================
+    match /usuarios/{usuarioId} {
+      // Permitir leitura para usuários autenticados
+      allow read: if isAuthenticated();
+      
+      // Permitir criação para usuários autenticados
+      // Permite que qualquer usuário autenticado crie um registro de usuário
+      allow create: if isAuthenticated() &&
+                      request.resource.data.nome is string &&
+                      request.resource.data.email is string &&
+                      request.resource.data.ativo is bool &&
+                      request.resource.data.nome.size() > 0 &&
+                      request.resource.data.email.size() > 0 &&
+                      ('createdAt' in request.resource.data) &&
+                      ('updatedAt' in request.resource.data) &&
+                      request.resource.data.createdAt is string &&
+                      request.resource.data.updatedAt is string;
+      
+      // Permitir atualização para usuários autenticados
+      allow update: if isAuthenticated() &&
+                     request.resource.data.nome is string &&
+                     request.resource.data.email is string &&
+                     request.resource.data.ativo is bool &&
+                     request.resource.data.nome.size() > 0 &&
+                     request.resource.data.email.size() > 0 &&
+                     ('updatedAt' in request.resource.data) &&
+                     request.resource.data.updatedAt is string &&
+                     (resource == null || resource.data.createdAt == request.resource.data.createdAt) &&
+                     (!('telefone' in request.resource.data) || request.resource.data.telefone is string);
+      
+      // Permitir exclusão para usuários autenticados
+      allow delete: if isAuthenticated();
+    }
+    
+    // Negar todas as outras operações por padrão
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
+
