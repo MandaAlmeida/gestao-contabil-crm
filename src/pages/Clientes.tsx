@@ -28,9 +28,23 @@ import {
 import { useToast } from "@/hooks/use-toast";
 
 export default function Clientes() {
-  const { clientes, createCliente, updateCliente, deleteCliente, loading: clientesLoading } = useClientes();
-  const { contabilidades, createContabilidade, loading: contabilidadesLoading } = useContabilidades();
-  const { usuarios, loading: usuariosLoading, refresh: refreshUsuarios } = useUsuarios();
+  const {
+    clientes,
+    createCliente,
+    updateCliente,
+    deleteCliente,
+    loading: clientesLoading,
+  } = useClientes();
+  const {
+    contabilidades,
+    createContabilidade,
+    loading: contabilidadesLoading,
+  } = useContabilidades();
+  const {
+    usuarios,
+    loading: usuariosLoading,
+    refresh: refreshUsuarios,
+  } = useUsuarios();
   const { user } = useAuth();
   const [searchTerm, setSearchTerm] = useState("");
   const [searchResponsavel, setSearchResponsavel] = useState("todos");
@@ -48,14 +62,17 @@ export default function Clientes() {
     if (user && user.email && !usuariosLoading && usuarios.length === 0) {
       const syncUser = async () => {
         try {
-          const nome = user.displayName || user.email?.split("@")[0] || "Usuário";
+          const nome =
+            user.displayName || user.email?.split("@")[0] || "Usuário";
           await createUsuarioIfNotExists(user.email!, nome);
           await refreshUsuarios();
         } catch (error: any) {
           console.error("Erro ao sincronizar usuário:", error);
           // Se for erro de permissão, não é crítico - apenas logar
-          if (error.code === 'permission-denied') {
-            console.warn("Permissão negada para criar usuário. O usuário pode não ter permissão ou o email não corresponde ao usuário autenticado.");
+          if (error.code === "permission-denied") {
+            console.warn(
+              "Permissão negada para criar usuário. O usuário pode não ter permissão ou o email não corresponde ao usuário autenticado."
+            );
           }
         }
       };
@@ -109,14 +126,17 @@ export default function Clientes() {
     e.preventDefault();
 
     try {
-      await createContabilidade(contabilidadeFormData);
+      await createContabilidade({
+        ...contabilidadeFormData,
+        ativo: true,
+      });
       toast({ title: "Contabilidade adicionada com sucesso!" });
       resetContabilidadeForm();
       setIsContabilidadeDialogOpen(false);
     } catch (error) {
-      toast({ 
-        title: "Erro ao adicionar contabilidade", 
-        variant: "destructive" 
+      toast({
+        title: "Erro ao adicionar contabilidade",
+        variant: "destructive",
       });
     }
   };
@@ -129,15 +149,18 @@ export default function Clientes() {
         await updateCliente(editingCliente.id, formData);
         toast({ title: "Cliente atualizado com sucesso!" });
       } else {
-        await createCliente(formData);
+        await createCliente({
+          ...formData,
+          ativo: true,
+        });
         toast({ title: "Cliente adicionado com sucesso!" });
       }
       resetForm();
       setIsDialogOpen(false);
     } catch (error) {
-      toast({ 
-        title: "Erro ao salvar cliente", 
-        variant: "destructive" 
+      toast({
+        title: "Erro ao salvar cliente",
+        variant: "destructive",
       });
     }
   };
@@ -162,9 +185,9 @@ export default function Clientes() {
         await deleteCliente(id);
         toast({ title: "Cliente excluído com sucesso!" });
       } catch (error) {
-        toast({ 
-          title: "Erro ao excluir cliente", 
-          variant: "destructive" 
+        toast({
+          title: "Erro ao excluir cliente",
+          variant: "destructive",
         });
       }
     }
@@ -384,9 +407,13 @@ export default function Clientes() {
                         </SelectTrigger>
                         <SelectContent>
                           {usuariosLoading ? (
-                            <SelectItem value="" disabled>Carregando...</SelectItem>
+                            <SelectItem value="" disabled>
+                              Carregando...
+                            </SelectItem>
                           ) : usuarios.length === 0 ? (
-                            <SelectItem value="" disabled>Nenhum responsável cadastrado</SelectItem>
+                            <SelectItem value="" disabled>
+                              Nenhum responsável cadastrado
+                            </SelectItem>
                           ) : (
                             usuarios.map((usuario) => (
                               <SelectItem key={usuario.id} value={usuario.nome}>

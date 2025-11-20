@@ -12,7 +12,14 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import {
   Select,
   SelectContent,
@@ -48,24 +55,29 @@ export default function DespesasPage() {
   const [formState, setFormState] = useState<FormState>(DEFAULT_FORM);
   const [isSaving, setIsSaving] = useState(false);
   const { toast } = useToast();
-  const { despesas, createDespesa, updateDespesa, deleteDespesa } = useDespesas();
+  const { despesas, createDespesa, updateDespesa, deleteDespesa } =
+    useDespesas();
   const [filtroDataInicio, setFiltroDataInicio] = useState("");
   const [filtroDataFim, setFiltroDataFim] = useState("");
-  const [filtroStatus, setFiltroStatus] = useState<"todos" | "pago" | "pendente">("todos");
+  const [filtroStatus, setFiltroStatus] = useState<
+    "todos" | "pago" | "pendente"
+  >("todos");
 
   const despesasFiltradas = useMemo(() => {
     return despesas.filter((despesa) => {
       // Filtro por data
       const despesaData = new Date(despesa.data);
-      const matchesDataInicio = !filtroDataInicio || despesaData >= new Date(filtroDataInicio);
-      const matchesDataFim = !filtroDataFim || despesaData <= new Date(filtroDataFim);
-      
+      const matchesDataInicio =
+        !filtroDataInicio || despesaData >= new Date(filtroDataInicio);
+      const matchesDataFim =
+        !filtroDataFim || despesaData <= new Date(filtroDataFim);
+
       // Filtro por status
-      const matchesStatus = 
-        filtroStatus === "todos" || 
+      const matchesStatus =
+        filtroStatus === "todos" ||
         (filtroStatus === "pago" && despesa.pago) ||
         (filtroStatus === "pendente" && !despesa.pago);
-      
+
       return matchesDataInicio && matchesDataFim && matchesStatus;
     });
   }, [despesas, filtroDataInicio, filtroDataFim, filtroStatus]);
@@ -78,7 +90,7 @@ export default function DespesasPage() {
         }
         return b.data.localeCompare(a.data);
       }),
-    [despesasFiltradas],
+    [despesasFiltradas]
   );
 
   const resetForm = () => {
@@ -108,6 +120,7 @@ export default function DespesasPage() {
         data: formState.data,
         fixo: formState.fixo,
         pago: formState.pago,
+        ativo: true,
       });
       toast({ title: "Despesa registrada com sucesso!" });
       resetForm();
@@ -126,7 +139,9 @@ export default function DespesasPage() {
     try {
       await updateDespesa(despesa.id, { pago: !despesa.pago });
       toast({
-        title: despesa.pago ? "Despesa marcada como pendente" : "Despesa marcada como paga",
+        title: despesa.pago
+          ? "Despesa marcada como pendente"
+          : "Despesa marcada como paga",
       });
     } catch (error) {
       toast({
@@ -193,19 +208,27 @@ export default function DespesasPage() {
                     id="descricao"
                     value={formState.descricao}
                     onChange={(event) =>
-                      setFormState((prev) => ({ ...prev, descricao: event.target.value }))
+                      setFormState((prev) => ({
+                        ...prev,
+                        descricao: event.target.value,
+                      }))
                     }
                     required
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="contabilidade">Contabilidade (opcional)</Label>
+                  <Label htmlFor="contabilidade">
+                    Contabilidade (opcional)
+                  </Label>
                   <Input
                     id="contabilidade"
                     value={formState.contabilidade}
                     onChange={(event) =>
-                      setFormState((prev) => ({ ...prev, contabilidade: event.target.value }))
+                      setFormState((prev) => ({
+                        ...prev,
+                        contabilidade: event.target.value,
+                      }))
                     }
                     placeholder="Informe a contabilidade, se aplicável"
                   />
@@ -218,7 +241,10 @@ export default function DespesasPage() {
                       id="valor"
                       value={formState.valor}
                       onChange={(event) =>
-                        setFormState((prev) => ({ ...prev, valor: event.target.value }))
+                        setFormState((prev) => ({
+                          ...prev,
+                          valor: event.target.value,
+                        }))
                       }
                       placeholder="0,00"
                       required
@@ -231,7 +257,10 @@ export default function DespesasPage() {
                       type="date"
                       value={formState.data}
                       onChange={(event) =>
-                        setFormState((prev) => ({ ...prev, data: event.target.value }))
+                        setFormState((prev) => ({
+                          ...prev,
+                          data: event.target.value,
+                        }))
                       }
                       required
                     />
@@ -297,11 +326,18 @@ export default function DespesasPage() {
 
         <section className="rounded-lg border border-border bg-card">
           <div className="flex items-center justify-between border-b border-border px-6 py-4">
-            <h2 className="text-lg font-semibold text-foreground">Histórico de despesas</h2>
+            <h2 className="text-lg font-semibold text-foreground">
+              Histórico de despesas
+            </h2>
           </div>
           <div className="flex gap-4 p-4 border-b border-border">
             <div className="space-y-1">
-              <Label htmlFor="filtro-data-inicio" className="text-xs text-muted-foreground">Data Início</Label>
+              <Label
+                htmlFor="filtro-data-inicio"
+                className="text-xs text-muted-foreground"
+              >
+                Data Início
+              </Label>
               <Input
                 id="filtro-data-inicio"
                 type="date"
@@ -311,7 +347,12 @@ export default function DespesasPage() {
               />
             </div>
             <div className="space-y-1">
-              <Label htmlFor="filtro-data-fim" className="text-xs text-muted-foreground">Data Fim</Label>
+              <Label
+                htmlFor="filtro-data-fim"
+                className="text-xs text-muted-foreground"
+              >
+                Data Fim
+              </Label>
               <Input
                 id="filtro-data-fim"
                 type="date"
@@ -321,8 +362,18 @@ export default function DespesasPage() {
               />
             </div>
             <div className="space-y-1">
-              <Label htmlFor="filtro-status" className="text-xs text-muted-foreground">Status</Label>
-              <Select value={filtroStatus} onValueChange={(value) => setFiltroStatus(value as "todos" | "pago" | "pendente")}>
+              <Label
+                htmlFor="filtro-status"
+                className="text-xs text-muted-foreground"
+              >
+                Status
+              </Label>
+              <Select
+                value={filtroStatus}
+                onValueChange={(value) =>
+                  setFiltroStatus(value as "todos" | "pago" | "pendente")
+                }
+              >
                 <SelectTrigger className="w-40">
                   <SelectValue />
                 </SelectTrigger>
@@ -333,7 +384,9 @@ export default function DespesasPage() {
                 </SelectContent>
               </Select>
             </div>
-            {(filtroDataInicio || filtroDataFim || filtroStatus !== "todos") && (
+            {(filtroDataInicio ||
+              filtroDataFim ||
+              filtroStatus !== "todos") && (
               <div className="flex items-end">
                 <Button
                   variant="outline"
@@ -365,17 +418,25 @@ export default function DespesasPage() {
             <TableBody>
               {despesasOrdenadas.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
+                  <TableCell
+                    colSpan={7}
+                    className="h-24 text-center text-muted-foreground"
+                  >
                     Nenhuma despesa cadastrada até o momento.
                   </TableCell>
                 </TableRow>
               ) : (
                 despesasOrdenadas.map((despesa) => (
                   <TableRow key={despesa.id}>
-                    <TableCell className="font-medium">{despesa.descricao}</TableCell>
+                    <TableCell className="font-medium">
+                      {despesa.descricao}
+                    </TableCell>
                     <TableCell>{despesa.contabilidade || "-"}</TableCell>
                     <TableCell>
-                      R$ {despesa.valor.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                      R${" "}
+                      {despesa.valor.toLocaleString("pt-BR", {
+                        minimumFractionDigits: 2,
+                      })}
                     </TableCell>
                     <TableCell>
                       {despesa.data
@@ -415,4 +476,3 @@ export default function DespesasPage() {
     </Layout>
   );
 }
-

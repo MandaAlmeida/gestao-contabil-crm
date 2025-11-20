@@ -5,7 +5,15 @@ import { Input } from "@/components/ui/input";
 import { useClientes } from "@/hooks/useClientes";
 import { useCertificados } from "@/hooks/useCertificados";
 import { Cliente, Certificado } from "@/types/crm";
-import { Plus, Search, Edit, Trash2, CheckCircle, Clock3, AlertTriangle } from "lucide-react";
+import {
+  Plus,
+  Search,
+  Edit,
+  Trash2,
+  CheckCircle,
+  Clock3,
+  AlertTriangle,
+} from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import {
   Dialog,
@@ -24,7 +32,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { normalizarCertificados, calcularStatusCertificado } from "@/lib/certificados";
+import {
+  normalizarCertificados,
+  calcularStatusCertificado,
+} from "@/lib/certificados";
 import { cn } from "@/lib/utils";
 
 const adicionarAno = (data?: string) => {
@@ -49,8 +60,11 @@ const removerAno = (data: string) => {
 
 const formatarISO = (date: Date) => date.toISOString().split("T")[0];
 
-const STATUS_META: Record<Certificado["status"], { label: string; className: string; icon: LucideIcon }> = {
-  "Válido": {
+const STATUS_META: Record<
+  Certificado["status"],
+  { label: string; className: string; icon: LucideIcon }
+> = {
+  Válido: {
     label: "Válido",
     className: "bg-success/10 text-success hover:bg-success/20",
     icon: CheckCircle,
@@ -60,7 +74,7 @@ const STATUS_META: Record<Certificado["status"], { label: string; className: str
     className: "bg-warning/10 text-warning hover:bg-warning/20",
     icon: Clock3,
   },
-  "Vencido": {
+  Vencido: {
     label: "Vencido",
     className: "bg-destructive/10 text-destructive hover:bg-destructive/20",
     icon: AlertTriangle,
@@ -82,63 +96,77 @@ const getToggleTitle = (status: Certificado["status"]) => {
 
 export default function Certificados() {
   const { clientes } = useClientes();
-  const { certificados: certificadosRaw, createCertificado, updateCertificado, deleteCertificado } = useCertificados();
-  const [searchTerm, setSearchTerm] = useState('');
-  const [searchResponsavel, setSearchResponsavel] = useState('todos');
-  const [filtroDataInicio, setFiltroDataInicio] = useState('');
-  const [filtroDataFim, setFiltroDataFim] = useState('');
-  const [filtroStatus, setFiltroStatus] = useState<Certificado['status'] | 'todos'>('todos');
+  const {
+    certificados: certificadosRaw,
+    createCertificado,
+    updateCertificado,
+    deleteCertificado,
+  } = useCertificados();
+  const [searchTerm, setSearchTerm] = useState("");
+  const [searchResponsavel, setSearchResponsavel] = useState("todos");
+  const [filtroDataInicio, setFiltroDataInicio] = useState("");
+  const [filtroDataFim, setFiltroDataFim] = useState("");
+  const [filtroStatus, setFiltroStatus] = useState<
+    Certificado["status"] | "todos"
+  >("todos");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<Certificado | null>(null);
   const { toast } = useToast();
 
   const responsaveisDisponiveis = useMemo(
-    () => Array.from(new Set(clientes.map((cliente) => cliente.responsavel))).sort(),
+    () =>
+      Array.from(
+        new Set(clientes.map((cliente) => cliente.responsavel))
+      ).sort(),
     [clientes]
   );
 
   const certificadosNormalizados = useMemo(
     () => normalizarCertificados(certificadosRaw),
-    [certificadosRaw],
+    [certificadosRaw]
   );
 
   const [formData, setFormData] = useState({
-    clienteId: '',
-    tipoCertificado: 'A1' as Certificado['tipoCertificado'],
-    dataVencimento: '',
-    status: 'Válido' as Certificado['status'],
-    observacoes: '',
+    clienteId: "",
+    tipoCertificado: "A1" as Certificado["tipoCertificado"],
+    dataVencimento: "",
+    status: "Válido" as Certificado["status"],
+    observacoes: "",
   });
 
   const resetForm = () => {
     setFormData({
-      clienteId: '',
-      tipoCertificado: 'A1',
-      dataVencimento: '',
-      status: 'Válido',
-      observacoes: '',
+      clienteId: "",
+      tipoCertificado: "A1",
+      dataVencimento: "",
+      status: "Válido",
+      observacoes: "",
     });
     setEditingItem(null);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    const cliente = clientes.find(c => c.id === formData.clienteId);
+
+    const cliente = clientes.find((c) => c.id === formData.clienteId);
     if (!cliente) {
       toast({ title: "Cliente não encontrado!", variant: "destructive" });
       return;
     }
 
     let dataVencimento = formData.dataVencimento;
-    
+
     // Regra de negócio: quando status mudar para Válido, adicionar 1 ano à data
-    if (editingItem && formData.status === 'Válido' && editingItem.status !== 'Válido') {
+    if (
+      editingItem &&
+      formData.status === "Válido" &&
+      editingItem.status !== "Válido"
+    ) {
       const currentDate = new Date(formData.dataVencimento);
       currentDate.setFullYear(currentDate.getFullYear() + 1);
-      dataVencimento = currentDate.toISOString().split('T')[0];
+      dataVencimento = currentDate.toISOString().split("T")[0];
     }
-    
+
     try {
       if (editingItem) {
         await updateCertificado(editingItem.id, {
@@ -160,10 +188,11 @@ export default function Certificados() {
           dataVencimento,
           status: formData.status,
           observacoes: formData.observacoes,
+          ativo: true,
         });
         toast({ title: "Certificado adicionado com sucesso!" });
       }
-      
+
       resetForm();
       setIsDialogOpen(false);
     } catch (error) {
@@ -184,7 +213,7 @@ export default function Certificados() {
   };
 
   const handleDelete = async (id: string) => {
-    if (confirm('Tem certeza que deseja excluir este certificado?')) {
+    if (confirm("Tem certeza que deseja excluir este certificado?")) {
       try {
         await deleteCertificado(id);
         toast({ title: "Certificado excluído com sucesso!" });
@@ -194,31 +223,47 @@ export default function Certificados() {
     }
   };
 
-  const filteredItems = certificadosNormalizados.filter(item => {
-    const cliente = clientes.find(c => c.id === item.clienteId);
-    const matchesSearch = item.clienteNome.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          item.clienteCNPJ.includes(searchTerm);
-    const matchesResponsavel = searchResponsavel === 'todos' || 
-                                (cliente && cliente.responsavel === searchResponsavel);
-    
+  const filteredItems = certificadosNormalizados.filter((item) => {
+    const cliente = clientes.find((c) => c.id === item.clienteId);
+    const matchesSearch =
+      item.clienteNome.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      item.clienteCNPJ.includes(searchTerm);
+    const matchesResponsavel =
+      searchResponsavel === "todos" ||
+      (cliente && cliente.responsavel === searchResponsavel);
+
     // Filtro por data
     const itemData = new Date(item.dataVencimento);
-    const matchesDataInicio = !filtroDataInicio || itemData >= new Date(filtroDataInicio);
-    const matchesDataFim = !filtroDataFim || itemData <= new Date(filtroDataFim);
-    
+    const matchesDataInicio =
+      !filtroDataInicio || itemData >= new Date(filtroDataInicio);
+    const matchesDataFim =
+      !filtroDataFim || itemData <= new Date(filtroDataFim);
+
     // Filtro por status
-    const matchesStatus = filtroStatus === 'todos' || item.status === filtroStatus;
-    
-    return matchesSearch && matchesResponsavel && matchesDataInicio && matchesDataFim && matchesStatus;
+    const matchesStatus =
+      filtroStatus === "todos" || item.status === filtroStatus;
+
+    return (
+      matchesSearch &&
+      matchesResponsavel &&
+      matchesDataInicio &&
+      matchesDataFim &&
+      matchesStatus
+    );
   });
 
   const handleToggleStatus = async (item: Certificado) => {
-    const registroAtual = certificadosRaw.find((cert) => cert.id === item.id) ?? item;
+    const registroAtual =
+      certificadosRaw.find((cert) => cert.id === item.id) ?? item;
 
     if (registroAtual.status === "Válido") {
-      const dataAnterior = formatarISO(removerAno(registroAtual.dataVencimento));
-      const statusRecalculado = calcularStatusCertificado({ dataVencimento: dataAnterior });
-      
+      const dataAnterior = formatarISO(
+        removerAno(registroAtual.dataVencimento)
+      );
+      const statusRecalculado = calcularStatusCertificado({
+        dataVencimento: dataAnterior,
+      });
+
       try {
         await updateCertificado(item.id, {
           status: statusRecalculado,
@@ -238,7 +283,7 @@ export default function Certificados() {
     }
 
     const novoVencimento = formatarISO(adicionarAno());
-    
+
     try {
       await updateCertificado(item.id, {
         status: "Válido",
@@ -246,7 +291,9 @@ export default function Certificados() {
       });
       toast({
         title: "Certificado renovado!",
-        description: `${registroAtual.clienteNome} está válido até ${new Date(novoVencimento).toLocaleDateString("pt-BR")}.`,
+        description: `${registroAtual.clienteNome} está válido até ${new Date(
+          novoVencimento
+        ).toLocaleDateString("pt-BR")}.`,
       });
     } catch (error) {
       toast({ title: "Erro ao renovar certificado", variant: "destructive" });
@@ -259,12 +306,17 @@ export default function Certificados() {
         <div className="mb-8 flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold text-foreground">Certificados</h1>
-            <p className="text-muted-foreground">Gerencie certificados digitais</p>
+            <p className="text-muted-foreground">
+              Gerencie certificados digitais
+            </p>
           </div>
-          <Dialog open={isDialogOpen} onOpenChange={(open) => {
-            setIsDialogOpen(open);
-            if (!open) resetForm();
-          }}>
+          <Dialog
+            open={isDialogOpen}
+            onOpenChange={(open) => {
+              setIsDialogOpen(open);
+              if (!open) resetForm();
+            }}
+          >
             <DialogTrigger asChild>
               <Button>
                 <Plus className="mr-2 h-4 w-4" />
@@ -273,17 +325,24 @@ export default function Certificados() {
             </DialogTrigger>
             <DialogContent className="max-w-2xl">
               <DialogHeader>
-                <DialogTitle>{editingItem ? 'Editar' : 'Novo'} Certificado</DialogTitle>
+                <DialogTitle>
+                  {editingItem ? "Editar" : "Novo"} Certificado
+                </DialogTitle>
               </DialogHeader>
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="clienteId">Cliente</Label>
-                  <Select value={formData.clienteId} onValueChange={(value) => setFormData({ ...formData, clienteId: value })}>
+                  <Select
+                    value={formData.clienteId}
+                    onValueChange={(value) =>
+                      setFormData({ ...formData, clienteId: value })
+                    }
+                  >
                     <SelectTrigger>
                       <SelectValue placeholder="Selecione um cliente" />
                     </SelectTrigger>
                     <SelectContent>
-                      {clientes.map(cliente => (
+                      {clientes.map((cliente) => (
                         <SelectItem key={cliente.id} value={cliente.id}>
                           {cliente.nome} - {cliente.cnpj}
                         </SelectItem>
@@ -294,7 +353,12 @@ export default function Certificados() {
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="tipoCertificado">Tipo de Certificado</Label>
-                    <Select value={formData.tipoCertificado} onValueChange={(value: Certificado['tipoCertificado']) => setFormData({ ...formData, tipoCertificado: value })}>
+                    <Select
+                      value={formData.tipoCertificado}
+                      onValueChange={(value: Certificado["tipoCertificado"]) =>
+                        setFormData({ ...formData, tipoCertificado: value })
+                      }
+                    >
                       <SelectTrigger>
                         <SelectValue />
                       </SelectTrigger>
@@ -310,14 +374,24 @@ export default function Certificados() {
                       id="dataVencimento"
                       type="date"
                       value={formData.dataVencimento}
-                      onChange={(e) => setFormData({ ...formData, dataVencimento: e.target.value })}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          dataVencimento: e.target.value,
+                        })
+                      }
                       required
                     />
                   </div>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="status">Status</Label>
-                  <Select value={formData.status} onValueChange={(value: Certificado['status']) => setFormData({ ...formData, status: value })}>
+                  <Select
+                    value={formData.status}
+                    onValueChange={(value: Certificado["status"]) =>
+                      setFormData({ ...formData, status: value })
+                    }
+                  >
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
@@ -333,12 +407,18 @@ export default function Certificados() {
                   <Textarea
                     id="observacoes"
                     value={formData.observacoes}
-                    onChange={(e) => setFormData({ ...formData, observacoes: e.target.value })}
+                    onChange={(e) =>
+                      setFormData({ ...formData, observacoes: e.target.value })
+                    }
                     rows={3}
                   />
                 </div>
                 <div className="flex justify-end gap-2">
-                  <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setIsDialogOpen(false)}
+                  >
                     Cancelar
                   </Button>
                   <Button type="submit">Salvar</Button>
@@ -369,8 +449,16 @@ export default function Certificados() {
               </div>
             </div>
             <div className="w-64 space-y-1">
-              <Label htmlFor="filtro-responsavel" className="text-xs text-muted-foreground">Responsável</Label>
-              <Select value={searchResponsavel} onValueChange={setSearchResponsavel}>
+              <Label
+                htmlFor="filtro-responsavel"
+                className="text-xs text-muted-foreground"
+              >
+                Responsável
+              </Label>
+              <Select
+                value={searchResponsavel}
+                onValueChange={setSearchResponsavel}
+              >
                 <SelectTrigger id="filtro-responsavel">
                   <SelectValue placeholder="Selecione o responsável" />
                 </SelectTrigger>
@@ -387,7 +475,12 @@ export default function Certificados() {
           </div>
           <div className="flex gap-4">
             <div className="space-y-1">
-              <Label htmlFor="filtro-data-inicio" className="text-xs text-muted-foreground">Data Início</Label>
+              <Label
+                htmlFor="filtro-data-inicio"
+                className="text-xs text-muted-foreground"
+              >
+                Data Início
+              </Label>
               <Input
                 id="filtro-data-inicio"
                 type="date"
@@ -397,7 +490,12 @@ export default function Certificados() {
               />
             </div>
             <div className="space-y-1">
-              <Label htmlFor="filtro-data-fim" className="text-xs text-muted-foreground">Data Fim</Label>
+              <Label
+                htmlFor="filtro-data-fim"
+                className="text-xs text-muted-foreground"
+              >
+                Data Fim
+              </Label>
               <Input
                 id="filtro-data-fim"
                 type="date"
@@ -407,8 +505,18 @@ export default function Certificados() {
               />
             </div>
             <div className="space-y-1">
-              <Label htmlFor="filtro-status" className="text-xs text-muted-foreground">Status</Label>
-              <Select value={filtroStatus} onValueChange={(value) => setFiltroStatus(value as Certificado['status'] | 'todos')}>
+              <Label
+                htmlFor="filtro-status"
+                className="text-xs text-muted-foreground"
+              >
+                Status
+              </Label>
+              <Select
+                value={filtroStatus}
+                onValueChange={(value) =>
+                  setFiltroStatus(value as Certificado["status"] | "todos")
+                }
+              >
                 <SelectTrigger className="w-40">
                   <SelectValue />
                 </SelectTrigger>
@@ -420,16 +528,19 @@ export default function Certificados() {
                 </SelectContent>
               </Select>
             </div>
-            {(filtroDataInicio || filtroDataFim || filtroStatus !== 'todos' || searchResponsavel !== 'todos') && (
+            {(filtroDataInicio ||
+              filtroDataFim ||
+              filtroStatus !== "todos" ||
+              searchResponsavel !== "todos") && (
               <div className="flex items-end">
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={() => {
-                    setFiltroDataInicio('');
-                    setFiltroDataFim('');
-                    setFiltroStatus('todos');
-                    setSearchResponsavel('todos');
+                    setFiltroDataInicio("");
+                    setFiltroDataFim("");
+                    setFiltroStatus("todos");
+                    setSearchResponsavel("todos");
                   }}
                 >
                   Limpar Filtros
@@ -446,7 +557,9 @@ export default function Certificados() {
                 <th className="p-3 text-left text-sm font-medium">Cliente</th>
                 <th className="p-3 text-left text-sm font-medium">CNPJ</th>
                 <th className="p-3 text-left text-sm font-medium">Tipo</th>
-                <th className="p-3 text-left text-sm font-medium">Vencimento</th>
+                <th className="p-3 text-left text-sm font-medium">
+                  Vencimento
+                </th>
                 <th className="p-3 text-left text-sm font-medium">Status</th>
                 <th className="p-3 text-left text-sm font-medium">Ações</th>
               </tr>
@@ -457,7 +570,9 @@ export default function Certificados() {
                   <td className="p-3">{item.clienteNome}</td>
                   <td className="p-3">{item.clienteCNPJ}</td>
                   <td className="p-3">{item.tipoCertificado}</td>
-                  <td className="p-3">{new Date(item.dataVencimento).toLocaleDateString('pt-BR')}</td>
+                  <td className="p-3">
+                    {new Date(item.dataVencimento).toLocaleDateString("pt-BR")}
+                  </td>
                   <td className="p-3">
                     {(() => {
                       const meta = STATUS_META[item.status];
@@ -470,7 +585,7 @@ export default function Certificados() {
                           className={cn(
                             "flex items-center gap-2 rounded-full px-3 py-1 text-xs font-medium transition-colors",
                             "border border-transparent focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
-                            meta.className,
+                            meta.className
                           )}
                         >
                           <Icon className="h-4 w-4" />
@@ -481,10 +596,18 @@ export default function Certificados() {
                   </td>
                   <td className="p-3">
                     <div className="flex gap-2">
-                      <Button size="sm" variant="ghost" onClick={() => handleEdit(item)}>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => handleEdit(item)}
+                      >
                         <Edit className="h-4 w-4" />
                       </Button>
-                      <Button size="sm" variant="ghost" onClick={() => handleDelete(item.id)}>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => handleDelete(item.id)}
+                      >
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
