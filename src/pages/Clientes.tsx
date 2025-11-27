@@ -26,6 +26,17 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { formatarTelefone } from "@/lib/utils";
+import { usePagination } from "@/hooks/usePagination";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+  PaginationEllipsis,
+} from "@/components/ui/pagination";
 
 export default function Clientes() {
   const {
@@ -38,6 +49,8 @@ export default function Clientes() {
   const {
     contabilidades,
     createContabilidade,
+    updateContabilidade,
+    deleteContabilidade,
     loading: contabilidadesLoading,
   } = useContabilidades();
   const {
@@ -53,6 +66,10 @@ export default function Clientes() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isContabilidadeDialogOpen, setIsContabilidadeDialogOpen] =
     useState(false);
+  const [isGerenciarContabilidadesOpen, setIsGerenciarContabilidadesOpen] =
+    useState(false);
+  const [editingContabilidade, setEditingContabilidade] =
+    useState<Contabilidade | null>(null);
   const [editingCliente, setEditingCliente] = useState<Cliente | null>(null);
   const { toast } = useToast();
 
@@ -81,7 +98,11 @@ export default function Clientes() {
   }, [user, usuarios.length, usuariosLoading, refreshUsuarios]);
 
   const responsaveisDisponiveis = useMemo(
-    () => usuarios.map((usuario) => usuario.nome).sort(),
+    () =>
+      usuarios
+        .filter((usuario) => usuario.type !== "dev")
+        .map((usuario) => usuario.nome)
+        .sort(),
     [usuarios]
   );
 
@@ -98,7 +119,7 @@ export default function Clientes() {
   const [contabilidadeFormData, setContabilidadeFormData] = useState({
     nome: "",
     cnpj: "",
-    cidade: "",
+    email: "",
   });
 
   const resetForm = () => {
@@ -118,26 +139,60 @@ export default function Clientes() {
     setContabilidadeFormData({
       nome: "",
       cnpj: "",
-      cidade: "",
+      email: "",
     });
+    setEditingContabilidade(null);
   };
 
   const handleContabilidadeSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     try {
-      await createContabilidade({
-        ...contabilidadeFormData,
-        ativo: true,
-      });
-      toast({ title: "Contabilidade adicionada com sucesso!" });
+      if (editingContabilidade) {
+        await updateContabilidade(editingContabilidade.id, {
+          ...contabilidadeFormData,
+        });
+        toast({ title: "Contabilidade atualizada com sucesso!" });
+      } else {
+        await createContabilidade({
+          ...contabilidadeFormData,
+          ativo: true,
+        });
+        toast({ title: "Contabilidade adicionada com sucesso!" });
+      }
       resetContabilidadeForm();
       setIsContabilidadeDialogOpen(false);
     } catch (error) {
       toast({
-        title: "Erro ao adicionar contabilidade",
+        title: editingContabilidade
+          ? "Erro ao atualizar contabilidade"
+          : "Erro ao adicionar contabilidade",
         variant: "destructive",
       });
+    }
+  };
+
+  const handleEditContabilidade = (contabilidade: Contabilidade) => {
+    setEditingContabilidade(contabilidade);
+    setContabilidadeFormData({
+      nome: contabilidade.nome,
+      cnpj: contabilidade.cnpj || "",
+      email: contabilidade.email,
+    });
+    setIsContabilidadeDialogOpen(true);
+  };
+
+  const handleDeleteContabilidade = async (id: string) => {
+    if (confirm("Tem certeza que deseja excluir esta contabilidade?")) {
+      try {
+        await deleteContabilidade(id);
+        toast({ title: "Contabilidade excluída com sucesso!" });
+      } catch (error) {
+        toast({
+          title: "Erro ao excluir contabilidade",
+          variant: "destructive",
+        });
+      }
     }
   };
 
@@ -213,6 +268,18 @@ export default function Clientes() {
     );
   });
 
+  const {
+    currentPage,
+    totalPages,
+    paginatedItems,
+    nextPage,
+    previousPage,
+    goToPage,
+    startIndex,
+    endIndex,
+    totalItems,
+  } = usePagination(filteredClientes, 10);
+
   return (
     <Layout>
       <div className="p-8">
@@ -239,7 +306,11 @@ export default function Clientes() {
               </DialogTrigger>
               <DialogContent className="max-w-md">
                 <DialogHeader>
-                  <DialogTitle>Nova Contabilidade</DialogTitle>
+                  <DialogTitle>
+                    {editingContabilidade
+                      ? "Editar Contabilidade"
+                      : "Nova Contabilidade"}
+                  </DialogTitle>
                 </DialogHeader>
                 <form
                   onSubmit={handleContabilidadeSubmit}
@@ -273,23 +344,23 @@ export default function Clientes() {
                           cnpj: e.target.value,
                         })
                       }
-                      required
                       placeholder="00.000.000/0000-00"
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="contabilidade-cidade">Cidade</Label>
+                    <Label htmlFor="contabilidade-email">E-mail</Label>
                     <Input
-                      id="contabilidade-cidade"
-                      value={contabilidadeFormData.cidade}
+                      id="contabilidade-email"
+                      type="email"
+                      value={contabilidadeFormData.email}
                       onChange={(e) =>
                         setContabilidadeFormData({
                           ...contabilidadeFormData,
-                          cidade: e.target.value,
+                          email: e.target.value,
                         })
                       }
                       required
-                      placeholder="Ex: São Paulo"
+                      placeholder="Ex: contato@contabil.com.br"
                     />
                   </div>
                   <div className="flex justify-end gap-2">
@@ -300,9 +371,105 @@ export default function Clientes() {
                     >
                       Cancelar
                     </Button>
-                    <Button type="submit">Salvar</Button>
+                    <Button type="submit">
+                      {editingContabilidade ? "Atualizar" : "Salvar"}
+                    </Button>
                   </div>
                 </form>
+              </DialogContent>
+            </Dialog>
+            <Dialog
+              open={isGerenciarContabilidadesOpen}
+              onOpenChange={setIsGerenciarContabilidadesOpen}
+            >
+              <DialogTrigger asChild>
+                <Button variant="outline">
+                  <Building2 className="mr-2 h-4 w-4" />
+                  Gerenciar Contabilidades
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle>Contabilidades Cadastradas</DialogTitle>
+                </DialogHeader>
+                <div className="mt-4">
+                  <div className="rounded-md border">
+                    <table className="w-full">
+                      <thead className="bg-muted/50">
+                        <tr>
+                          <th className="p-3 text-left text-sm font-medium">
+                            Nome
+                          </th>
+                          <th className="p-3 text-left text-sm font-medium">
+                            CNPJ
+                          </th>
+                          <th className="p-3 text-left text-sm font-medium">
+                            E-mail
+                          </th>
+                          <th className="p-3 text-left text-sm font-medium">
+                            Ações
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {contabilidadesLoading ? (
+                          <tr>
+                            <td
+                              colSpan={4}
+                              className="p-3 text-center text-muted-foreground"
+                            >
+                              Carregando...
+                            </td>
+                          </tr>
+                        ) : contabilidades.length === 0 ? (
+                          <tr>
+                            <td
+                              colSpan={4}
+                              className="p-3 text-center text-muted-foreground"
+                            >
+                              Nenhuma contabilidade cadastrada
+                            </td>
+                          </tr>
+                        ) : (
+                          contabilidades.map((contabilidade) => (
+                            <tr key={contabilidade.id} className="border-t">
+                              <td className="p-3">{contabilidade.nome}</td>
+                              <td className="p-3">
+                                {contabilidade.cnpj || "-"}
+                              </td>
+                              <td className="p-3">{contabilidade.email}</td>
+                              <td className="p-3">
+                                <div className="flex gap-2">
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={() => {
+                                      handleEditContabilidade(contabilidade);
+                                      setIsGerenciarContabilidadesOpen(false);
+                                    }}
+                                  >
+                                    <Edit className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={() =>
+                                      handleDeleteContabilidade(
+                                        contabilidade.id
+                                      )
+                                    }
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                              </td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
               </DialogContent>
             </Dialog>
             <Dialog
@@ -369,7 +536,12 @@ export default function Clientes() {
                         onChange={(e) =>
                           setFormData({ ...formData, contato: e.target.value })
                         }
+                        onBlur={(e) => {
+                          const formatado = formatarTelefone(e.target.value);
+                          setFormData({ ...formData, contato: formatado });
+                        }}
                         required
+                        placeholder="(31) 9 9789-1102"
                       />
                     </div>
                   </div>
@@ -378,17 +550,95 @@ export default function Clientes() {
                       <Label htmlFor="contabilidade">
                         Nome da Contabilidade
                       </Label>
-                      <Input
-                        id="contabilidade"
+                      <Select
                         value={formData.contabilidade}
-                        onChange={(e) =>
-                          setFormData({
-                            ...formData,
-                            contabilidade: e.target.value,
-                          })
-                        }
+                        onValueChange={(value) => {
+                          // Buscar a contabilidade selecionada para obter o email
+                          const contabilidadeSelecionada = contabilidades.find(
+                            (c) => c.nome === value
+                          );
+
+                          // Preencher o email no campo observações
+                          const emailContabilidade =
+                            contabilidadeSelecionada?.email || "";
+
+                          // Se houver email da contabilidade, adicionar nas observações
+                          let observacoesAtualizadas =
+                            formData.observacoes || "";
+
+                          if (
+                            emailContabilidade &&
+                            emailContabilidade.trim() !== ""
+                          ) {
+                            // Verificar se o email já existe nas observações
+                            const emailJaExiste =
+                              observacoesAtualizadas.includes(
+                                emailContabilidade
+                              );
+
+                            if (!emailJaExiste) {
+                              // Se não existe, adicionar o email no início das observações
+                              if (observacoesAtualizadas.trim()) {
+                                // Se já há observações, adicionar o email no início
+                                observacoesAtualizadas = `${emailContabilidade}\n${observacoesAtualizadas}`;
+                              } else {
+                                // Se não há observações, apenas adicionar o email
+                                observacoesAtualizadas = emailContabilidade;
+                              }
+                            }
+                          }
+
+                          // Atualizar o estado
+                          setFormData((prev) => ({
+                            ...prev,
+                            contabilidade: value,
+                            observacoes: observacoesAtualizadas,
+                          }));
+                        }}
                         required
-                      />
+                      >
+                        <SelectTrigger id="contabilidade">
+                          <SelectValue placeholder="Selecione a contabilidade">
+                            {formData.contabilidade ||
+                              "Selecione a contabilidade"}
+                          </SelectValue>
+                        </SelectTrigger>
+                        <SelectContent>
+                          {contabilidadesLoading ? (
+                            <SelectItem value="" disabled>
+                              Carregando...
+                            </SelectItem>
+                          ) : contabilidades.length === 0 ? (
+                            <SelectItem value="" disabled>
+                              Nenhuma contabilidade cadastrada
+                            </SelectItem>
+                          ) : (
+                            <>
+                              {/* Mostrar contabilidade atual mesmo que não esteja cadastrada */}
+                              {formData.contabilidade &&
+                                !contabilidades.some(
+                                  (c) => c.nome === formData.contabilidade
+                                ) && (
+                                  <SelectItem
+                                    key="current-contabilidade"
+                                    value={formData.contabilidade}
+                                  >
+                                    {formData.contabilidade}
+                                  </SelectItem>
+                                )}
+                              {/* Listar todas as contabilidades cadastradas */}
+                              {contabilidades.map((contabilidade) => (
+                                <SelectItem
+                                  key={contabilidade.id}
+                                  value={contabilidade.nome}
+                                >
+                                  {contabilidade.nome}
+                                </SelectItem>
+                              ))}
+                            </>
+                          )}
+                        </SelectContent>
+                      </Select>
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="responsavel">Responsável</Label>
@@ -415,11 +665,16 @@ export default function Clientes() {
                               Nenhum responsável cadastrado
                             </SelectItem>
                           ) : (
-                            usuarios.map((usuario) => (
-                              <SelectItem key={usuario.id} value={usuario.nome}>
-                                {usuario.nome}
-                              </SelectItem>
-                            ))
+                            usuarios
+                              .filter((usuario) => usuario.type !== "dev")
+                              .map((usuario) => (
+                                <SelectItem
+                                  key={usuario.id}
+                                  value={usuario.nome}
+                                >
+                                  {usuario.nome}
+                                </SelectItem>
+                              ))
                           )}
                         </SelectContent>
                       </Select>
@@ -490,8 +745,11 @@ export default function Clientes() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="todos">Todos os responsáveis</SelectItem>
-                  {responsaveisDisponiveis.map((responsavel) => (
-                    <SelectItem key={responsavel} value={responsavel}>
+                  {responsaveisDisponiveis.map((responsavel, index) => (
+                    <SelectItem
+                      key={`responsavel-${index}-${responsavel}`}
+                      value={responsavel}
+                    >
                       {responsavel}
                     </SelectItem>
                   ))}
@@ -565,7 +823,7 @@ export default function Clientes() {
               </tr>
             </thead>
             <tbody>
-              {filteredClientes.map((cliente) => (
+              {paginatedItems.map((cliente) => (
                 <tr key={cliente.id} className="border-t">
                   <td className="p-3">{cliente.nome}</td>
                   <td className="p-3">{cliente.cnpj}</td>
@@ -603,6 +861,71 @@ export default function Clientes() {
               Nenhum cliente encontrado
             </div>
           ) : null}
+          {totalPages > 1 && (
+            <div className="border-t p-4">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-sm text-muted-foreground">
+                  Mostrando {startIndex + 1} a {endIndex} de {totalItems}{" "}
+                  clientes
+                </p>
+              </div>
+              <Pagination>
+                <PaginationContent>
+                  <PaginationItem>
+                    <PaginationPrevious
+                      onClick={previousPage}
+                      className={
+                        currentPage === 1
+                          ? "pointer-events-none opacity-50"
+                          : "cursor-pointer"
+                      }
+                    />
+                  </PaginationItem>
+                  {Array.from({ length: totalPages }, (_, i) => i + 1).map(
+                    (page) => {
+                      if (
+                        page === 1 ||
+                        page === totalPages ||
+                        (page >= currentPage - 1 && page <= currentPage + 1)
+                      ) {
+                        return (
+                          <PaginationItem key={page}>
+                            <PaginationLink
+                              onClick={() => goToPage(page)}
+                              isActive={currentPage === page}
+                              className="cursor-pointer"
+                            >
+                              {page}
+                            </PaginationLink>
+                          </PaginationItem>
+                        );
+                      } else if (
+                        page === currentPage - 2 ||
+                        page === currentPage + 2
+                      ) {
+                        return (
+                          <PaginationItem key={page}>
+                            <PaginationEllipsis />
+                          </PaginationItem>
+                        );
+                      }
+                      return null;
+                    }
+                  )}
+                  <PaginationItem>
+                    <PaginationNext
+                      onClick={nextPage}
+                      className={
+                        currentPage === totalPages
+                          ? "pointer-events-none opacity-50"
+                          : "cursor-pointer"
+                      }
+                    />
+                  </PaginationItem>
+                </PaginationContent>
+              </Pagination>
+            </div>
+          )}
         </div>
       </div>
     </Layout>

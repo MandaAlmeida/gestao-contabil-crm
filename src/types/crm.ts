@@ -1,8 +1,9 @@
 export interface Contabilidade {
   id: string;
   nome: string;
-  cnpj: string;
-  cidade: string;
+  cnpj?: string;
+  email: string;
+  cidade?: string;
   ativo: boolean;
   createdAt: string;
   updatedAt: string;
@@ -59,7 +60,14 @@ export interface Renovacao {
   clienteCNPJ: string;
   dataRenovacao: string;
   valorRenovacao: number;
-  status: "Em Negociação" | "Renovado" | "Cancelado";
+  status:
+    | "Pendente"
+    | "Avisado"
+    | "Em Negociação"
+    | "Parcelado"
+    | "Renovado"
+    | "Cancelado";
+  parcela?: "1 Vez" | "2 Vezes" | "3 Vezes" | null;
   observacoes: string;
   ativo: boolean;
   createdAt: string;
@@ -72,7 +80,7 @@ export interface Sintegra {
   clienteNome: string;
   dataPrazo: string;
   acesso: string;
-  status: "Pendente" | "Em Andamento" | "Concluído";
+  status: "Pendente" | "Concluído";
   observacoes: string;
   ativo: boolean;
   createdAt: string;

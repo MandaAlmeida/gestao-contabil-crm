@@ -223,8 +223,8 @@ export default function Dashboard() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="todos">Todos os responsáveis</SelectItem>
-                  {responsaveisDisponiveis.map((responsavel) => (
-                    <SelectItem key={responsavel} value={responsavel}>
+                  {responsaveisDisponiveis.map((responsavel, index) => (
+                    <SelectItem key={`responsavel-${index}-${responsavel}`} value={responsavel}>
                       {responsavel}
                     </SelectItem>
                   ))}

@@ -26,7 +26,14 @@ import { useClientes } from "@/hooks/useClientes";
 import { useFinanceiro } from "@/hooks/useFinanceiro";
 import { useCertificados } from "@/hooks/useCertificados";
 import { useSintegra } from "@/hooks/useSintegra";
-import { Cliente, Financeiro, Certificado, Sintegra } from "@/types/crm";
+import { useRenovacao } from "@/hooks/useRenovacao";
+import {
+  Cliente,
+  Financeiro,
+  Certificado,
+  Sintegra,
+  Renovacao,
+} from "@/types/crm";
 import {
   Users,
   DollarSign,
@@ -35,6 +42,7 @@ import {
   Calendar,
   Building2,
   MapPin,
+  RefreshCw,
 } from "lucide-react";
 import { normalizarFinanceiros } from "@/lib/financeiro";
 
@@ -43,6 +51,7 @@ export default function DashboardClientes() {
   const { financeiros: financeirosRaw } = useFinanceiro();
   const { certificados } = useCertificados();
   const { sintegras } = useSintegra();
+  const { renovacoes } = useRenovacao();
   const [responsavelSelecionado, setResponsavelSelecionado] =
     useState<string>("todos");
 
@@ -82,6 +91,10 @@ export default function DashboardClientes() {
     clienteIdsFiltrados.has(sintegra.clienteId)
   );
 
+  const renovacoesFiltradas = renovacoes.filter((renovacao) =>
+    clienteIdsFiltrados.has(renovacao.clienteId)
+  );
+
   const totaisMensalidades = financeirosFiltrados.reduce(
     (acc, f) => {
       if (f.status === "Recebido") {
@@ -106,6 +119,24 @@ export default function DashboardClientes() {
   const sintegrasPendentes = sintegrasFiltradas.filter(
     (s) => s.status === "Pendente"
   ).length;
+
+  const totaisRenovacoes = renovacoesFiltradas.reduce(
+    (acc, r) => {
+      if (r.status === "Renovado") {
+        acc.recebidas += r.valorRenovacao;
+      } else if (
+        r.status === "Pendente" ||
+        r.status === "Avisado" ||
+        r.status === "Em Negociação" ||
+        r.status === "Parcelado"
+      ) {
+        acc.aReceber += r.valorRenovacao;
+        acc.emAberto += 1;
+      }
+      return acc;
+    },
+    { recebidas: 0, aReceber: 0, emAberto: 0 }
+  );
 
   const financeirosEmAberto = financeirosFiltrados.filter(
     (f) => f.status !== "Recebido"
@@ -168,8 +199,11 @@ export default function DashboardClientes() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="todos">Todos os responsáveis</SelectItem>
-                {responsaveisDisponiveis.map((responsavel) => (
-                  <SelectItem key={responsavel} value={responsavel}>
+                {responsaveisDisponiveis.map((responsavel, index) => (
+                  <SelectItem
+                    key={`responsavel-${index}-${responsavel}`}
+                    value={responsavel}
+                  >
                     {responsavel}
                   </SelectItem>
                 ))}
@@ -179,7 +213,7 @@ export default function DashboardClientes() {
         </div>
 
         {/* Cards de Resumo */}
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">
@@ -255,6 +289,38 @@ export default function DashboardClientes() {
               <div className="text-2xl font-bold">{sintegrasPendentes}</div>
               <p className="text-xs text-muted-foreground">
                 aguardando conclusão
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">
+                Total Renovações
+              </CardTitle>
+              <RefreshCw className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">
+                R${" "}
+                {(
+                  totaisRenovacoes.recebidas + totaisRenovacoes.aReceber
+                ).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Recebidas: R${" "}
+                {totaisRenovacoes.recebidas.toLocaleString("pt-BR", {
+                  minimumFractionDigits: 2,
+                })}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                A receber: R${" "}
+                {totaisRenovacoes.aReceber.toLocaleString("pt-BR", {
+                  minimumFractionDigits: 2,
+                })}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Em aberto: {totaisRenovacoes.emAberto}
               </p>
             </CardContent>
           </Card>

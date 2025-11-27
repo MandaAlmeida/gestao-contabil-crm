@@ -36,7 +36,17 @@ import {
   calcularStatusFinanceiro,
   normalizarFinanceiros,
 } from "@/lib/financeiro";
-import { cn } from "@/lib/utils";
+import { cn, formatarDataBR } from "@/lib/utils";
+import { usePagination } from "@/hooks/usePagination";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+  PaginationEllipsis,
+} from "@/components/ui/pagination";
 
 export default function FinanceiroPage() {
   const { clientes } = useClientes();
@@ -102,16 +112,6 @@ export default function FinanceiroPage() {
 
     let dataVencimento = formData.dataVencimento;
 
-    if (
-      editingItem &&
-      editingItem.status === "Recebido" &&
-      !formData.dataPagamento
-    ) {
-      const currentDate = new Date(formData.dataVencimento);
-      currentDate.setMonth(currentDate.getMonth() + 1);
-      dataVencimento = currentDate.toISOString().split("T")[0];
-    }
-
     const valorMensalidadeNumber = parseFloat(formData.valorMensalidade);
     if (Number.isNaN(valorMensalidadeNumber)) {
       toast({
@@ -123,6 +123,12 @@ export default function FinanceiroPage() {
     const dataPagamento = formData.dataPagamento
       ? formData.dataPagamento
       : null;
+
+    // Avanço automático da data de vencimento quando um pagamento é registrado
+    // Apenas se o item não estava como "Recebido" antes (ou seja, está registrando um novo pagamento)
+    if (dataPagamento && (!editingItem || editingItem.status !== "Recebido")) {
+      dataVencimento = adicionarMes(dataVencimento);
+    }
     const status = calcularStatusFinanceiro({
       status: editingItem?.status ?? "A Vencer",
       dataPagamento,
@@ -169,31 +175,81 @@ export default function FinanceiroPage() {
     }
   };
 
-  const adicionarMes = (data: string) => {
-    const baseDate = data ? new Date(data) : new Date();
-    if (Number.isNaN(baseDate.getTime())) {
-      return new Date();
+  /**
+   * Adiciona um mês a uma data no formato YYYY-MM-DD
+   * Trabalha diretamente com strings para evitar problemas de timezone
+   */
+  const adicionarMes = (dataString: string): string => {
+    if (!dataString) {
+      const hoje = new Date();
+      return hoje.toISOString().split("T")[0];
     }
-    const novaData = new Date(baseDate);
-    novaData.setMonth(novaData.getMonth() + 1);
-    return novaData;
+
+    const partes = dataString.split("-");
+    if (partes.length !== 3) {
+      return dataString;
+    }
+
+    const ano = parseInt(partes[0], 10);
+    const mes = parseInt(partes[1], 10);
+    const dia = parseInt(partes[2], 10);
+
+    let novoAno = ano;
+    let novoMes = mes + 1;
+
+    if (novoMes > 12) {
+      novoMes = 1;
+      novoAno += 1;
+    }
+
+    // Garante que o dia não ultrapasse os dias do mês
+    const ultimoDiaDoMes = new Date(novoAno, novoMes, 0).getDate();
+    const novoDia = Math.min(dia, ultimoDiaDoMes);
+
+    return `${novoAno}-${String(novoMes).padStart(2, "0")}-${String(
+      novoDia
+    ).padStart(2, "0")}`;
   };
 
-  const removerMes = (data: string) => {
-    const baseDate = data ? new Date(data) : new Date();
-    if (Number.isNaN(baseDate.getTime())) {
-      return new Date();
+  /**
+   * Remove um mês de uma data no formato YYYY-MM-DD
+   * Trabalha diretamente com strings para evitar problemas de timezone
+   */
+  const removerMes = (dataString: string): string => {
+    if (!dataString) {
+      const hoje = new Date();
+      return hoje.toISOString().split("T")[0];
     }
-    const novaData = new Date(baseDate);
-    novaData.setMonth(novaData.getMonth() - 1);
-    return novaData;
-  };
 
-  const formatarISO = (date: Date) => date.toISOString().split("T")[0];
+    const partes = dataString.split("-");
+    if (partes.length !== 3) {
+      return dataString;
+    }
+
+    const ano = parseInt(partes[0], 10);
+    const mes = parseInt(partes[1], 10);
+    const dia = parseInt(partes[2], 10);
+
+    let novoAno = ano;
+    let novoMes = mes - 1;
+
+    if (novoMes < 1) {
+      novoMes = 12;
+      novoAno -= 1;
+    }
+
+    // Garante que o dia não ultrapasse os dias do mês
+    const ultimoDiaDoMes = new Date(novoAno, novoMes, 0).getDate();
+    const novoDia = Math.min(dia, ultimoDiaDoMes);
+
+    return `${novoAno}-${String(novoMes).padStart(2, "0")}-${String(
+      novoDia
+    ).padStart(2, "0")}`;
+  };
 
   const handleTogglePagamento = async (item: Financeiro) => {
     if (item.status === "Recebido") {
-      const vencimentoAnterior = formatarISO(removerMes(item.dataVencimento));
+      const vencimentoAnterior = removerMes(item.dataVencimento);
       const statusAjustado = calcularStatusFinanceiro({
         status: item.status,
         dataPagamento: null,
@@ -219,9 +275,13 @@ export default function FinanceiroPage() {
       return;
     }
 
+    // Obtém a data de hoje no formato YYYY-MM-DD (timezone local)
     const hoje = new Date();
-    const novaDataPagamento = formatarISO(hoje);
-    const novoVencimento = formatarISO(adicionarMes(item.dataVencimento));
+    const ano = hoje.getFullYear();
+    const mes = String(hoje.getMonth() + 1).padStart(2, "0");
+    const dia = String(hoje.getDate()).padStart(2, "0");
+    const novaDataPagamento = `${ano}-${mes}-${dia}`;
+    const novoVencimento = adicionarMes(item.dataVencimento);
 
     try {
       await updateFinanceiro(item.id, {
@@ -290,6 +350,18 @@ export default function FinanceiroPage() {
       matchesStatus
     );
   });
+
+  const {
+    currentPage,
+    totalPages,
+    paginatedItems,
+    nextPage,
+    previousPage,
+    goToPage,
+    startIndex,
+    endIndex,
+    totalItems,
+  } = usePagination(filteredItems, 10);
 
   const totaisMensalidades = filteredItems.reduce(
     (acc, item) => {
@@ -514,8 +586,11 @@ export default function FinanceiroPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="todos">Todos os responsáveis</SelectItem>
-                  {responsaveisDisponiveis.map((responsavel) => (
-                    <SelectItem key={responsavel} value={responsavel}>
+                  {responsaveisDisponiveis.map((responsavel, index) => (
+                    <SelectItem
+                      key={`responsavel-${index}-${responsavel}`}
+                      value={responsavel}
+                    >
                       {responsavel}
                     </SelectItem>
                   ))}
@@ -631,13 +706,11 @@ export default function FinanceiroPage() {
               </tr>
             </thead>
             <tbody>
-              {filteredItems.map((item) => (
+              {paginatedItems.map((item) => (
                 <tr key={item.id} className="border-t">
                   <td className="p-3">{item.clienteNome}</td>
                   <td className="p-3">{item.clienteCNPJ}</td>
-                  <td className="p-3">
-                    {new Date(item.dataVencimento).toLocaleDateString("pt-BR")}
-                  </td>
+                  <td className="p-3">{formatarDataBR(item.dataVencimento)}</td>
                   <td className="p-3">
                     R${" "}
                     {item.valorMensalidade.toLocaleString("pt-BR", {
@@ -670,9 +743,7 @@ export default function FinanceiroPage() {
                       <span>{item.meioPagamento}</span>
                       <span className="text-xs text-muted-foreground">
                         {item.dataPagamento
-                          ? new Date(item.dataPagamento).toLocaleDateString(
-                              "pt-BR"
-                            )
+                          ? formatarDataBR(item.dataPagamento)
                           : "Sem registro"}
                       </span>
                     </div>
@@ -702,6 +773,71 @@ export default function FinanceiroPage() {
           {filteredItems.length === 0 && (
             <div className="p-8 text-center text-muted-foreground">
               Nenhum registro encontrado
+            </div>
+          )}
+          {totalPages > 1 && (
+            <div className="border-t p-4">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-sm text-muted-foreground">
+                  Mostrando {startIndex + 1} a {endIndex} de {totalItems}{" "}
+                  registros
+                </p>
+              </div>
+              <Pagination>
+                <PaginationContent>
+                  <PaginationItem>
+                    <PaginationPrevious
+                      onClick={previousPage}
+                      className={
+                        currentPage === 1
+                          ? "pointer-events-none opacity-50"
+                          : "cursor-pointer"
+                      }
+                    />
+                  </PaginationItem>
+                  {Array.from({ length: totalPages }, (_, i) => i + 1).map(
+                    (page) => {
+                      if (
+                        page === 1 ||
+                        page === totalPages ||
+                        (page >= currentPage - 1 && page <= currentPage + 1)
+                      ) {
+                        return (
+                          <PaginationItem key={page}>
+                            <PaginationLink
+                              onClick={() => goToPage(page)}
+                              isActive={currentPage === page}
+                              className="cursor-pointer"
+                            >
+                              {page}
+                            </PaginationLink>
+                          </PaginationItem>
+                        );
+                      } else if (
+                        page === currentPage - 2 ||
+                        page === currentPage + 2
+                      ) {
+                        return (
+                          <PaginationItem key={page}>
+                            <PaginationEllipsis />
+                          </PaginationItem>
+                        );
+                      }
+                      return null;
+                    }
+                  )}
+                  <PaginationItem>
+                    <PaginationNext
+                      onClick={nextPage}
+                      className={
+                        currentPage === totalPages
+                          ? "pointer-events-none opacity-50"
+                          : "cursor-pointer"
+                      }
+                    />
+                  </PaginationItem>
+                </PaginationContent>
+              </Pagination>
             </div>
           )}
         </div>

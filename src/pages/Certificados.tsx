@@ -13,6 +13,8 @@ import {
   CheckCircle,
   Clock3,
   AlertTriangle,
+  UserPlus,
+  Users,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import {
@@ -36,7 +38,9 @@ import {
   normalizarCertificados,
   calcularStatusCertificado,
 } from "@/lib/certificados";
-import { cn } from "@/lib/utils";
+import { cn, formatarTelefone } from "@/lib/utils";
+import { usePagination } from "@/hooks/usePagination";
+import { PaginationControls } from "@/components/PaginationControls";
 
 const adicionarAno = (data?: string) => {
   const baseDate = data ? new Date(data) : new Date();
@@ -111,6 +115,9 @@ export default function Certificados() {
   >("todos");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<Certificado | null>(null);
+  const [modoCliente, setModoCliente] = useState<"existente" | "novo">(
+    "existente"
+  );
   const { toast } = useToast();
 
   const responsaveisDisponiveis = useMemo(
@@ -134,6 +141,11 @@ export default function Certificados() {
     observacoes: "",
   });
 
+  const [novoClienteData, setNovoClienteData] = useState({
+    nome: "",
+    cnpj: "",
+  });
+
   const resetForm = () => {
     setFormData({
       clienteId: "",
@@ -142,16 +154,46 @@ export default function Certificados() {
       status: "Válido",
       observacoes: "",
     });
+    setNovoClienteData({
+      nome: "",
+      cnpj: "",
+    });
+    setModoCliente("existente");
     setEditingItem(null);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    const cliente = clientes.find((c) => c.id === formData.clienteId);
-    if (!cliente) {
-      toast({ title: "Cliente não encontrado!", variant: "destructive" });
-      return;
+    let clienteNome = "";
+    let clienteCNPJ = "";
+    let clienteId = "";
+
+    // Se estiver no modo "novo cliente", usar os dados preenchidos manualmente
+    if (modoCliente === "novo") {
+      if (!novoClienteData.nome || !novoClienteData.cnpj) {
+        toast({
+          title: "Campos obrigatórios",
+          description: "Preencha pelo menos o nome e CNPJ/CPF.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Usar dados preenchidos manualmente (não criar cliente na base)
+      clienteNome = novoClienteData.nome;
+      clienteCNPJ = novoClienteData.cnpj;
+      clienteId = `manual-${Date.now()}`; // ID temporário para identificar que não é um cliente cadastrado
+    } else {
+      // Modo cliente existente - buscar dados do cliente
+      const cliente = clientes.find((c) => c.id === formData.clienteId);
+      if (!cliente) {
+        toast({ title: "Cliente não encontrado!", variant: "destructive" });
+        return;
+      }
+      clienteNome = cliente.nome;
+      clienteCNPJ = cliente.cnpj;
+      clienteId = cliente.id;
     }
 
     let dataVencimento = formData.dataVencimento;
@@ -170,9 +212,9 @@ export default function Certificados() {
     try {
       if (editingItem) {
         await updateCertificado(editingItem.id, {
-          clienteId: formData.clienteId,
-          clienteNome: cliente.nome,
-          clienteCNPJ: cliente.cnpj,
+          clienteId: clienteId,
+          clienteNome: clienteNome,
+          clienteCNPJ: clienteCNPJ,
           tipoCertificado: formData.tipoCertificado,
           dataVencimento,
           status: formData.status,
@@ -181,16 +223,22 @@ export default function Certificados() {
         toast({ title: "Certificado atualizado com sucesso!" });
       } else {
         await createCertificado({
-          clienteId: formData.clienteId,
-          clienteNome: cliente.nome,
-          clienteCNPJ: cliente.cnpj,
+          clienteId: clienteId,
+          clienteNome: clienteNome,
+          clienteCNPJ: clienteCNPJ,
           tipoCertificado: formData.tipoCertificado,
           dataVencimento,
           status: formData.status,
           observacoes: formData.observacoes,
           ativo: true,
         });
-        toast({ title: "Certificado adicionado com sucesso!" });
+        toast({
+          title: "Certificado adicionado com sucesso!",
+          description:
+            modoCliente === "novo"
+              ? "Certificado criado com dados informados manualmente."
+              : undefined,
+        });
       }
 
       resetForm();
@@ -251,6 +299,18 @@ export default function Certificados() {
       matchesStatus
     );
   });
+
+  const {
+    currentPage,
+    totalPages,
+    paginatedItems,
+    nextPage,
+    previousPage,
+    goToPage,
+    startIndex,
+    endIndex,
+    totalItems,
+  } = usePagination(filteredItems, 10);
 
   const handleToggleStatus = async (item: Certificado) => {
     const registroAtual =
@@ -331,24 +391,93 @@ export default function Certificados() {
               </DialogHeader>
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="clienteId">Cliente</Label>
-                  <Select
-                    value={formData.clienteId}
-                    onValueChange={(value) =>
-                      setFormData({ ...formData, clienteId: value })
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecione um cliente" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {clientes.map((cliente) => (
-                        <SelectItem key={cliente.id} value={cliente.id}>
-                          {cliente.nome} - {cliente.cnpj}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="clienteId">Cliente</Label>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() =>
+                        setModoCliente(
+                          modoCliente === "existente" ? "novo" : "existente"
+                        )
+                      }
+                      className="h-8"
+                    >
+                      {modoCliente === "existente" ? (
+                        <>
+                          <UserPlus className="mr-2 h-4 w-4" />
+                          Novo Cliente
+                        </>
+                      ) : (
+                        <>
+                          <Users className="mr-2 h-4 w-4" />
+                          Cliente Existente
+                        </>
+                      )}
+                    </Button>
+                  </div>
+
+                  {modoCliente === "existente" ? (
+                    <Select
+                      value={formData.clienteId}
+                      onValueChange={(value) =>
+                        setFormData({ ...formData, clienteId: value })
+                      }
+                      required
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione um cliente" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {clientes.map((cliente) => (
+                          <SelectItem key={cliente.id} value={cliente.id}>
+                            {cliente.nome} - {cliente.cnpj}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <div className="space-y-3 p-4 border rounded-md bg-muted/30">
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-2">
+                          <Label htmlFor="novo-cliente-nome">Nome *</Label>
+                          <Input
+                            id="novo-cliente-nome"
+                            value={novoClienteData.nome}
+                            onChange={(e) =>
+                              setNovoClienteData({
+                                ...novoClienteData,
+                                nome: e.target.value,
+                              })
+                            }
+                            required
+                            placeholder="Nome do cliente/pessoa"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="novo-cliente-cnpj">CNPJ/CPF *</Label>
+                          <Input
+                            id="novo-cliente-cnpj"
+                            value={novoClienteData.cnpj}
+                            onChange={(e) =>
+                              setNovoClienteData({
+                                ...novoClienteData,
+                                cnpj: e.target.value,
+                              })
+                            }
+                            required
+                            placeholder="00.000.000/0000-00 ou 000.000.000-00"
+                          />
+                        </div>
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        * Apenas os campos Nome e CNPJ/CPF são obrigatórios. Os
+                        demais campos são opcionais e não serão salvos como
+                        cliente.
+                      </p>
+                    </div>
+                  )}
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
@@ -565,7 +694,7 @@ export default function Certificados() {
               </tr>
             </thead>
             <tbody>
-              {filteredItems.map((item) => (
+              {paginatedItems.map((item) => (
                 <tr key={item.id} className="border-t">
                   <td className="p-3">{item.clienteNome}</td>
                   <td className="p-3">{item.clienteCNPJ}</td>
@@ -621,6 +750,17 @@ export default function Certificados() {
               Nenhum certificado encontrado
             </div>
           )}
+          <PaginationControls
+            currentPage={currentPage}
+            totalPages={totalPages}
+            onPageChange={goToPage}
+            onNext={nextPage}
+            onPrevious={previousPage}
+            startIndex={startIndex}
+            endIndex={endIndex}
+            totalItems={totalItems}
+            itemLabel="certificados"
+          />
         </div>
       </div>
     </Layout>

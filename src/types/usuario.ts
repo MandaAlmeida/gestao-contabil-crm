@@ -3,6 +3,7 @@ export interface Usuario {
   nome: string;
   email: string;
   telefone?: string;
+  type?: "dev" | "user";
   ativo: boolean;
   createdAt: string;
   updatedAt: string;

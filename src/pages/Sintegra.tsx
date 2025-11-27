@@ -5,15 +5,7 @@ import { Input } from "@/components/ui/input";
 import { useClientes } from "@/hooks/useClientes";
 import { useSintegra } from "@/hooks/useSintegra";
 import { Cliente, Sintegra } from "@/types/crm";
-import {
-  Plus,
-  Search,
-  Edit,
-  Trash2,
-  Clock3,
-  RefreshCw,
-  CheckCircle,
-} from "lucide-react";
+import { Plus, Search, Edit, Trash2, Clock3, CheckCircle } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import {
   Dialog,
@@ -32,6 +24,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { usePagination } from "@/hooks/usePagination";
+import { PaginationControls } from "@/components/PaginationControls";
 import { cn } from "@/lib/utils";
 
 const adicionarMes = (data: string) => {
@@ -64,11 +58,6 @@ const STATUS_META: Record<
     label: "Pendente",
     className: "bg-warning/10 text-warning hover:bg-warning/20",
     icon: Clock3,
-  },
-  "Em Andamento": {
-    label: "Em andamento",
-    className: "bg-accent text-accent-foreground hover:bg-accent/80",
-    icon: RefreshCw,
   },
   Concluído: {
     label: "Concluído",
@@ -200,8 +189,6 @@ export default function SintegraPage() {
     let novaDataPrazo = item.dataPrazo;
 
     if (item.status === "Pendente") {
-      novoStatus = "Em Andamento";
-    } else if (item.status === "Em Andamento") {
       novoStatus = "Concluído";
       novaDataPrazo = formatarISO(adicionarMes(item.dataPrazo));
     } else {
@@ -222,8 +209,6 @@ export default function SintegraPage() {
             ? `${item.clienteNome} concluído. Novo prazo: ${new Date(
                 novaDataPrazo
               ).toLocaleDateString("pt-BR")}.`
-            : novoStatus === "Em Andamento"
-            ? `${item.clienteNome} agora está em andamento.`
             : `${item.clienteNome} voltou para pendente.`,
       });
     } catch (error) {
@@ -234,8 +219,6 @@ export default function SintegraPage() {
   const getToggleTitle = (status: Sintegra["status"]) => {
     switch (status) {
       case "Pendente":
-        return "Marcar como em andamento";
-      case "Em Andamento":
         return "Marcar como concluído";
       case "Concluído":
         return "Reabrir como pendente";
@@ -272,6 +255,18 @@ export default function SintegraPage() {
       matchesStatus
     );
   });
+
+  const {
+    currentPage,
+    totalPages,
+    paginatedItems,
+    nextPage,
+    previousPage,
+    goToPage,
+    startIndex,
+    endIndex,
+    totalItems,
+  } = usePagination(filteredItems, 10);
 
   return (
     <Layout>
@@ -349,9 +344,6 @@ export default function SintegraPage() {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="Pendente">Pendente</SelectItem>
-                        <SelectItem value="Em Andamento">
-                          Em Andamento
-                        </SelectItem>
                         <SelectItem value="Concluído">Concluído</SelectItem>
                       </SelectContent>
                     </Select>
@@ -379,7 +371,11 @@ export default function SintegraPage() {
                       setFormData({ ...formData, observacoes: e.target.value })
                     }
                     rows={3}
+                    placeholder="Ex: Instalado no meu computador (PATRICK)"
                   />
+                  <p className="text-xs text-muted-foreground">
+                    Exemplo: Instalado no meu computador (PATRICK)
+                  </p>
                 </div>
                 <div className="flex justify-end gap-2">
                   <Button
@@ -432,8 +428,11 @@ export default function SintegraPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="todos">Todos os responsáveis</SelectItem>
-                  {responsaveisDisponiveis.map((responsavel) => (
-                    <SelectItem key={responsavel} value={responsavel}>
+                  {responsaveisDisponiveis.map((responsavel, index) => (
+                    <SelectItem
+                      key={`responsavel-${index}-${responsavel}`}
+                      value={responsavel}
+                    >
                       {responsavel}
                     </SelectItem>
                   ))}
@@ -491,7 +490,6 @@ export default function SintegraPage() {
                 <SelectContent>
                   <SelectItem value="todos">Todos</SelectItem>
                   <SelectItem value="Pendente">Pendente</SelectItem>
-                  <SelectItem value="Em Andamento">Em Andamento</SelectItem>
                   <SelectItem value="Concluído">Concluído</SelectItem>
                 </SelectContent>
               </Select>
@@ -532,7 +530,7 @@ export default function SintegraPage() {
               </tr>
             </thead>
             <tbody>
-              {filteredItems.map((item) => (
+              {paginatedItems.map((item) => (
                 <tr key={item.id} className="border-t">
                   <td className="p-3">{item.clienteNome}</td>
                   <td className="p-3">
@@ -587,6 +585,17 @@ export default function SintegraPage() {
               Nenhum Sintegra encontrado
             </div>
           )}
+          <PaginationControls
+            currentPage={currentPage}
+            totalPages={totalPages}
+            onPageChange={goToPage}
+            onNext={nextPage}
+            onPrevious={previousPage}
+            startIndex={startIndex}
+            endIndex={endIndex}
+            totalItems={totalItems}
+            itemLabel="registros"
+          />
         </div>
       </div>
     </Layout>

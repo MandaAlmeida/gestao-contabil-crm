@@ -27,10 +27,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus, Wallet } from "lucide-react";
+import { Plus, Wallet, Edit, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useDespesas } from "@/hooks/useDespesas";
 import type { Despesa } from "@/types/despesas";
+import { usePagination } from "@/hooks/usePagination";
+import { PaginationControls } from "@/components/PaginationControls";
 
 interface FormState {
   descricao: string;
@@ -50,8 +52,41 @@ const DEFAULT_FORM: FormState = {
   pago: false,
 };
 
+const adicionarMes = (dataString: string): string => {
+  if (!dataString) {
+    const hoje = new Date();
+    return hoje.toISOString().split("T")[0];
+  }
+
+  const partes = dataString.split("-");
+  if (partes.length !== 3) {
+    return dataString;
+  }
+
+  const ano = parseInt(partes[0], 10);
+  const mes = parseInt(partes[1], 10);
+  const dia = parseInt(partes[2], 10);
+
+  let novoAno = ano;
+  let novoMes = mes + 1;
+
+  if (novoMes > 12) {
+    novoMes = 1;
+    novoAno += 1;
+  }
+
+  // Garante que o dia não ultrapasse os dias do mês
+  const ultimoDiaDoMes = new Date(novoAno, novoMes, 0).getDate();
+  const novoDia = Math.min(dia, ultimoDiaDoMes);
+
+  return `${novoAno}-${String(novoMes).padStart(2, "0")}-${String(
+    novoDia
+  ).padStart(2, "0")}`;
+};
+
 export default function DespesasPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [editingItem, setEditingItem] = useState<Despesa | null>(null);
   const [formState, setFormState] = useState<FormState>(DEFAULT_FORM);
   const [isSaving, setIsSaving] = useState(false);
   const { toast } = useToast();
@@ -93,8 +128,21 @@ export default function DespesasPage() {
     [despesasFiltradas]
   );
 
+  const {
+    currentPage,
+    totalPages,
+    paginatedItems,
+    nextPage,
+    previousPage,
+    goToPage,
+    startIndex,
+    endIndex,
+    totalItems,
+  } = usePagination(despesasOrdenadas, 10);
+
   const resetForm = () => {
     setFormState(DEFAULT_FORM);
+    setEditingItem(null);
   };
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -113,21 +161,35 @@ export default function DespesasPage() {
 
     setIsSaving(true);
     try {
-      await createDespesa({
-        descricao: formState.descricao.trim(),
-        contabilidade: formState.contabilidade.trim() || null,
-        valor: valorNumber,
-        data: formState.data,
-        fixo: formState.fixo,
-        pago: formState.pago,
-        ativo: true,
-      });
-      toast({ title: "Despesa registrada com sucesso!" });
+      if (editingItem) {
+        await updateDespesa(editingItem.id, {
+          descricao: formState.descricao.trim(),
+          contabilidade: formState.contabilidade.trim() || null,
+          valor: valorNumber,
+          data: formState.data,
+          fixo: formState.fixo,
+          pago: formState.pago,
+        });
+        toast({ title: "Despesa atualizada com sucesso!" });
+      } else {
+        await createDespesa({
+          descricao: formState.descricao.trim(),
+          contabilidade: formState.contabilidade.trim() || null,
+          valor: valorNumber,
+          data: formState.data,
+          fixo: formState.fixo,
+          pago: formState.pago,
+          ativo: true,
+        });
+        toast({ title: "Despesa registrada com sucesso!" });
+      }
       resetForm();
       setIsDialogOpen(false);
     } catch (error) {
       toast({
-        title: "Erro ao registrar despesa",
+        title: editingItem
+          ? "Erro ao atualizar despesa"
+          : "Erro ao registrar despesa",
         variant: "destructive",
       });
     } finally {
@@ -135,13 +197,44 @@ export default function DespesasPage() {
     }
   };
 
+  const handleEdit = (despesa: Despesa) => {
+    setEditingItem(despesa);
+    setFormState({
+      descricao: despesa.descricao,
+      contabilidade: despesa.contabilidade || "",
+      valor: despesa.valor.toString().replace(".", ","),
+      data: despesa.data,
+      fixo: despesa.fixo,
+      pago: despesa.pago,
+    });
+    setIsDialogOpen(true);
+  };
+
   const handleTogglePago = async (despesa: Despesa) => {
     try {
-      await updateDespesa(despesa.id, { pago: !despesa.pago });
+      const novoStatusPago = !despesa.pago;
+      let novaData = despesa.data;
+
+      // Avanço automático da data para despesas fixas quando marcadas como pagas
+      if (despesa.fixo && novoStatusPago && !despesa.pago) {
+        novaData = adicionarMes(despesa.data);
+      }
+
+      await updateDespesa(despesa.id, {
+        pago: novoStatusPago,
+        data: novaData,
+      });
+
       toast({
-        title: despesa.pago
-          ? "Despesa marcada como pendente"
-          : "Despesa marcada como paga",
+        title: novoStatusPago
+          ? "Despesa marcada como paga"
+          : "Despesa marcada como pendente",
+        description:
+          despesa.fixo && novoStatusPago
+            ? `Data avançada para ${new Date(novaData).toLocaleDateString(
+                "pt-BR"
+              )}`
+            : undefined,
       });
     } catch (error) {
       toast({
@@ -198,7 +291,9 @@ export default function DespesasPage() {
             </DialogTrigger>
             <DialogContent className="max-w-lg">
               <DialogHeader>
-                <DialogTitle>Adicionar despesa</DialogTitle>
+                <DialogTitle>
+                  {editingItem ? "Editar despesa" : "Adicionar despesa"}
+                </DialogTitle>
               </DialogHeader>
 
               <form onSubmit={handleSubmit} className="space-y-4">
@@ -316,7 +411,7 @@ export default function DespesasPage() {
                     Cancelar
                   </Button>
                   <Button type="submit" disabled={isSaving}>
-                    Adicionar
+                    {editingItem ? "Salvar" : "Adicionar"}
                   </Button>
                 </div>
               </form>
@@ -426,7 +521,7 @@ export default function DespesasPage() {
                   </TableCell>
                 </TableRow>
               ) : (
-                despesasOrdenadas.map((despesa) => (
+                paginatedItems.map((despesa) => (
                   <TableRow key={despesa.id}>
                     <TableCell className="font-medium">
                       {despesa.descricao}
@@ -458,19 +553,43 @@ export default function DespesasPage() {
                       </Button>
                     </TableCell>
                     <TableCell className="text-right">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleRemover(despesa)}
-                      >
-                        Excluir
-                      </Button>
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleEdit(despesa)}
+                        >
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleRemover(despesa)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))
               )}
             </TableBody>
           </Table>
+          {totalPages > 1 && (
+            <div className="border-t p-4">
+              <PaginationControls
+                currentPage={currentPage}
+                totalPages={totalPages}
+                onPageChange={goToPage}
+                onNext={nextPage}
+                onPrevious={previousPage}
+                startIndex={startIndex}
+                endIndex={endIndex}
+                totalItems={totalItems}
+                itemLabel="despesas"
+              />
+            </div>
+          )}
         </section>
       </div>
     </Layout>

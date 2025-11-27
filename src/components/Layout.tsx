@@ -9,7 +9,8 @@ import {
   FileText,
   Wallet,
   BarChart3,
-  UserCog,
+  LayoutDashboard,
+  TrendingUp,
   ChevronLeft,
   Settings,
   HelpCircle,
@@ -28,7 +29,10 @@ interface LayoutProps {
 }
 
 export function Layout({ children }: LayoutProps) {
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(() => {
+    const saved = localStorage.getItem("sidebar-collapsed");
+    return saved ? JSON.parse(saved) : false;
+  });
   const { resolvedTheme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
   const { logout, user } = useAuth();
@@ -38,6 +42,10 @@ export function Layout({ children }: LayoutProps) {
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  useEffect(() => {
+    localStorage.setItem("sidebar-collapsed", JSON.stringify(collapsed));
+  }, [collapsed]);
 
   const isDark = resolvedTheme === "dark";
 
@@ -77,7 +85,7 @@ export function Layout({ children }: LayoutProps) {
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => setCollapsed(!collapsed)}
+              onClick={() => setCollapsed((prev) => !prev)}
               className="h-8 w-8 flex-shrink-0"
             >
               <ChevronLeft
@@ -92,23 +100,23 @@ export function Layout({ children }: LayoutProps) {
           <nav className="flex-1 space-y-1 p-4 overflow-y-auto">
             <NavLink
               to="/"
-              className="flex items-center gap-3 rounded-lg px-3 py-2 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+              className={collapsed ? "justify-center" : ""}
               activeClassName="bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground"
             >
-              <UserCog className="h-5 w-5 flex-shrink-0" />
+              <LayoutDashboard className="h-5 w-5 flex-shrink-0" />
               {!collapsed && <span>Dashboard Clientes</span>}
             </NavLink>
             <NavLink
               to="/dashboard-financeiro"
-              className="flex items-center gap-3 rounded-lg px-3 py-2 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+              className={collapsed ? "justify-center" : ""}
               activeClassName="bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground"
             >
-              <BarChart3 className="h-5 w-5 flex-shrink-0" />
+              <TrendingUp className="h-5 w-5 flex-shrink-0" />
               {!collapsed && <span>Dashboard Financeiro</span>}
             </NavLink>
             <NavLink
               to="/clientes"
-              className="flex items-center gap-3 rounded-lg px-3 py-2 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+              className={collapsed ? "justify-center" : ""}
               activeClassName="bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground"
             >
               <Users className="h-5 w-5 flex-shrink-0" />
@@ -116,7 +124,7 @@ export function Layout({ children }: LayoutProps) {
             </NavLink>
             <NavLink
               to="/financeiro"
-              className="flex items-center gap-3 rounded-lg px-3 py-2 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+              className={collapsed ? "justify-center" : ""}
               activeClassName="bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground"
             >
               <DollarSign className="h-5 w-5 flex-shrink-0" />
@@ -124,7 +132,7 @@ export function Layout({ children }: LayoutProps) {
             </NavLink>
             <NavLink
               to="/despesas"
-              className="flex items-center gap-3 rounded-lg px-3 py-2 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+              className={collapsed ? "justify-center" : ""}
               activeClassName="bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground"
             >
               <Wallet className="h-5 w-5 flex-shrink-0" />
@@ -132,7 +140,7 @@ export function Layout({ children }: LayoutProps) {
             </NavLink>
             <NavLink
               to="/certificados"
-              className="flex items-center gap-3 rounded-lg px-3 py-2 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+              className={collapsed ? "justify-center" : ""}
               activeClassName="bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground"
             >
               <FileCheck className="h-5 w-5 flex-shrink-0" />
@@ -140,7 +148,7 @@ export function Layout({ children }: LayoutProps) {
             </NavLink>
             <NavLink
               to="/renovacao"
-              className="flex items-center gap-3 rounded-lg px-3 py-2 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+              className={collapsed ? "justify-center" : ""}
               activeClassName="bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground"
             >
               <RefreshCw className="h-5 w-5 flex-shrink-0" />
@@ -148,7 +156,7 @@ export function Layout({ children }: LayoutProps) {
             </NavLink>
             <NavLink
               to="/sintegra"
-              className="flex items-center gap-3 rounded-lg px-3 py-2 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+              className={collapsed ? "justify-center" : ""}
               activeClassName="bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground"
             >
               <FileText className="h-5 w-5 flex-shrink-0" />
@@ -156,7 +164,7 @@ export function Layout({ children }: LayoutProps) {
             </NavLink>
             <NavLink
               to="/configuracoes"
-              className="flex items-center gap-3 rounded-lg px-3 py-2 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+              className={collapsed ? "justify-center" : ""}
               activeClassName="bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground"
             >
               <Settings className="h-5 w-5 flex-shrink-0" />
@@ -177,7 +185,9 @@ export function Layout({ children }: LayoutProps) {
             <Button
               variant="ghost"
               onClick={handleLogout}
-              className="flex items-center gap-3 rounded-lg px-3 py-2 text-destructive transition-colors hover:bg-destructive/10 hover:text-destructive w-full justify-start"
+              className={`flex items-center gap-3 rounded-lg px-3 py-2 text-destructive transition-colors hover:bg-destructive/10 hover:text-destructive w-full ${
+                collapsed ? "justify-center" : "justify-start"
+              }`}
             >
               <LogOut className="h-5 w-5 flex-shrink-0" />
               {!collapsed && <span>Sair</span>}

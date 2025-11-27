@@ -23,6 +23,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { usePagination } from "@/hooks/usePagination";
+import { PaginationControls } from "@/components/PaginationControls";
 
 export default function RenovacaoPage() {
   const { clientes } = useClientes();
@@ -51,7 +53,8 @@ export default function RenovacaoPage() {
     clienteId: "",
     dataRenovacao: "",
     valorRenovacao: "",
-    status: "Em Negociação" as Renovacao["status"],
+    status: "Pendente" as Renovacao["status"],
+    parcela: null as Renovacao["parcela"],
     observacoes: "",
   });
 
@@ -60,7 +63,8 @@ export default function RenovacaoPage() {
       clienteId: "",
       dataRenovacao: "",
       valorRenovacao: "",
-      status: "Em Negociação",
+      status: "Pendente",
+      parcela: null,
       observacoes: "",
     });
     setEditingItem(null);
@@ -103,6 +107,7 @@ export default function RenovacaoPage() {
           valorRenovacao: valorRenovacaoNumber,
           dataRenovacao,
           status: formData.status,
+          parcela: formData.status === "Parcelado" ? formData.parcela : null,
           observacoes: formData.observacoes,
         });
         toast({ title: "Renovação atualizada com sucesso!" });
@@ -114,6 +119,7 @@ export default function RenovacaoPage() {
           valorRenovacao: valorRenovacaoNumber,
           dataRenovacao,
           status: formData.status,
+          parcela: formData.status === "Parcelado" ? formData.parcela : null,
           observacoes: formData.observacoes,
           ativo: true,
         });
@@ -134,6 +140,7 @@ export default function RenovacaoPage() {
       dataRenovacao: item.dataRenovacao,
       valorRenovacao: item.valorRenovacao.toString(),
       status: item.status,
+      parcela: item.parcela || null,
       observacoes: item.observacoes,
     });
     setIsDialogOpen(true);
@@ -179,16 +186,83 @@ export default function RenovacaoPage() {
     );
   });
 
+  const {
+    currentPage,
+    totalPages,
+    paginatedItems,
+    nextPage,
+    previousPage,
+    goToPage,
+    startIndex,
+    endIndex,
+    totalItems,
+  } = usePagination(filteredItems, 10);
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case "Renovado":
         return "bg-success/10 text-success";
-      case "Em Negociação":
+      case "Pendente":
+        return "bg-destructive/10 text-destructive";
+      case "Avisado":
         return "bg-warning/10 text-warning";
+      case "Em Negociação":
+        return "bg-orange-500/10 text-orange-500";
+      case "Parcelado":
+        return "bg-blue-500/10 text-blue-500";
       case "Cancelado":
         return "bg-muted text-muted-foreground";
       default:
-        return "";
+        return "bg-muted/50 text-muted-foreground";
+    }
+  };
+
+  const statusOrder: Renovacao["status"][] = [
+    "Pendente",
+    "Avisado",
+    "Em Negociação",
+    "Parcelado",
+    "Renovado",
+    "Cancelado",
+  ];
+
+  const handleQuickStatusChange = async (item: Renovacao) => {
+    const currentIndex = statusOrder.indexOf(item.status);
+    const nextIndex = (currentIndex + 1) % statusOrder.length;
+    const nextStatus = statusOrder[nextIndex];
+
+    try {
+      const updateData: Partial<Renovacao> = {
+        status: nextStatus,
+      };
+
+      // Se mudar para Parcelado e não tiver parcela, definir como "1 Vez"
+      if (nextStatus === "Parcelado" && !item.parcela) {
+        updateData.parcela = "1 Vez";
+      } else if (nextStatus !== "Parcelado") {
+        // Se mudar para outro status que não seja Parcelado, remover parcela
+        updateData.parcela = null;
+      }
+
+      await updateRenovacao(item.id, updateData);
+      toast({
+        title: "Status atualizado!",
+        description: `Status alterado para "${nextStatus}"${
+          nextStatus === "Parcelado" && updateData.parcela
+            ? ` (${updateData.parcela})`
+            : ""
+        }.`,
+      });
+    } catch (error) {
+      console.error("Erro ao atualizar status:", error);
+      toast({
+        title: "Erro ao atualizar status",
+        description:
+          error instanceof Error
+            ? error.message
+            : "Ocorreu um erro ao atualizar o status.",
+        variant: "destructive",
+      });
     }
   };
 
@@ -280,21 +354,50 @@ export default function RenovacaoPage() {
                   <Select
                     value={formData.status}
                     onValueChange={(value: Renovacao["status"]) =>
-                      setFormData({ ...formData, status: value })
+                      setFormData({
+                        ...formData,
+                        status: value,
+                        parcela:
+                          value === "Parcelado" ? formData.parcela : null,
+                      })
                     }
                   >
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
+                      <SelectItem value="Pendente">Pendente</SelectItem>
+                      <SelectItem value="Avisado">Avisado</SelectItem>
                       <SelectItem value="Em Negociação">
                         Em Negociação
                       </SelectItem>
+                      <SelectItem value="Parcelado">Parcelado</SelectItem>
                       <SelectItem value="Renovado">Renovado</SelectItem>
                       <SelectItem value="Cancelado">Cancelado</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
+                {formData.status === "Parcelado" && (
+                  <div className="space-y-2">
+                    <Label htmlFor="parcela">Parcela</Label>
+                    <Select
+                      value={formData.parcela || ""}
+                      onValueChange={(value: "1 Vez" | "2 Vezes" | "3 Vezes") =>
+                        setFormData({ ...formData, parcela: value })
+                      }
+                      required={formData.status === "Parcelado"}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione a parcela" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="1 Vez">1 Vez</SelectItem>
+                        <SelectItem value="2 Vezes">2 Vezes</SelectItem>
+                        <SelectItem value="3 Vezes">3 Vezes</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
                 <div className="space-y-2">
                   <Label htmlFor="observacoes">Observações</Label>
                   <Textarea
@@ -415,7 +518,10 @@ export default function RenovacaoPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="todos">Todos</SelectItem>
+                  <SelectItem value="Pendente">Pendente</SelectItem>
+                  <SelectItem value="Avisado">Avisado</SelectItem>
                   <SelectItem value="Em Negociação">Em Negociação</SelectItem>
+                  <SelectItem value="Parcelado">Parcelado</SelectItem>
                   <SelectItem value="Renovado">Renovado</SelectItem>
                   <SelectItem value="Cancelado">Cancelado</SelectItem>
                 </SelectContent>
@@ -458,7 +564,7 @@ export default function RenovacaoPage() {
               </tr>
             </thead>
             <tbody>
-              {filteredItems.map((item) => (
+              {paginatedItems.map((item) => (
                 <tr key={item.id} className="border-t">
                   <td className="p-3">{item.clienteNome}</td>
                   <td className="p-3">{item.clienteCNPJ}</td>
@@ -472,13 +578,19 @@ export default function RenovacaoPage() {
                     })}
                   </td>
                   <td className="p-3">
-                    <span
-                      className={`rounded-full px-3 py-1 text-xs font-medium ${getStatusColor(
+                    <button
+                      type="button"
+                      onClick={() => handleQuickStatusChange(item)}
+                      title="Clique para alterar o status"
+                      className={`rounded-full px-3 py-1 text-xs font-medium transition-colors hover:opacity-80 cursor-pointer ${getStatusColor(
                         item.status
                       )}`}
                     >
                       {item.status}
-                    </span>
+                      {item.status === "Parcelado" && item.parcela && (
+                        <span className="ml-1">({item.parcela})</span>
+                      )}
+                    </button>
                   </td>
                   <td className="p-3">
                     <div className="flex gap-2">
@@ -507,6 +619,17 @@ export default function RenovacaoPage() {
               Nenhuma renovação encontrada
             </div>
           )}
+          <PaginationControls
+            currentPage={currentPage}
+            totalPages={totalPages}
+            onPageChange={goToPage}
+            onNext={nextPage}
+            onPrevious={previousPage}
+            startIndex={startIndex}
+            endIndex={endIndex}
+            totalItems={totalItems}
+            itemLabel="renovações"
+          />
         </div>
       </div>
     </Layout>

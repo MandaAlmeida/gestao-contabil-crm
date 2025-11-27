@@ -21,6 +21,7 @@ import { ThemeProvider } from "@/components/ThemeProvider";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { PublicRoute } from "@/components/PublicRoute";
+import { NotificationSystem } from "@/components/NotificationSystem";
 
 const queryClient = new QueryClient();
 
@@ -31,6 +32,7 @@ const App = () => (
         <AuthProvider>
           <Toaster />
           <Sonner />
+          <NotificationSystem />
           <BrowserRouter>
             <Routes>
               {/* Rotas públicas */}
@@ -59,7 +61,7 @@ const App = () => (
                   </PublicRoute>
                 }
               />
-              
+
               {/* Rotas protegidas */}
               <Route
                 path="/"
