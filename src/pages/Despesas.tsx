@@ -33,6 +33,7 @@ import { useDespesas } from "@/hooks/useDespesas";
 import type { Despesa } from "@/types/despesas";
 import { usePagination } from "@/hooks/usePagination";
 import { PaginationControls } from "@/components/PaginationControls";
+import { formatarDataBR } from "@/lib/utils";
 
 interface FormState {
   descricao: string;
@@ -138,6 +139,8 @@ export default function DespesasPage() {
     startIndex,
     endIndex,
     totalItems,
+    itemsPerPage,
+    setItemsPerPage,
   } = usePagination(despesasOrdenadas, 10);
 
   const resetForm = () => {
@@ -231,9 +234,7 @@ export default function DespesasPage() {
           : "Despesa marcada como pendente",
         description:
           despesa.fixo && novoStatusPago
-            ? `Data avançada para ${new Date(novaData).toLocaleDateString(
-                "pt-BR"
-              )}`
+            ? `Data avançada para ${formatarDataBR(novaData)}`
             : undefined,
       });
     } catch (error) {
@@ -479,6 +480,31 @@ export default function DespesasPage() {
                 </SelectContent>
               </Select>
             </div>
+            {totalItems > 11 && (
+              <div className="space-y-1">
+                <Label
+                  htmlFor="items-per-page"
+                  className="text-xs text-muted-foreground"
+                >
+                  Itens por página
+                </Label>
+                <Select
+                  value={itemsPerPage.toString()}
+                  onValueChange={(value) => setItemsPerPage(Number(value))}
+                >
+                  <SelectTrigger id="items-per-page" className="w-24">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="5">5</SelectItem>
+                    <SelectItem value="10">10</SelectItem>
+                    <SelectItem value="20">20</SelectItem>
+                    <SelectItem value="50">50</SelectItem>
+                    <SelectItem value="100">100</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             {(filtroDataInicio ||
               filtroDataFim ||
               filtroStatus !== "todos") && (
@@ -534,9 +560,7 @@ export default function DespesasPage() {
                       })}
                     </TableCell>
                     <TableCell>
-                      {despesa.data
-                        ? new Date(despesa.data).toLocaleDateString("pt-BR")
-                        : "-"}
+                      {despesa.data ? formatarDataBR(despesa.data) : "-"}
                     </TableCell>
                     <TableCell>
                       <Badge variant={despesa.fixo ? "default" : "secondary"}>

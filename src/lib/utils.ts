@@ -12,13 +12,17 @@ export function cn(...inputs: ClassValue[]) {
 export function formatarDataBR(dataString: string): string {
   if (!dataString) return "";
 
-  // Se já está no formato YYYY-MM-DD, converte diretamente
+  // Se já está no formato YYYY-MM-DD, converte diretamente (evita problemas de timezone)
   const partes = dataString.split("-");
   if (partes.length === 3) {
-    return `${partes[2]}/${partes[1]}/${partes[0]}`;
+    const [ano, mes, dia] = partes;
+    // Valida se são números válidos
+    if (!isNaN(Number(ano)) && !isNaN(Number(mes)) && !isNaN(Number(dia))) {
+      return `${dia}/${mes}/${ano}`;
+    }
   }
 
-  // Se não, tenta usar Date mas ajustando para timezone local
+  // Fallback: tenta usar Date mas ajustando para timezone local
   const data = new Date(dataString);
   if (isNaN(data.getTime())) return "";
 

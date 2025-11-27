@@ -28,6 +28,7 @@ import { useClientes } from "@/hooks/useClientes";
 import { useFinanceiro } from "@/hooks/useFinanceiro";
 import { useCertificados } from "@/hooks/useCertificados";
 import { useSintegra } from "@/hooks/useSintegra";
+import { formatarDataBR } from "@/lib/utils";
 import { useDespesas } from "@/hooks/useDespesas";
 import { Cliente, Financeiro, Certificado, Sintegra } from "@/types/crm";
 import { Despesa } from "@/types/despesas";
@@ -79,7 +80,10 @@ export default function Dashboard() {
       dataFim: new Date(),
     });
 
-  const financeirosNormalizados = useMemo(() => normalizarFinanceiros(financeirosRaw), [financeirosRaw]);
+  const financeirosNormalizados = useMemo(
+    () => normalizarFinanceiros(financeirosRaw),
+    [financeirosRaw]
+  );
 
   const responsaveisDisponiveis = useMemo(
     () =>
@@ -224,7 +228,10 @@ export default function Dashboard() {
                 <SelectContent>
                   <SelectItem value="todos">Todos os responsáveis</SelectItem>
                   {responsaveisDisponiveis.map((responsavel, index) => (
-                    <SelectItem key={`responsavel-${index}-${responsavel}`} value={responsavel}>
+                    <SelectItem
+                      key={`responsavel-${index}-${responsavel}`}
+                      value={responsavel}
+                    >
                       {responsavel}
                     </SelectItem>
                   ))}
@@ -481,10 +488,7 @@ export default function Dashboard() {
                       <div>
                         <p className="font-medium">{cert.clienteNome}</p>
                         <p className="text-sm text-muted-foreground">
-                          Vence em{" "}
-                          {new Date(cert.dataVencimento).toLocaleDateString(
-                            "pt-BR"
-                          )}
+                          Vence em {formatarDataBR(cert.dataVencimento)}
                         </p>
                       </div>
                       <span className="rounded-full bg-warning/10 px-3 py-1 text-xs font-medium text-warning">
@@ -521,10 +525,7 @@ export default function Dashboard() {
                       <div>
                         <p className="font-medium">{sintegra.clienteNome}</p>
                         <p className="text-sm text-muted-foreground">
-                          Prazo:{" "}
-                          {new Date(sintegra.dataPrazo).toLocaleDateString(
-                            "pt-BR"
-                          )}
+                          Prazo: {formatarDataBR(sintegra.dataPrazo)}
                         </p>
                       </div>
                       <Calendar className="h-4 w-4 text-muted-foreground" />

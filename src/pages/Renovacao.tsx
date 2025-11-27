@@ -25,6 +25,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { usePagination } from "@/hooks/usePagination";
 import { PaginationControls } from "@/components/PaginationControls";
+import { formatarDataBR } from "@/lib/utils";
 
 export default function RenovacaoPage() {
   const { clientes } = useClientes();
@@ -196,6 +197,8 @@ export default function RenovacaoPage() {
     startIndex,
     endIndex,
     totalItems,
+    itemsPerPage,
+    setItemsPerPage,
   } = usePagination(filteredItems, 10);
 
   const getStatusColor = (status: string) => {
@@ -217,53 +220,79 @@ export default function RenovacaoPage() {
     }
   };
 
-  const statusOrder: Renovacao["status"][] = [
-    "Pendente",
-    "Avisado",
-    "Em Negociação",
-    "Parcelado",
-    "Renovado",
-    "Cancelado",
-  ];
+  const handleStatusChange = async (item: Renovacao, value: string) => {
+    // Se o valor contém "Parcelado", extrair a parcela
+    if (value.startsWith("Parcelado")) {
+      const parcelaMatch = value.match(/\((.+)\)/);
+      const parcela = parcelaMatch
+        ? (parcelaMatch[1] as "1 Vez" | "2 Vezes" | "3 Vezes")
+        : "1 Vez";
 
-  const handleQuickStatusChange = async (item: Renovacao) => {
-    const currentIndex = statusOrder.indexOf(item.status);
-    const nextIndex = (currentIndex + 1) % statusOrder.length;
-    const nextStatus = statusOrder[nextIndex];
+      const novoStatus: Renovacao["status"] = "Parcelado";
 
-    try {
-      const updateData: Partial<Renovacao> = {
-        status: nextStatus,
-      };
+      // Se o status e parcela não mudaram, não faz nada
+      if (item.status === novoStatus && item.parcela === parcela) return;
 
-      // Se mudar para Parcelado e não tiver parcela, definir como "1 Vez"
-      if (nextStatus === "Parcelado" && !item.parcela) {
-        updateData.parcela = "1 Vez";
-      } else if (nextStatus !== "Parcelado") {
-        // Se mudar para outro status que não seja Parcelado, remover parcela
-        updateData.parcela = null;
+      try {
+        await updateRenovacao(item.id, {
+          status: novoStatus,
+          parcela: parcela,
+        });
+        toast({
+          title: "Status atualizado!",
+          description: `Status alterado para "${novoStatus}" (${parcela}).`,
+        });
+      } catch (error) {
+        console.error("Erro ao atualizar status:", error);
+        toast({
+          title: "Erro ao atualizar status",
+          description:
+            error instanceof Error
+              ? error.message
+              : "Ocorreu um erro ao atualizar o status.",
+          variant: "destructive",
+        });
       }
+    } else {
+      const novoStatus = value as Renovacao["status"];
 
-      await updateRenovacao(item.id, updateData);
-      toast({
-        title: "Status atualizado!",
-        description: `Status alterado para "${nextStatus}"${
-          nextStatus === "Parcelado" && updateData.parcela
-            ? ` (${updateData.parcela})`
-            : ""
-        }.`,
-      });
-    } catch (error) {
-      console.error("Erro ao atualizar status:", error);
-      toast({
-        title: "Erro ao atualizar status",
-        description:
-          error instanceof Error
-            ? error.message
-            : "Ocorreu um erro ao atualizar o status.",
-        variant: "destructive",
-      });
+      // Se o status não mudou, não faz nada
+      if (item.status === novoStatus) return;
+
+      try {
+        const updateData: Partial<Renovacao> = {
+          status: novoStatus,
+        };
+
+        // Se mudar para outro status que não seja Parcelado, remover parcela
+        if (novoStatus !== "Parcelado") {
+          updateData.parcela = null;
+        }
+
+        await updateRenovacao(item.id, updateData);
+        toast({
+          title: "Status atualizado!",
+          description: `Status alterado para "${novoStatus}".`,
+        });
+      } catch (error) {
+        console.error("Erro ao atualizar status:", error);
+        toast({
+          title: "Erro ao atualizar status",
+          description:
+            error instanceof Error
+              ? error.message
+              : "Ocorreu um erro ao atualizar o status.",
+          variant: "destructive",
+        });
+      }
     }
+  };
+
+  const getStatusValue = (item: Renovacao): string => {
+    if (item.status === "Parcelado") {
+      return `Parcelado (${item.parcela || "1 Vez"})`;
+    }
+    return item.status;
   };
 
   return (
@@ -527,6 +556,31 @@ export default function RenovacaoPage() {
                 </SelectContent>
               </Select>
             </div>
+            {totalItems > 11 && (
+              <div className="space-y-1">
+                <Label
+                  htmlFor="items-per-page"
+                  className="text-xs text-muted-foreground"
+                >
+                  Itens por página
+                </Label>
+                <Select
+                  value={itemsPerPage.toString()}
+                  onValueChange={(value) => setItemsPerPage(Number(value))}
+                >
+                  <SelectTrigger id="items-per-page" className="w-24">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="5">5</SelectItem>
+                    <SelectItem value="10">10</SelectItem>
+                    <SelectItem value="20">20</SelectItem>
+                    <SelectItem value="50">50</SelectItem>
+                    <SelectItem value="100">100</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             {(filtroDataInicio ||
               filtroDataFim ||
               filtroStatus !== "todos" ||
@@ -568,9 +622,7 @@ export default function RenovacaoPage() {
                 <tr key={item.id} className="border-t">
                   <td className="p-3">{item.clienteNome}</td>
                   <td className="p-3">{item.clienteCNPJ}</td>
-                  <td className="p-3">
-                    {new Date(item.dataRenovacao).toLocaleDateString("pt-BR")}
-                  </td>
+                  <td className="p-3">{formatarDataBR(item.dataRenovacao)}</td>
                   <td className="p-3">
                     R${" "}
                     {item.valorRenovacao.toLocaleString("pt-BR", {
@@ -578,19 +630,34 @@ export default function RenovacaoPage() {
                     })}
                   </td>
                   <td className="p-3">
-                    <button
-                      type="button"
-                      onClick={() => handleQuickStatusChange(item)}
-                      title="Clique para alterar o status"
-                      className={`rounded-full px-3 py-1 text-xs font-medium transition-colors hover:opacity-80 cursor-pointer ${getStatusColor(
-                        item.status
-                      )}`}
+                    <Select
+                      value={getStatusValue(item)}
+                      onValueChange={(value) => handleStatusChange(item, value)}
                     >
-                      {item.status}
-                      {item.status === "Parcelado" && item.parcela && (
-                        <span className="ml-1">({item.parcela})</span>
-                      )}
-                    </button>
+                      <SelectTrigger
+                        className={`w-48 ${getStatusColor(item.status)}`}
+                      >
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Pendente">Pendente</SelectItem>
+                        <SelectItem value="Avisado">Avisado</SelectItem>
+                        <SelectItem value="Em Negociação">
+                          Em Negociação
+                        </SelectItem>
+                        <SelectItem value="Parcelado (1 Vez)">
+                          Parcelado (1 Vez)
+                        </SelectItem>
+                        <SelectItem value="Parcelado (2 Vezes)">
+                          Parcelado (2 Vezes)
+                        </SelectItem>
+                        <SelectItem value="Parcelado (3 Vezes)">
+                          Parcelado (3 Vezes)
+                        </SelectItem>
+                        <SelectItem value="Renovado">Renovado</SelectItem>
+                        <SelectItem value="Cancelado">Cancelado</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </td>
                   <td className="p-3">
                     <div className="flex gap-2">

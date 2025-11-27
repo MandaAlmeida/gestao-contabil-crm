@@ -361,6 +361,8 @@ export default function FinanceiroPage() {
     startIndex,
     endIndex,
     totalItems,
+    itemsPerPage,
+    setItemsPerPage,
   } = usePagination(filteredItems, 10);
 
   const totaisMensalidades = filteredItems.reduce(
@@ -653,6 +655,31 @@ export default function FinanceiroPage() {
                 </SelectContent>
               </Select>
             </div>
+            {totalItems > 11 && (
+              <div className="space-y-1">
+                <Label
+                  htmlFor="items-per-page"
+                  className="text-xs text-muted-foreground"
+                >
+                  Itens por página
+                </Label>
+                <Select
+                  value={itemsPerPage.toString()}
+                  onValueChange={(value) => setItemsPerPage(Number(value))}
+                >
+                  <SelectTrigger id="items-per-page" className="w-24">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="5">5</SelectItem>
+                    <SelectItem value="10">10</SelectItem>
+                    <SelectItem value="20">20</SelectItem>
+                    <SelectItem value="50">50</SelectItem>
+                    <SelectItem value="100">100</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             {(filtroDataInicio ||
               filtroDataFim ||
               filtroStatus !== "todos" ||

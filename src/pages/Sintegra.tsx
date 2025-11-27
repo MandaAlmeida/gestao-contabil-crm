@@ -26,7 +26,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { usePagination } from "@/hooks/usePagination";
 import { PaginationControls } from "@/components/PaginationControls";
-import { cn } from "@/lib/utils";
+import { cn, formatarDataBR } from "@/lib/utils";
 
 const adicionarMes = (data: string) => {
   const baseDate = data ? new Date(data) : new Date();
@@ -206,9 +206,9 @@ export default function SintegraPage() {
         title: "Status atualizado!",
         description:
           novoStatus === "Concluído"
-            ? `${item.clienteNome} concluído. Novo prazo: ${new Date(
+            ? `${item.clienteNome} concluído. Novo prazo: ${formatarDataBR(
                 novaDataPrazo
-              ).toLocaleDateString("pt-BR")}.`
+              )}.`
             : `${item.clienteNome} voltou para pendente.`,
       });
     } catch (error) {
@@ -266,6 +266,8 @@ export default function SintegraPage() {
     startIndex,
     endIndex,
     totalItems,
+    itemsPerPage,
+    setItemsPerPage,
   } = usePagination(filteredItems, 10);
 
   return (
@@ -494,6 +496,31 @@ export default function SintegraPage() {
                 </SelectContent>
               </Select>
             </div>
+            {totalItems > 11 && (
+              <div className="space-y-1">
+                <Label
+                  htmlFor="items-per-page"
+                  className="text-xs text-muted-foreground"
+                >
+                  Itens por página
+                </Label>
+                <Select
+                  value={itemsPerPage.toString()}
+                  onValueChange={(value) => setItemsPerPage(Number(value))}
+                >
+                  <SelectTrigger id="items-per-page" className="w-24">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="5">5</SelectItem>
+                    <SelectItem value="10">10</SelectItem>
+                    <SelectItem value="20">20</SelectItem>
+                    <SelectItem value="50">50</SelectItem>
+                    <SelectItem value="100">100</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             {(filtroDataInicio ||
               filtroDataFim ||
               filtroStatus !== "todos" ||
@@ -533,9 +560,7 @@ export default function SintegraPage() {
               {paginatedItems.map((item) => (
                 <tr key={item.id} className="border-t">
                   <td className="p-3">{item.clienteNome}</td>
-                  <td className="p-3">
-                    {new Date(item.dataPrazo).toLocaleDateString("pt-BR")}
-                  </td>
+                  <td className="p-3">{formatarDataBR(item.dataPrazo)}</td>
                   <td className="p-3">{item.acesso || "-"}</td>
                   <td className="p-3">
                     {(() => {

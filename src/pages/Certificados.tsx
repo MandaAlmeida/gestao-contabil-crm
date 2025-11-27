@@ -38,6 +38,7 @@ import {
   normalizarCertificados,
   calcularStatusCertificado,
 } from "@/lib/certificados";
+import { formatarDataBR } from "@/lib/utils";
 import { cn, formatarTelefone } from "@/lib/utils";
 import { usePagination } from "@/hooks/usePagination";
 import { PaginationControls } from "@/components/PaginationControls";
@@ -310,6 +311,8 @@ export default function Certificados() {
     startIndex,
     endIndex,
     totalItems,
+    itemsPerPage,
+    setItemsPerPage,
   } = usePagination(filteredItems, 10);
 
   const handleToggleStatus = async (item: Certificado) => {
@@ -351,9 +354,9 @@ export default function Certificados() {
       });
       toast({
         title: "Certificado renovado!",
-        description: `${registroAtual.clienteNome} está válido até ${new Date(
-          novoVencimento
-        ).toLocaleDateString("pt-BR")}.`,
+        description: `${
+          registroAtual.clienteNome
+        } está válido até ${formatarDataBR(novoVencimento)}.`,
       });
     } catch (error) {
       toast({ title: "Erro ao renovar certificado", variant: "destructive" });
@@ -657,6 +660,31 @@ export default function Certificados() {
                 </SelectContent>
               </Select>
             </div>
+            {totalItems > 11 && (
+              <div className="space-y-1">
+                <Label
+                  htmlFor="items-per-page"
+                  className="text-xs text-muted-foreground"
+                >
+                  Itens por página
+                </Label>
+                <Select
+                  value={itemsPerPage.toString()}
+                  onValueChange={(value) => setItemsPerPage(Number(value))}
+                >
+                  <SelectTrigger id="items-per-page" className="w-24">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="5">5</SelectItem>
+                    <SelectItem value="10">10</SelectItem>
+                    <SelectItem value="20">20</SelectItem>
+                    <SelectItem value="50">50</SelectItem>
+                    <SelectItem value="100">100</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             {(filtroDataInicio ||
               filtroDataFim ||
               filtroStatus !== "todos" ||
@@ -699,9 +727,7 @@ export default function Certificados() {
                   <td className="p-3">{item.clienteNome}</td>
                   <td className="p-3">{item.clienteCNPJ}</td>
                   <td className="p-3">{item.tipoCertificado}</td>
-                  <td className="p-3">
-                    {new Date(item.dataVencimento).toLocaleDateString("pt-BR")}
-                  </td>
+                  <td className="p-3">{formatarDataBR(item.dataVencimento)}</td>
                   <td className="p-3">
                     {(() => {
                       const meta = STATUS_META[item.status];
