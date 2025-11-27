@@ -57,7 +57,10 @@ export default function DashboardFinanceiro() {
       dataFim: new Date(),
     });
 
-  const financeirosNormalizados = useMemo(() => normalizarFinanceiros(financeirosRaw), [financeirosRaw]);
+  const financeirosNormalizados = useMemo(
+    () => normalizarFinanceiros(financeirosRaw),
+    [financeirosRaw]
+  );
 
   // Cálculos para gráficos
   const totalEntrada = useMemo(
@@ -134,7 +137,7 @@ export default function DashboardFinanceiro() {
               Acompanhe entradas, saídas e saldo financeiro
             </p>
           </div>
-          <div className="flex flex-col gap-4 md:flex-row">
+          <div className="flex flex-col gap-4 md:flex-row items-end">
             <div className="w-full max-w-xs md:w-auto">
               <Select
                 value={periodoFiltro}
@@ -157,7 +160,7 @@ export default function DashboardFinanceiro() {
             </div>
             {periodoFiltro === "customizado" && (
               <div className="flex gap-2">
-                <div className="w-full max-w-xs">
+                <div className="w-full max-w-xs space-y-1">
                   <Label htmlFor="dataInicio" className="text-xs">
                     Data Início
                   </Label>
@@ -175,7 +178,7 @@ export default function DashboardFinanceiro() {
                     }
                   />
                 </div>
-                <div className="w-full max-w-xs">
+                <div className="w-full max-w-xs space-y-1">
                   <Label htmlFor="dataFim" className="text-xs">
                     Data Fim
                   </Label>

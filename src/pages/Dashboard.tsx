@@ -259,8 +259,8 @@ export default function Dashboard() {
               </Select>
             </div>
             {periodoFiltro === "customizado" && (
-              <div className="flex gap-2">
-                <div className="w-full max-w-xs">
+              <div className="flex gap-2 items-end">
+                <div className="w-full max-w-xs space-y-1">
                   <Label htmlFor="dataInicio" className="text-xs">
                     Data Início
                   </Label>
@@ -278,7 +278,7 @@ export default function Dashboard() {
                     }
                   />
                 </div>
-                <div className="w-full max-w-xs">
+                <div className="w-full max-w-xs space-y-1">
                   <Label htmlFor="dataFim" className="text-xs">
                     Data Fim
                   </Label>
