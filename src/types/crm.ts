@@ -86,3 +86,21 @@ export interface Sintegra {
   createdAt: string;
   updatedAt: string;
 }
+
+export interface Servico {
+  id: string;
+  clienteId: string;
+  clienteNome: string;
+  clienteCNPJ: string;
+  responsavel: string;
+  descricao: string;
+  dataVencimento: string;
+  valorMensalidade: number;
+  status: "Recebido" | "A Vencer" | "Vencido";
+  dataPagamento?: string | null;
+  meioPagamento: "Pix" | "Boleto";
+  observacoes: string;
+  ativo: boolean;
+  createdAt: string;
+  updatedAt: string;
+}

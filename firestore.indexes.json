@@ -1,0 +1,128 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "certificados",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "dataVencimento",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "ativo",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "financeiro",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "dataVencimento",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "ativo",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "renovacao",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "dataRenovacao",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "ativo",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "sintegra",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "dataPrazo",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "ativo",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "usuarios",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "ativo",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "notificacoesPush",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "notificacoesRenovacoes",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "usuarios",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "ativo",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "notificacoesPush",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "notificacoesPagamentos",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "usuarios",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "ativo",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "notificacoesPush",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "notificacoesClientes",
+          "order": "ASCENDING"
+        }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}
+

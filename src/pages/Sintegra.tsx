@@ -68,6 +68,13 @@ const STATUS_META: Record<
 
 export default function SintegraPage() {
   const { clientes } = useClientes();
+  
+  // Clientes ordenados alfabeticamente
+  const clientesOrdenados = useMemo(() => {
+    return [...clientes].sort((a, b) =>
+      a.nome.localeCompare(b.nome, "pt-BR", { sensitivity: "base" })
+    );
+  }, [clientes]);
   const { sintegras, createSintegra, updateSintegra, deleteSintegra } =
     useSintegra();
   const [searchTerm, setSearchTerm] = useState("");
@@ -312,7 +319,7 @@ export default function SintegraPage() {
                       <SelectValue placeholder="Selecione um cliente" />
                     </SelectTrigger>
                     <SelectContent>
-                      {clientes.map((cliente) => (
+                      {clientesOrdenados.map((cliente) => (
                         <SelectItem key={cliente.id} value={cliente.id}>
                           {cliente.nome} - {cliente.cnpj}
                         </SelectItem>

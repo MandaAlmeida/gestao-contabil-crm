@@ -29,6 +29,13 @@ import { formatarDataBR } from "@/lib/utils";
 
 export default function RenovacaoPage() {
   const { clientes } = useClientes();
+  
+  // Clientes ordenados alfabeticamente
+  const clientesOrdenados = useMemo(() => {
+    return [...clientes].sort((a, b) =>
+      a.nome.localeCompare(b.nome, "pt-BR", { sensitivity: "base" })
+    );
+  }, [clientes]);
   const { renovacoes, createRenovacao, updateRenovacao, deleteRenovacao } =
     useRenovacao();
   const [searchTerm, setSearchTerm] = useState("");
@@ -259,32 +266,32 @@ export default function RenovacaoPage() {
       // Se o status não mudou, não faz nada
       if (item.status === novoStatus) return;
 
-      try {
-        const updateData: Partial<Renovacao> = {
+    try {
+      const updateData: Partial<Renovacao> = {
           status: novoStatus,
-        };
+      };
 
         // Se mudar para outro status que não seja Parcelado, remover parcela
         if (novoStatus !== "Parcelado") {
-          updateData.parcela = null;
-        }
-
-        await updateRenovacao(item.id, updateData);
-        toast({
-          title: "Status atualizado!",
-          description: `Status alterado para "${novoStatus}".`,
-        });
-      } catch (error) {
-        console.error("Erro ao atualizar status:", error);
-        toast({
-          title: "Erro ao atualizar status",
-          description:
-            error instanceof Error
-              ? error.message
-              : "Ocorreu um erro ao atualizar o status.",
-          variant: "destructive",
-        });
+        updateData.parcela = null;
       }
+
+      await updateRenovacao(item.id, updateData);
+      toast({
+        title: "Status atualizado!",
+          description: `Status alterado para "${novoStatus}".`,
+      });
+    } catch (error) {
+      console.error("Erro ao atualizar status:", error);
+      toast({
+        title: "Erro ao atualizar status",
+        description:
+          error instanceof Error
+            ? error.message
+            : "Ocorreu um erro ao atualizar o status.",
+        variant: "destructive",
+      });
+    }
     }
   };
 
@@ -337,7 +344,7 @@ export default function RenovacaoPage() {
                       <SelectValue placeholder="Selecione um cliente" />
                     </SelectTrigger>
                     <SelectContent>
-                      {clientes.map((cliente) => (
+                      {clientesOrdenados.map((cliente) => (
                         <SelectItem key={cliente.id} value={cliente.id}>
                           {cliente.nome} - {cliente.cnpj}
                         </SelectItem>

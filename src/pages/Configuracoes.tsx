@@ -36,6 +36,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { PushNotificationSettings } from "@/components/PushNotificationPrompt";
+import { usePushNotifications } from "@/hooks/usePushNotifications";
 
 export default function Configuracoes() {
   const { user, updateUserProfile, updateUserEmail, updateUserPassword } =
@@ -63,11 +65,17 @@ export default function Configuracoes() {
 
   // Estados das preferências de notificação
   const [notificacoesEmail, setNotificacoesEmail] = useState(false);
-  const [notificacoesPush, setNotificacoesPush] = useState(false);
   const [notificacoesRenovacoes, setNotificacoesRenovacoes] = useState(true);
   const [notificacoesPagamentos, setNotificacoesPagamentos] = useState(true);
   const [notificacoesClientes, setNotificacoesClientes] = useState(false);
   const [usuarioId, setUsuarioId] = useState<string | null>(null);
+
+  // Hook para notificações push
+  const {
+    token: pushToken,
+    permission: pushPermission,
+    isSupported: pushIsSupported,
+  } = usePushNotifications();
 
   // Carregar dados do usuário
   useEffect(() => {
@@ -83,7 +91,6 @@ export default function Configuracoes() {
             setTelefone(usuario.telefone || "");
             // Carregar preferências de notificação
             setNotificacoesEmail(usuario.notificacoesEmail ?? false);
-            setNotificacoesPush(usuario.notificacoesPush ?? false);
             setNotificacoesRenovacoes(usuario.notificacoesRenovacoes ?? true);
             setNotificacoesPagamentos(usuario.notificacoesPagamentos ?? true);
             setNotificacoesClientes(usuario.notificacoesClientes ?? false);
@@ -302,6 +309,7 @@ export default function Configuracoes() {
     notificacoesRenovacoes?: boolean;
     notificacoesPagamentos?: boolean;
     notificacoesClientes?: boolean;
+    pushToken?: string;
   }) => {
     if (!usuarioId) {
       toast({
@@ -314,44 +322,17 @@ export default function Configuracoes() {
 
     try {
       await updateUsuario(usuarioId, preferences);
+
+      // Salvar token FCM se disponível
+      if (pushToken && pushPermission === "granted") {
+        await updateUsuario(usuarioId, {
+          notificacoesPush: true,
+          pushToken,
+        });
+      }
     } catch (error: any) {
       console.error("Erro ao salvar preferências:", error);
       throw error;
-    }
-  };
-
-  // Função para lidar com mudança de notificações push
-  const handlePushNotificationChange = async (checked: boolean) => {
-    if (checked && "Notification" in window) {
-      // Solicitar permissão quando ativar
-      const permission = await Notification.requestPermission();
-      if (permission !== "granted") {
-        toast({
-          title: "Permissão negada",
-          description: "As notificações push não funcionarão sem permissão.",
-          variant: "destructive",
-        });
-        return;
-      }
-    }
-
-    setNotificacoesPush(checked);
-
-    // Salvar automaticamente quando mudar
-    if (usuarioId) {
-      try {
-        await handleSaveNotificationPreferences({
-          notificacoesPush: checked,
-        });
-      } catch (error: any) {
-        setNotificacoesPush(!checked); // Reverter se falhar
-        toast({
-          title: "Erro ao salvar preferências",
-          description:
-            error.message || "Ocorreu um erro ao salvar suas preferências.",
-          variant: "destructive",
-        });
-      }
     }
   };
 
@@ -535,24 +516,8 @@ export default function Configuracoes() {
                 />
               </div>
               <Separator />
-              <div className="flex items-center justify-between p-3 rounded-md bg-muted/30 hover:bg-muted/50 transition-colors">
-                <div className="space-y-0.5 flex-1">
-                  <Label
-                    htmlFor="notificacoes-push"
-                    className="text-sm font-medium cursor-pointer"
-                  >
-                    Notificações Push
-                  </Label>
-                  <p className="text-xs text-muted-foreground">
-                    Receba notificações no navegador
-                  </p>
-                </div>
-                <Switch
-                  id="notificacoes-push"
-                  checked={notificacoesPush}
-                  onCheckedChange={handlePushNotificationChange}
-                  disabled={loading}
-                />
+              <div className="p-3 rounded-md bg-muted/30 hover:bg-muted/50 transition-colors">
+                <PushNotificationSettings />
               </div>
             </CardContent>
           </Card>

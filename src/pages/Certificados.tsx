@@ -101,6 +101,13 @@ const getToggleTitle = (status: Certificado["status"]) => {
 
 export default function Certificados() {
   const { clientes } = useClientes();
+  
+  // Clientes ordenados alfabeticamente
+  const clientesOrdenados = useMemo(() => {
+    return [...clientes].sort((a, b) =>
+      a.nome.localeCompare(b.nome, "pt-BR", { sensitivity: "base" })
+    );
+  }, [clientes]);
   const {
     certificados: certificadosRaw,
     createCertificado,
@@ -433,7 +440,7 @@ export default function Certificados() {
                         <SelectValue placeholder="Selecione um cliente" />
                       </SelectTrigger>
                       <SelectContent>
-                        {clientes.map((cliente) => (
+                        {clientesOrdenados.map((cliente) => (
                           <SelectItem key={cliente.id} value={cliente.id}>
                             {cliente.nome} - {cliente.cnpj}
                           </SelectItem>

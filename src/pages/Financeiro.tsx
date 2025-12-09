@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
 import {
   Select,
   SelectContent,
@@ -63,6 +64,12 @@ export default function FinanceiroPage() {
   const [filtroStatus, setFiltroStatus] = useState<
     Financeiro["status"] | "todos"
   >("todos");
+  const [filtroClientesNaoCadastrados, setFiltroClientesNaoCadastrados] =
+    useState(false);
+  const [ordenacao, setOrdenacao] = useState<{
+    campo: "clienteNome" | "dataVencimento" | "valorMensalidade" | "status";
+    direcao: "asc" | "desc";
+  }>({ campo: "dataVencimento", direcao: "desc" });
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<Financeiro | null>(null);
   const { toast } = useToast();
@@ -79,6 +86,46 @@ export default function FinanceiroPage() {
     () => normalizarFinanceiros(financeirosRaw),
     [financeirosRaw]
   );
+
+  // Lista de IDs de clientes que já têm registros financeiros
+  const clientesComFinanceiro = useMemo(
+    () => new Set(financeirosNormalizados.map((f) => f.clienteId)),
+    [financeirosNormalizados]
+  );
+
+  // Clientes disponíveis para seleção no formulário
+  // Ao criar novo registro, mostra apenas clientes não cadastrados
+  // Ao editar, mostra todos os clientes (incluindo o que está sendo editado)
+  const clientesDisponiveisFormulario = useMemo(() => {
+    let clientesFiltrados = clientes;
+    
+    // Se estiver criando um novo registro (não editando), mostra apenas clientes não cadastrados
+    if (!editingItem) {
+      clientesFiltrados = clientes.filter((c) => !clientesComFinanceiro.has(c.id));
+    } else {
+      // Se estiver editando, inclui o cliente atual mesmo que já tenha registro
+      clientesFiltrados = clientes.filter(
+        (c) => !clientesComFinanceiro.has(c.id) || c.id === editingItem.clienteId
+      );
+    }
+    
+    // Ordenar alfabeticamente por nome
+    return [...clientesFiltrados].sort((a, b) =>
+      a.nome.localeCompare(b.nome, "pt-BR", { sensitivity: "base" })
+    );
+  }, [clientes, clientesComFinanceiro, editingItem]);
+
+  // Clientes disponíveis para o filtro da tabela (filtrados se necessário)
+  const clientesDisponiveis = useMemo(() => {
+    let clientesFiltrados = clientes;
+    if (filtroClientesNaoCadastrados) {
+      clientesFiltrados = clientes.filter((c) => !clientesComFinanceiro.has(c.id));
+    }
+    // Ordenar alfabeticamente por nome
+    return [...clientesFiltrados].sort((a, b) =>
+      a.nome.localeCompare(b.nome, "pt-BR", { sensitivity: "base" })
+    );
+  }, [clientes, clientesComFinanceiro, filtroClientesNaoCadastrados]);
 
   const [formData, setFormData] = useState({
     clienteId: "",
@@ -351,6 +398,38 @@ export default function FinanceiroPage() {
     );
   });
 
+  // Aplicar ordenação
+  const itemsOrdenados = useMemo(() => {
+    const items = [...filteredItems];
+    items.sort((a, b) => {
+      let comparacao = 0;
+      
+      switch (ordenacao.campo) {
+        case "clienteNome":
+          comparacao = a.clienteNome.localeCompare(b.clienteNome, "pt-BR", {
+            sensitivity: "base",
+          });
+          break;
+        case "dataVencimento":
+          comparacao =
+            new Date(a.dataVencimento).getTime() -
+            new Date(b.dataVencimento).getTime();
+          break;
+        case "valorMensalidade":
+          comparacao = a.valorMensalidade - b.valorMensalidade;
+          break;
+        case "status":
+          comparacao = a.status.localeCompare(b.status, "pt-BR", {
+            sensitivity: "base",
+          });
+          break;
+      }
+      
+      return ordenacao.direcao === "asc" ? comparacao : -comparacao;
+    });
+    return items;
+  }, [filteredItems, ordenacao]);
+
   const {
     currentPage,
     totalPages,
@@ -363,7 +442,7 @@ export default function FinanceiroPage() {
     totalItems,
     itemsPerPage,
     setItemsPerPage,
-  } = usePagination(filteredItems, 10);
+  } = usePagination(itemsOrdenados, 10);
 
   const totaisMensalidades = filteredItems.reduce(
     (acc, item) => {
@@ -450,7 +529,7 @@ export default function FinanceiroPage() {
                       <SelectValue placeholder="Selecione um cliente" />
                     </SelectTrigger>
                     <SelectContent>
-                      {clientes.map((cliente) => (
+                      {clientesDisponiveisFormulario.map((cliente) => (
                         <SelectItem key={cliente.id} value={cliente.id}>
                           {cliente.nome} - {cliente.cnpj}
                         </SelectItem>
@@ -655,6 +734,50 @@ export default function FinanceiroPage() {
                 </SelectContent>
               </Select>
             </div>
+            <div className="space-y-1">
+              <Label
+                htmlFor="ordenacao"
+                className="text-xs text-muted-foreground"
+              >
+                Ordenar por
+              </Label>
+              <Select
+                value={`${ordenacao.campo}-${ordenacao.direcao}`}
+                onValueChange={(value) => {
+                  const [campo, direcao] = value.split("-") as [
+                    "clienteNome" | "dataVencimento" | "valorMensalidade" | "status",
+                    "asc" | "desc"
+                  ];
+                  setOrdenacao({ campo, direcao });
+                }}
+              >
+                <SelectTrigger id="ordenacao" className="w-48">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="clienteNome-asc">
+                    Cliente (A-Z)
+                  </SelectItem>
+                  <SelectItem value="clienteNome-desc">
+                    Cliente (Z-A)
+                  </SelectItem>
+                  <SelectItem value="dataVencimento-desc">
+                    Vencimento (Mais recente)
+                  </SelectItem>
+                  <SelectItem value="dataVencimento-asc">
+                    Vencimento (Mais antigo)
+                  </SelectItem>
+                  <SelectItem value="valorMensalidade-desc">
+                    Valor (Maior)
+                  </SelectItem>
+                  <SelectItem value="valorMensalidade-asc">
+                    Valor (Menor)
+                  </SelectItem>
+                  <SelectItem value="status-asc">Status (A-Z)</SelectItem>
+                  <SelectItem value="status-desc">Status (Z-A)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
             {totalItems > 11 && (
               <div className="space-y-1">
                 <Label
@@ -699,6 +822,21 @@ export default function FinanceiroPage() {
                 </Button>
               </div>
             )}
+          </div>
+          <div className="flex gap-4 items-center">
+            <div className="flex items-center gap-2">
+              <Switch
+                id="filtro-clientes-nao-cadastrados"
+                checked={filtroClientesNaoCadastrados}
+                onCheckedChange={setFiltroClientesNaoCadastrados}
+              />
+              <Label
+                htmlFor="filtro-clientes-nao-cadastrados"
+                className="text-sm cursor-pointer"
+              >
+                Mostrar apenas clientes não cadastrados
+              </Label>
+            </div>
           </div>
         </div>
 

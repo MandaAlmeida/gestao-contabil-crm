@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/table";
 import { useClientes } from "@/hooks/useClientes";
 import { useFinanceiro } from "@/hooks/useFinanceiro";
+import { useServicos } from "@/hooks/useServicos";
 import { useCertificados } from "@/hooks/useCertificados";
 import { useSintegra } from "@/hooks/useSintegra";
 import { useRenovacao } from "@/hooks/useRenovacao";
@@ -31,6 +32,7 @@ import { formatarDataBR } from "@/lib/utils";
 import {
   Cliente,
   Financeiro,
+  Servico,
   Certificado,
   Sintegra,
   Renovacao,
@@ -44,12 +46,15 @@ import {
   Building2,
   MapPin,
   RefreshCw,
+  Wrench,
 } from "lucide-react";
 import { normalizarFinanceiros } from "@/lib/financeiro";
+import { normalizarServicos } from "@/lib/servicos";
 
 export default function DashboardClientes() {
   const { clientes } = useClientes();
   const { financeiros: financeirosRaw } = useFinanceiro();
+  const { servicos: servicosRaw } = useServicos();
   const { certificados } = useCertificados();
   const { sintegras } = useSintegra();
   const { renovacoes } = useRenovacao();
@@ -96,6 +101,15 @@ export default function DashboardClientes() {
     clienteIdsFiltrados.has(renovacao.clienteId)
   );
 
+  const servicosNormalizados = useMemo(
+    () => normalizarServicos(servicosRaw),
+    [servicosRaw]
+  );
+
+  const servicosFiltrados = servicosNormalizados.filter((servico) =>
+    clienteIdsFiltrados.has(servico.clienteId)
+  );
+
   const totaisMensalidades = financeirosFiltrados.reduce(
     (acc, f) => {
       if (f.status === "Recebido") {
@@ -107,6 +121,22 @@ export default function DashboardClientes() {
     },
     { recebidas: 0, aReceber: 0 }
   );
+
+  const totaisServicos = servicosFiltrados.reduce(
+    (acc, s) => {
+      if (s.status === "Recebido") {
+        acc.recebidas += s.valorMensalidade;
+      } else {
+        acc.aReceber += s.valorMensalidade;
+      }
+      return acc;
+    },
+    { recebidas: 0, aReceber: 0 }
+  );
+
+  const servicosEmAberto = servicosFiltrados.filter(
+    (s) => s.status !== "Recebido"
+  ).length;
 
   const certificadosVencendo = certificadosFiltrados.filter((cert) => {
     const dataVencimento = new Date(cert.dataVencimento);
@@ -213,25 +243,8 @@ export default function DashboardClientes() {
           </div>
         </div>
 
-        {/* Cards de Resumo */}
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
-                Total de Clientes
-              </CardTitle>
-              <Users className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">
-                {clientesFiltrados.length}
-              </div>
-              <p className="text-xs text-muted-foreground">
-                clientes cadastrados
-              </p>
-            </CardContent>
-          </Card>
-
+        {/* Cards de Valores */}
+        <div className="grid gap-4 md:grid-cols-3">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">
@@ -267,29 +280,31 @@ export default function DashboardClientes() {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">
-                Certificados a Vencer
+                Total Serviços
               </CardTitle>
-              <AlertCircle className="h-4 w-4 text-warning" />
+              <Wrench className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-warning">
-                {certificadosVencendo}
+              <div className="text-2xl font-bold">
+                R${" "}
+                {(
+                  totaisServicos.recebidas + totaisServicos.aReceber
+                ).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
               </div>
-              <p className="text-xs text-muted-foreground">próximos 30 dias</p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
-                Sintegra Pendentes
-              </CardTitle>
-              <FileCheck className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{sintegrasPendentes}</div>
               <p className="text-xs text-muted-foreground">
-                aguardando conclusão
+                Recebidas: R${" "}
+                {totaisServicos.recebidas.toLocaleString("pt-BR", {
+                  minimumFractionDigits: 2,
+                })}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                A receber: R${" "}
+                {totaisServicos.aReceber.toLocaleString("pt-BR", {
+                  minimumFractionDigits: 2,
+                })}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Cobranças em aberto: {servicosEmAberto}
               </p>
             </CardContent>
           </Card>
@@ -322,6 +337,56 @@ export default function DashboardClientes() {
               </p>
               <p className="text-xs text-muted-foreground">
                 Em aberto: {totaisRenovacoes.emAberto}
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Cards de Informações */}
+        <div className="mt-8 grid gap-4 md:grid-cols-3">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">
+                Total de Clientes
+              </CardTitle>
+              <Users className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">
+                {clientesFiltrados.length}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                clientes cadastrados
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">
+                Certificados a Vencer
+              </CardTitle>
+              <AlertCircle className="h-4 w-4 text-warning" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-warning">
+                {certificadosVencendo}
+              </div>
+              <p className="text-xs text-muted-foreground">próximos 30 dias</p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">
+                Sintegra Pendentes
+              </CardTitle>
+              <FileCheck className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{sintegrasPendentes}</div>
+              <p className="text-xs text-muted-foreground">
+                aguardando conclusão
               </p>
             </CardContent>
           </Card>

@@ -63,6 +63,10 @@ export default function Clientes() {
   const [searchResponsavel, setSearchResponsavel] = useState("todos");
   const [filtroDataInicio, setFiltroDataInicio] = useState("");
   const [filtroDataFim, setFiltroDataFim] = useState("");
+  const [ordenacao, setOrdenacao] = useState<{
+    campo: "nome" | "cnpj" | "cidade" | "responsavel";
+    direcao: "asc" | "desc";
+  }>({ campo: "nome", direcao: "asc" });
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isContabilidadeDialogOpen, setIsContabilidadeDialogOpen] =
     useState(false);
@@ -268,6 +272,40 @@ export default function Clientes() {
     );
   });
 
+  // Aplicar ordenação
+  const clientesOrdenados = useMemo(() => {
+    const items = [...filteredClientes];
+    items.sort((a, b) => {
+      let comparacao = 0;
+      
+      switch (ordenacao.campo) {
+        case "nome":
+          comparacao = a.nome.localeCompare(b.nome, "pt-BR", {
+            sensitivity: "base",
+          });
+          break;
+        case "cnpj":
+          comparacao = a.cnpj.localeCompare(b.cnpj, "pt-BR", {
+            sensitivity: "base",
+          });
+          break;
+        case "cidade":
+          comparacao = a.cidade.localeCompare(b.cidade, "pt-BR", {
+            sensitivity: "base",
+          });
+          break;
+        case "responsavel":
+          comparacao = a.responsavel.localeCompare(b.responsavel, "pt-BR", {
+            sensitivity: "base",
+          });
+          break;
+      }
+      
+      return ordenacao.direcao === "asc" ? comparacao : -comparacao;
+    });
+    return items;
+  }, [filteredClientes, ordenacao]);
+
   const {
     currentPage,
     totalPages,
@@ -280,7 +318,7 @@ export default function Clientes() {
     totalItems,
     itemsPerPage,
     setItemsPerPage,
-  } = usePagination(filteredClientes, 10);
+  } = usePagination(clientesOrdenados, 10);
 
   return (
     <Layout>
@@ -789,6 +827,42 @@ export default function Clientes() {
                 onChange={(e) => setFiltroDataFim(e.target.value)}
                 className="w-40"
               />
+            </div>
+            <div className="space-y-1">
+              <Label
+                htmlFor="ordenacao"
+                className="text-xs text-muted-foreground"
+              >
+                Ordenar por
+              </Label>
+              <Select
+                value={`${ordenacao.campo}-${ordenacao.direcao}`}
+                onValueChange={(value) => {
+                  const [campo, direcao] = value.split("-") as [
+                    "nome" | "cnpj" | "cidade" | "responsavel",
+                    "asc" | "desc"
+                  ];
+                  setOrdenacao({ campo, direcao });
+                }}
+              >
+                <SelectTrigger id="ordenacao" className="w-48">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="nome-asc">Nome (A-Z)</SelectItem>
+                  <SelectItem value="nome-desc">Nome (Z-A)</SelectItem>
+                  <SelectItem value="cnpj-asc">CNPJ (A-Z)</SelectItem>
+                  <SelectItem value="cnpj-desc">CNPJ (Z-A)</SelectItem>
+                  <SelectItem value="cidade-asc">Cidade (A-Z)</SelectItem>
+                  <SelectItem value="cidade-desc">Cidade (Z-A)</SelectItem>
+                  <SelectItem value="responsavel-asc">
+                    Responsável (A-Z)
+                  </SelectItem>
+                  <SelectItem value="responsavel-desc">
+                    Responsável (Z-A)
+                  </SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             {totalItems > 11 && (
               <div className="space-y-1">

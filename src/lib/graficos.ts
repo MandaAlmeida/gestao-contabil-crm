@@ -1,4 +1,4 @@
-import { Financeiro } from "@/types/crm";
+import { Financeiro, Servico } from "@/types/crm";
 import { Despesa } from "@/types/despesas";
 
 export type PeriodoFiltro = "dia" | "semana" | "mes" | "customizado";
@@ -107,6 +107,22 @@ export const calcularTotalEntrada = (
     .reduce((acc, f) => acc + f.valorMensalidade, 0);
 };
 
+export const calcularTotalEntradaServicos = (
+  servicos: Servico[],
+  periodo: PeriodoFiltro,
+  periodoCustomizado?: PeriodoCustomizado
+): number => {
+  const { inicio, fim } = calcularPeriodo(periodo, periodoCustomizado);
+
+  return servicos
+    .filter((s) => {
+      if (s.status !== "Recebido" || !s.dataPagamento) return false;
+      const dataPagamento = new Date(s.dataPagamento);
+      return dataPagamento >= inicio && dataPagamento <= fim;
+    })
+    .reduce((acc, s) => acc + s.valorMensalidade, 0);
+};
+
 export const calcularTotalSaida = (
   despesas: Despesa[],
   periodo: PeriodoFiltro,
@@ -144,6 +160,83 @@ export const gerarDadosGrafico = (
       const chave = data.split("T")[0];
       const atual = dados.get(chave) || { entrada: 0, saida: 0 };
       atual.entrada += f.valorMensalidade;
+      dados.set(chave, atual);
+    });
+
+  // Processar saídas
+  despesas
+    .filter((d) => {
+      if (!d.pago) return false;
+      const dataDespesa = new Date(d.data);
+      return dataDespesa >= inicio && dataDespesa <= fim;
+    })
+    .forEach((d) => {
+      const chave = d.data.split("T")[0];
+      const atual = dados.get(chave) || { entrada: 0, saida: 0 };
+      atual.saida += d.valor;
+      dados.set(chave, atual);
+    });
+
+  // Gerar array ordenado por data
+  const resultado: DadosGrafico[] = Array.from(dados.entries())
+    .map(([data, valores]) => ({
+      data,
+      entrada: valores.entrada,
+      saida: valores.saida,
+    }))
+    .sort((a, b) => a.data.localeCompare(b.data));
+
+  // Preencher dias faltantes no período
+  if (periodo === "dia") {
+    return resultado.length > 0
+      ? resultado
+      : [{ data: inicio.toISOString().split("T")[0], entrada: 0, saida: 0 }];
+  }
+
+  if (periodo === "semana" || periodo === "mes" || periodo === "customizado") {
+    const preenchido: DadosGrafico[] = [];
+    const dataAtual = new Date(inicio);
+
+    while (dataAtual <= fim) {
+      const chave = dataAtual.toISOString().split("T")[0];
+      const existente = resultado.find((d) => d.data === chave);
+      preenchido.push(
+        existente || {
+          data: chave,
+          entrada: 0,
+          saida: 0,
+        }
+      );
+      dataAtual.setDate(dataAtual.getDate() + 1);
+    }
+
+    return preenchido;
+  }
+
+  return resultado;
+};
+
+export const gerarDadosGraficoServicos = (
+  servicos: Servico[],
+  despesas: Despesa[],
+  periodo: PeriodoFiltro,
+  periodoCustomizado?: PeriodoCustomizado
+): DadosGrafico[] => {
+  const { inicio, fim } = calcularPeriodo(periodo, periodoCustomizado);
+  const dados: Map<string, { entrada: number; saida: number }> = new Map();
+
+  // Processar entradas de serviços
+  servicos
+    .filter((s) => {
+      if (s.status !== "Recebido" || !s.dataPagamento) return false;
+      const dataPagamento = new Date(s.dataPagamento);
+      return dataPagamento >= inicio && dataPagamento <= fim;
+    })
+    .forEach((s) => {
+      const data = s.dataPagamento!;
+      const chave = data.split("T")[0];
+      const atual = dados.get(chave) || { entrada: 0, saida: 0 };
+      atual.entrada += s.valorMensalidade;
       dados.set(chave, atual);
     });
 

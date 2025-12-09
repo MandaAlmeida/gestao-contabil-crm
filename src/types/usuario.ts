@@ -13,4 +13,5 @@ export interface Usuario {
   notificacoesRenovacoes?: boolean;
   notificacoesPagamentos?: boolean;
   notificacoesClientes?: boolean;
+  pushToken?: string; // Token FCM para notificações push
 }

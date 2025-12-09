@@ -17,6 +17,7 @@ import {
   LogOut,
   Sun,
   Moon,
+  Wrench,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useTheme } from "next-themes";
@@ -129,6 +130,14 @@ export function Layout({ children }: LayoutProps) {
             >
               <DollarSign className="h-5 w-5 flex-shrink-0" />
               {!collapsed && <span>Financeiro</span>}
+            </NavLink>
+            <NavLink
+              to="/servicos"
+              className={collapsed ? "justify-center" : ""}
+              activeClassName="bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground"
+            >
+              <Wrench className="h-5 w-5 flex-shrink-0" />
+              {!collapsed && <span>Serviços</span>}
             </NavLink>
             <NavLink
               to="/despesas"

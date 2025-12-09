@@ -3,6 +3,7 @@ import { connectFirestoreEmulator, getFirestore, type Firestore } from "firebase
 import { connectAuthEmulator, getAuth, type Auth } from "firebase/auth";
 import { connectFunctionsEmulator, getFunctions, type Functions } from "firebase/functions";
 import { getStorage, connectStorageEmulator, type FirebaseStorage } from "firebase/storage";
+import { getMessaging, type Messaging, isSupported } from "firebase/messaging";
 
 type FirebaseConfig = {
   apiKey: string;
@@ -45,6 +46,19 @@ const firebaseFirestore: Firestore = getFirestore(firebaseApp);
 const firebaseStorage: FirebaseStorage = getStorage(firebaseApp);
 const firebaseFunctions: Functions = getFunctions(firebaseApp);
 
+// Firebase Messaging (notificações push)
+// Verifica se o navegador suporta notificações
+let firebaseMessaging: Messaging | null = null;
+if (typeof window !== 'undefined') {
+  isSupported().then((supported) => {
+    if (supported) {
+      firebaseMessaging = getMessaging(firebaseApp);
+    }
+  }).catch((error) => {
+    console.warn('[Firebase] Messaging não suportado:', error);
+  });
+}
+
 if (import.meta.env.DEV && import.meta.env.VITE_USE_FIREBASE_EMULATORS === "true") {
   const emulatorHost = import.meta.env.VITE_FIREBASE_EMULATOR_HOST ?? "127.0.0.1";
 
@@ -62,6 +76,7 @@ export {
   firebaseFirestore as db,
   firebaseFunctions as functions,
   firebaseStorage as storage,
+  firebaseMessaging as messaging,
 };
 
 
