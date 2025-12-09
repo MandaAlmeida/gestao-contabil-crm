@@ -64,8 +64,6 @@ export default function ServicosPage() {
   const [filtroStatus, setFiltroStatus] = useState<
     Servico["status"] | "todos"
   >("todos");
-  const [filtroClientesNaoCadastrados, setFiltroClientesNaoCadastrados] =
-    useState(false);
   const [ordenacao, setOrdenacao] = useState<{
     campo: "clienteNome" | "dataVencimento" | "valorMensalidade" | "status";
     direcao: "asc" | "desc";
@@ -95,23 +93,13 @@ export default function ServicosPage() {
     return Array.from(new Set(responsaveisServicos)).sort();
   }, [servicosNormalizados, clientes]);
 
-  // Lista de IDs de clientes que já têm registros de serviços
-  const clientesComServico = useMemo(
-    () => new Set(servicosNormalizados.map((s) => s.clienteId)),
-    [servicosNormalizados]
-  );
-
-  // Clientes disponíveis para seleção (filtrados se necessário)
+  // Clientes disponíveis para seleção - sempre mostra todos
   const clientesDisponiveis = useMemo(() => {
-    let clientesFiltrados = clientes;
-    if (filtroClientesNaoCadastrados) {
-      clientesFiltrados = clientes.filter((c) => !clientesComServico.has(c.id));
-    }
     // Ordenar alfabeticamente por nome
-    return [...clientesFiltrados].sort((a, b) =>
+    return [...clientes].sort((a, b) =>
       a.nome.localeCompare(b.nome, "pt-BR", { sensitivity: "base" })
     );
-  }, [clientes, clientesComServico, filtroClientesNaoCadastrados]);
+  }, [clientes]);
 
   const [formData, setFormData] = useState({
     clienteId: "",
@@ -869,21 +857,6 @@ export default function ServicosPage() {
                 </Button>
               </div>
             )}
-          </div>
-          <div className="flex gap-4 items-center">
-            <div className="flex items-center gap-2">
-              <Switch
-                id="filtro-clientes-nao-cadastrados"
-                checked={filtroClientesNaoCadastrados}
-                onCheckedChange={setFiltroClientesNaoCadastrados}
-              />
-              <Label
-                htmlFor="filtro-clientes-nao-cadastrados"
-                className="text-sm cursor-pointer"
-              >
-                Mostrar apenas clientes não cadastrados
-              </Label>
-            </div>
           </div>
         </div>
 

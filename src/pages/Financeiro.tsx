@@ -65,7 +65,7 @@ export default function FinanceiroPage() {
     Financeiro["status"] | "todos"
   >("todos");
   const [filtroClientesNaoCadastrados, setFiltroClientesNaoCadastrados] =
-    useState(false);
+    useState(true); // Sempre inicia com filtro ativo
   const [ordenacao, setOrdenacao] = useState<{
     campo: "clienteNome" | "dataVencimento" | "valorMensalidade" | "status";
     direcao: "asc" | "desc";
@@ -98,17 +98,20 @@ export default function FinanceiroPage() {
   // Ao editar, mostra todos os clientes (incluindo o que está sendo editado)
   const clientesDisponiveisFormulario = useMemo(() => {
     let clientesFiltrados = clientes;
-    
+
     // Se estiver criando um novo registro (não editando), mostra apenas clientes não cadastrados
     if (!editingItem) {
-      clientesFiltrados = clientes.filter((c) => !clientesComFinanceiro.has(c.id));
+      clientesFiltrados = clientes.filter(
+        (c) => !clientesComFinanceiro.has(c.id)
+      );
     } else {
       // Se estiver editando, inclui o cliente atual mesmo que já tenha registro
       clientesFiltrados = clientes.filter(
-        (c) => !clientesComFinanceiro.has(c.id) || c.id === editingItem.clienteId
+        (c) =>
+          !clientesComFinanceiro.has(c.id) || c.id === editingItem.clienteId
       );
     }
-    
+
     // Ordenar alfabeticamente por nome
     return [...clientesFiltrados].sort((a, b) =>
       a.nome.localeCompare(b.nome, "pt-BR", { sensitivity: "base" })
@@ -119,7 +122,9 @@ export default function FinanceiroPage() {
   const clientesDisponiveis = useMemo(() => {
     let clientesFiltrados = clientes;
     if (filtroClientesNaoCadastrados) {
-      clientesFiltrados = clientes.filter((c) => !clientesComFinanceiro.has(c.id));
+      clientesFiltrados = clientes.filter(
+        (c) => !clientesComFinanceiro.has(c.id)
+      );
     }
     // Ordenar alfabeticamente por nome
     return [...clientesFiltrados].sort((a, b) =>
@@ -389,12 +394,21 @@ export default function FinanceiroPage() {
     const matchesStatus =
       filtroStatus === "todos" || item.status === filtroStatus;
 
+    // Filtro de clientes não cadastrados: mostra apenas registros de clientes
+    // que não têm outros registros financeiros (exceto o próprio registro)
+    const matchesFiltroClientesNaoCadastrados = filtroClientesNaoCadastrados
+      ? financeirosNormalizados.filter(
+          (f) => f.clienteId === item.clienteId && f.id !== item.id
+        ).length === 0
+      : true;
+
     return (
       matchesSearch &&
       matchesResponsavel &&
       matchesDataInicio &&
       matchesDataFim &&
-      matchesStatus
+      matchesStatus &&
+      matchesFiltroClientesNaoCadastrados
     );
   });
 
@@ -403,7 +417,7 @@ export default function FinanceiroPage() {
     const items = [...filteredItems];
     items.sort((a, b) => {
       let comparacao = 0;
-      
+
       switch (ordenacao.campo) {
         case "clienteNome":
           comparacao = a.clienteNome.localeCompare(b.clienteNome, "pt-BR", {
@@ -424,7 +438,7 @@ export default function FinanceiroPage() {
           });
           break;
       }
-      
+
       return ordenacao.direcao === "asc" ? comparacao : -comparacao;
     });
     return items;
@@ -745,7 +759,12 @@ export default function FinanceiroPage() {
                 value={`${ordenacao.campo}-${ordenacao.direcao}`}
                 onValueChange={(value) => {
                   const [campo, direcao] = value.split("-") as [
-                    "clienteNome" | "dataVencimento" | "valorMensalidade" | "status",
+                    (
+                      | "clienteNome"
+                      | "dataVencimento"
+                      | "valorMensalidade"
+                      | "status"
+                    ),
                     "asc" | "desc"
                   ];
                   setOrdenacao({ campo, direcao });
@@ -755,9 +774,7 @@ export default function FinanceiroPage() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="clienteNome-asc">
-                    Cliente (A-Z)
-                  </SelectItem>
+                  <SelectItem value="clienteNome-asc">Cliente (A-Z)</SelectItem>
                   <SelectItem value="clienteNome-desc">
                     Cliente (Z-A)
                   </SelectItem>
@@ -822,21 +839,6 @@ export default function FinanceiroPage() {
                 </Button>
               </div>
             )}
-          </div>
-          <div className="flex gap-4 items-center">
-            <div className="flex items-center gap-2">
-              <Switch
-                id="filtro-clientes-nao-cadastrados"
-                checked={filtroClientesNaoCadastrados}
-                onCheckedChange={setFiltroClientesNaoCadastrados}
-              />
-              <Label
-                htmlFor="filtro-clientes-nao-cadastrados"
-                className="text-sm cursor-pointer"
-              >
-                Mostrar apenas clientes não cadastrados
-              </Label>
-            </div>
           </div>
         </div>
 
