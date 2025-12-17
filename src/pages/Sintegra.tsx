@@ -68,13 +68,6 @@ const STATUS_META: Record<
 
 export default function SintegraPage() {
   const { clientes } = useClientes();
-  
-  // Clientes ordenados alfabeticamente
-  const clientesOrdenados = useMemo(() => {
-    return [...clientes].sort((a, b) =>
-      a.nome.localeCompare(b.nome, "pt-BR", { sensitivity: "base" })
-    );
-  }, [clientes]);
   const { sintegras, createSintegra, updateSintegra, deleteSintegra } =
     useSintegra();
   const [searchTerm, setSearchTerm] = useState("");
@@ -84,14 +77,28 @@ export default function SintegraPage() {
   const [filtroStatus, setFiltroStatus] = useState<
     Sintegra["status"] | "todos"
   >("todos");
+  const [ordenacao, setOrdenacao] = useState<{
+    campo: "clienteNome" | "dataPrazo" | "status";
+    direcao: "asc" | "desc";
+  }>({ campo: "dataPrazo", direcao: "desc" });
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<Sintegra | null>(null);
   const { toast } = useToast();
 
+  // Lista de IDs de clientes que já têm Sintegra cadastrado
+  const clientesComSintegra = useMemo(
+    () => new Set(sintegras.map((s) => s.clienteId)),
+    [sintegras]
+  );
+
   const responsaveisDisponiveis = useMemo(
     () =>
       Array.from(
-        new Set(clientes.map((cliente) => cliente.responsavel))
+        new Set(
+          clientes
+            .map((cliente) => cliente.responsavel)
+            .filter((responsavel) => responsavel && responsavel.trim() !== "")
+        )
       ).sort(),
     [clientes]
   );
@@ -263,6 +270,35 @@ export default function SintegraPage() {
     );
   });
 
+  // Aplicar ordenação
+  const itemsOrdenados = useMemo(() => {
+    const items = [...filteredItems];
+    items.sort((a, b) => {
+      let comparacao = 0;
+
+      switch (ordenacao.campo) {
+        case "clienteNome":
+          comparacao = a.clienteNome.localeCompare(b.clienteNome, "pt-BR", {
+            sensitivity: "base",
+          });
+          break;
+        case "dataPrazo":
+          comparacao =
+            new Date(a.dataPrazo).getTime() -
+            new Date(b.dataPrazo).getTime();
+          break;
+        case "status":
+          comparacao = a.status.localeCompare(b.status, "pt-BR", {
+            sensitivity: "base",
+          });
+          break;
+      }
+
+      return ordenacao.direcao === "asc" ? comparacao : -comparacao;
+    });
+    return items;
+  }, [filteredItems, ordenacao]);
+
   const {
     currentPage,
     totalPages,
@@ -275,7 +311,7 @@ export default function SintegraPage() {
     totalItems,
     itemsPerPage,
     setItemsPerPage,
-  } = usePagination(filteredItems, 10);
+  } = usePagination(itemsOrdenados, 10);
 
   return (
     <Layout>
@@ -319,11 +355,31 @@ export default function SintegraPage() {
                       <SelectValue placeholder="Selecione um cliente" />
                     </SelectTrigger>
                     <SelectContent>
-                      {clientesOrdenados.map((cliente) => (
-                        <SelectItem key={cliente.id} value={cliente.id}>
-                          {cliente.nome} - {cliente.cnpj}
-                        </SelectItem>
-                      ))}
+                      {(() => {
+                        const clientesFiltrados = clientes.filter((c) => {
+                          if (!editingItem) {
+                            // Novo registro: não exibir clientes que já possuem Sintegra
+                            return !clientesComSintegra.has(c.id);
+                          }
+                          // Edição: permitir o cliente atual mesmo que já tenha Sintegra
+                          return (
+                            !clientesComSintegra.has(c.id) ||
+                            c.id === editingItem.clienteId
+                          );
+                        });
+
+                        const ordenados = [...clientesFiltrados].sort((a, b) =>
+                          a.nome.localeCompare(b.nome, "pt-BR", {
+                            sensitivity: "base",
+                          })
+                        );
+
+                        return ordenados.map((cliente) => (
+                          <SelectItem key={cliente.id} value={cliente.id}>
+                            {cliente.nome} - {cliente.cnpj}
+                          </SelectItem>
+                        ));
+                      })()}
                     </SelectContent>
                   </Select>
                 </div>
@@ -500,6 +556,42 @@ export default function SintegraPage() {
                   <SelectItem value="todos">Todos</SelectItem>
                   <SelectItem value="Pendente">Pendente</SelectItem>
                   <SelectItem value="Concluído">Concluído</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label
+                htmlFor="ordenacao"
+                className="text-xs text-muted-foreground"
+              >
+                Ordenar por
+              </Label>
+              <Select
+                value={`${ordenacao.campo}-${ordenacao.direcao}`}
+                onValueChange={(value) => {
+                  const [campo, direcao] = value.split("-") as [
+                    "clienteNome" | "dataPrazo" | "status",
+                    "asc" | "desc"
+                  ];
+                  setOrdenacao({ campo, direcao });
+                }}
+              >
+                <SelectTrigger id="ordenacao" className="w-48">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="clienteNome-asc">Cliente (A-Z)</SelectItem>
+                  <SelectItem value="clienteNome-desc">
+                    Cliente (Z-A)
+                  </SelectItem>
+                  <SelectItem value="dataPrazo-desc">
+                    Data (Mais recente)
+                  </SelectItem>
+                  <SelectItem value="dataPrazo-asc">
+                    Data (Mais antigo)
+                  </SelectItem>
+                  <SelectItem value="status-asc">Status (A-Z)</SelectItem>
+                  <SelectItem value="status-desc">Status (Z-A)</SelectItem>
                 </SelectContent>
               </Select>
             </div>

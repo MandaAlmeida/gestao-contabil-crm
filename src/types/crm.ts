@@ -46,7 +46,7 @@ export interface Certificado {
   clienteCNPJ: string;
   tipoCertificado: "A1" | "A3";
   dataVencimento: string;
-  status: "Válido" | "A Vencer" | "Vencido";
+  status: "Pendente" | "Avisado" | "Renovado";
   observacoes: string;
   ativo: boolean;
   createdAt: string;

@@ -10,13 +10,9 @@ import {
   Search,
   Edit,
   Trash2,
-  CheckCircle,
-  Clock3,
-  AlertTriangle,
   UserPlus,
   Users,
 } from "lucide-react";
-import type { LucideIcon } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -39,9 +35,12 @@ import {
   calcularStatusCertificado,
 } from "@/lib/certificados";
 import { formatarDataBR } from "@/lib/utils";
+import { CertificadoStatusButton, type CertificadoStatusMeta } from "@/components/CertificadoStatusButton";
+import { CheckCircle, Clock3, AlertTriangle } from "lucide-react";
 import { cn, formatarTelefone } from "@/lib/utils";
 import { usePagination } from "@/hooks/usePagination";
 import { PaginationControls } from "@/components/PaginationControls";
+import { StatusSelect } from "@/components/StatusSelect";
 
 const adicionarAno = (data?: string) => {
   const baseDate = data ? new Date(data) : new Date();
@@ -65,54 +64,14 @@ const removerAno = (data: string) => {
 
 const formatarISO = (date: Date) => date.toISOString().split("T")[0];
 
-const STATUS_META: Record<
-  Certificado["status"],
-  { label: string; className: string; icon: LucideIcon }
-> = {
-  Válido: {
-    label: "Válido",
-    className: "bg-success/10 text-success hover:bg-success/20",
-    icon: CheckCircle,
-  },
-  "A Vencer": {
-    label: "A vencer",
-    className: "bg-warning/10 text-warning hover:bg-warning/20",
-    icon: Clock3,
-  },
-  Vencido: {
-    label: "Vencido",
-    className: "bg-destructive/10 text-destructive hover:bg-destructive/20",
-    icon: AlertTriangle,
-  },
-};
-
-const getToggleTitle = (status: Certificado["status"]) => {
-  switch (status) {
-    case "Válido":
-      return "Reverter vigência";
-    case "A Vencer":
-      return "Renovar certificado";
-    case "Vencido":
-      return "Renovar certificado";
-    default:
-      return "Atualizar status";
-  }
-};
-
 export default function Certificados() {
   const { clientes } = useClientes();
-  
-  // Clientes ordenados alfabeticamente
-  const clientesOrdenados = useMemo(() => {
-    return [...clientes].sort((a, b) =>
-      a.nome.localeCompare(b.nome, "pt-BR", { sensitivity: "base" })
-    );
-  }, [clientes]);
   const {
     certificados: certificadosRaw,
     createCertificado,
     updateCertificado,
     deleteCertificado,
+    refresh,
   } = useCertificados();
   const [searchTerm, setSearchTerm] = useState("");
   const [searchResponsavel, setSearchResponsavel] = useState("todos");
@@ -121,6 +80,10 @@ export default function Certificados() {
   const [filtroStatus, setFiltroStatus] = useState<
     Certificado["status"] | "todos"
   >("todos");
+  const [ordenacao, setOrdenacao] = useState<{
+    campo: "clienteNome" | "dataVencimento" | "tipoCertificado" | "status";
+    direcao: "asc" | "desc";
+  }>({ campo: "dataVencimento", direcao: "desc" });
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<Certificado | null>(null);
   const [modoCliente, setModoCliente] = useState<"existente" | "novo">(
@@ -141,11 +104,17 @@ export default function Certificados() {
     [certificadosRaw]
   );
 
+  // Lista de IDs de clientes que já têm certificados cadastrados
+  const clientesComCertificado = useMemo(
+    () => new Set(certificadosNormalizados.map((c) => c.clienteId)),
+    [certificadosNormalizados]
+  );
+
   const [formData, setFormData] = useState({
     clienteId: "",
     tipoCertificado: "A1" as Certificado["tipoCertificado"],
     dataVencimento: "",
-    status: "Válido" as Certificado["status"],
+    status: "Pendente" as Certificado["status"],
     observacoes: "",
   });
 
@@ -159,7 +128,7 @@ export default function Certificados() {
       clienteId: "",
       tipoCertificado: "A1",
       dataVencimento: "",
-      status: "Válido",
+      status: "Pendente",
       observacoes: "",
     });
     setNovoClienteData({
@@ -206,11 +175,11 @@ export default function Certificados() {
 
     let dataVencimento = formData.dataVencimento;
 
-    // Regra de negócio: quando status mudar para Válido, adicionar 1 ano à data
+    // Regra de negócio: quando status mudar para Renovado, adicionar 1 ano à data
     if (
       editingItem &&
-      formData.status === "Válido" &&
-      editingItem.status !== "Válido"
+      formData.status === "Renovado" &&
+      editingItem.status !== "Renovado"
     ) {
       const currentDate = new Date(formData.dataVencimento);
       currentDate.setFullYear(currentDate.getFullYear() + 1);
@@ -308,6 +277,42 @@ export default function Certificados() {
     );
   });
 
+  // Aplicar ordenação
+  const itemsOrdenados = useMemo(() => {
+    const items = [...filteredItems];
+    items.sort((a, b) => {
+      let comparacao = 0;
+
+      switch (ordenacao.campo) {
+        case "clienteNome":
+          comparacao = a.clienteNome.localeCompare(b.clienteNome, "pt-BR", {
+            sensitivity: "base",
+          });
+          break;
+        case "dataVencimento":
+          comparacao =
+            new Date(a.dataVencimento).getTime() -
+            new Date(b.dataVencimento).getTime();
+          break;
+        case "tipoCertificado":
+          comparacao = a.tipoCertificado.localeCompare(
+            b.tipoCertificado,
+            "pt-BR",
+            { sensitivity: "base" }
+          );
+          break;
+        case "status":
+          comparacao = a.status.localeCompare(b.status, "pt-BR", {
+            sensitivity: "base",
+          });
+          break;
+      }
+
+      return ordenacao.direcao === "asc" ? comparacao : -comparacao;
+    });
+    return items;
+  }, [filteredItems, ordenacao]);
+
   const {
     currentPage,
     totalPages,
@@ -320,55 +325,13 @@ export default function Certificados() {
     totalItems,
     itemsPerPage,
     setItemsPerPage,
-  } = usePagination(filteredItems, 10);
+  } = usePagination(itemsOrdenados, 10);
 
-  const handleToggleStatus = async (item: Certificado) => {
-    const registroAtual =
-      certificadosRaw.find((cert) => cert.id === item.id) ?? item;
-
-    if (registroAtual.status === "Válido") {
-      const dataAnterior = formatarISO(
-        removerAno(registroAtual.dataVencimento)
-      );
-      const statusRecalculado = calcularStatusCertificado({
-        dataVencimento: dataAnterior,
-      });
-
-      try {
-        await updateCertificado(item.id, {
-          status: statusRecalculado,
-          dataVencimento: dataAnterior,
-        });
-        toast({
-          title: "Status revertido.",
-          description:
-            statusRecalculado === "Vencido"
-              ? `${registroAtual.clienteNome} voltou a ficar vencido.`
-              : `${registroAtual.clienteNome} agora está a vencer.`,
-        });
-      } catch (error) {
-        toast({ title: "Erro ao atualizar status", variant: "destructive" });
-      }
-      return;
-    }
-
-    const novoVencimento = formatarISO(adicionarAno());
-
-    try {
-      await updateCertificado(item.id, {
-        status: "Válido",
-        dataVencimento: novoVencimento,
-      });
-      toast({
-        title: "Certificado renovado!",
-        description: `${
-          registroAtual.clienteNome
-        } está válido até ${formatarDataBR(novoVencimento)}.`,
-      });
-    } catch (error) {
-      toast({ title: "Erro ao renovar certificado", variant: "destructive" });
-    }
-  };
+  const STATUS_OPTIONS = [
+    { value: "Pendente", label: "Pendente" },
+    { value: "Avisado", label: "Avisado" },
+    { value: "Renovado", label: "Renovado" },
+  ];
 
   return (
     <Layout>
@@ -440,11 +403,33 @@ export default function Certificados() {
                         <SelectValue placeholder="Selecione um cliente" />
                       </SelectTrigger>
                       <SelectContent>
-                        {clientesOrdenados.map((cliente) => (
-                          <SelectItem key={cliente.id} value={cliente.id}>
-                            {cliente.nome} - {cliente.cnpj}
-                          </SelectItem>
-                        ))}
+                        {(() => {
+                          // Clientes disponíveis para seleção no formulário:
+                          // - Novo certificado: não listar clientes que já possuem certificado
+                          // - Edição: permitir o cliente atual mesmo que já tenha certificado
+                          const clientesFiltrados = clientes.filter((c) => {
+                            if (!editingItem) {
+                              return !clientesComCertificado.has(c.id);
+                            }
+                            return (
+                              !clientesComCertificado.has(c.id) ||
+                              c.id === editingItem.clienteId
+                            );
+                          });
+
+                          const clientesOrdenados = [...clientesFiltrados].sort(
+                            (a, b) =>
+                              a.nome.localeCompare(b.nome, "pt-BR", {
+                                sensitivity: "base",
+                              })
+                          );
+
+                          return clientesOrdenados.map((cliente) => (
+                            <SelectItem key={cliente.id} value={cliente.id}>
+                              {cliente.nome} - {cliente.cnpj}
+                            </SelectItem>
+                          ));
+                        })()}
                       </SelectContent>
                     </Select>
                   ) : (
@@ -535,9 +520,9 @@ export default function Certificados() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="Válido">Válido</SelectItem>
-                      <SelectItem value="A Vencer">A Vencer</SelectItem>
-                      <SelectItem value="Vencido">Vencido</SelectItem>
+                      <SelectItem value="Pendente">Pendente</SelectItem>
+                      <SelectItem value="Avisado">Avisado</SelectItem>
+                      <SelectItem value="Renovado">Renovado</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -661,9 +646,51 @@ export default function Certificados() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="todos">Todos</SelectItem>
-                  <SelectItem value="Válido">Válido</SelectItem>
-                  <SelectItem value="A Vencer">A Vencer</SelectItem>
-                  <SelectItem value="Vencido">Vencido</SelectItem>
+                  <SelectItem value="Pendente">Pendente</SelectItem>
+                  <SelectItem value="Avisado">Avisado</SelectItem>
+                  <SelectItem value="Renovado">Renovado</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label
+                htmlFor="ordenacao"
+                className="text-xs text-muted-foreground"
+              >
+                Ordenar por
+              </Label>
+              <Select
+                value={`${ordenacao.campo}-${ordenacao.direcao}`}
+                onValueChange={(value) => {
+                  const [campo, direcao] = value.split("-") as [
+                    "clienteNome" | "dataVencimento" | "tipoCertificado" | "status",
+                    "asc" | "desc"
+                  ];
+                  setOrdenacao({ campo, direcao });
+                }}
+              >
+                <SelectTrigger id="ordenacao" className="w-48">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="clienteNome-asc">Cliente (A-Z)</SelectItem>
+                  <SelectItem value="clienteNome-desc">
+                    Cliente (Z-A)
+                  </SelectItem>
+                  <SelectItem value="dataVencimento-desc">
+                    Vencimento (Mais recente)
+                  </SelectItem>
+                  <SelectItem value="dataVencimento-asc">
+                    Vencimento (Mais antigo)
+                  </SelectItem>
+                  <SelectItem value="tipoCertificado-asc">
+                    Tipo (A-Z)
+                  </SelectItem>
+                  <SelectItem value="tipoCertificado-desc">
+                    Tipo (Z-A)
+                  </SelectItem>
+                  <SelectItem value="status-asc">Status (A-Z)</SelectItem>
+                  <SelectItem value="status-desc">Status (Z-A)</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -736,25 +763,14 @@ export default function Certificados() {
                   <td className="p-3">{item.tipoCertificado}</td>
                   <td className="p-3">{formatarDataBR(item.dataVencimento)}</td>
                   <td className="p-3">
-                    {(() => {
-                      const meta = STATUS_META[item.status];
-                      const Icon = meta.icon;
-                      return (
-                        <button
-                          type="button"
-                          onClick={() => handleToggleStatus(item)}
-                          title={getToggleTitle(item.status)}
-                          className={cn(
-                            "flex items-center gap-2 rounded-full px-3 py-1 text-xs font-medium transition-colors",
-                            "border border-transparent focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
-                            meta.className
-                          )}
-                        >
-                          <Icon className="h-4 w-4" />
-                          {meta.label}
-                        </button>
-                      );
-                    })()}
+                    <div className="flex gap-2">
+                    <StatusSelect
+                        item={item}
+                        onUpdateStatus={updateCertificado}
+                        onStatusChange={refresh}
+                        statusOptions={STATUS_OPTIONS}
+                      />
+                    </div>
                   </td>
                   <td className="p-3">
                     <div className="flex gap-2">

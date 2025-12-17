@@ -3,18 +3,13 @@ import { Layout } from "@/components/Layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useClientes } from "@/hooks/useClientes";
-import { useServicos } from "@/hooks/useServicos";
 import { Cliente, Servico } from "@/types/crm";
 import {
   Plus,
   Search,
   Edit,
   Trash2,
-  CheckCircle,
-  Clock3,
-  AlertTriangle,
 } from "lucide-react";
-import type { LucideIcon } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -24,7 +19,6 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Switch } from "@/components/ui/switch";
 import {
   Select,
   SelectContent,
@@ -37,7 +31,15 @@ import {
   calcularStatusServico,
   normalizarServicos,
 } from "@/lib/servicos";
-import { cn, formatarDataBR } from "@/lib/utils";
+import {
+  useServicos,
+  adicionarMes,
+  removerMes,
+} from "@/hooks/useServicos";
+import { formatarDataBR } from "@/lib/utils";
+import { StatusButton, type StatusMeta } from "@/components/StatusButton";
+import { PaymentConfirmationDialog } from "@/components/PaymentConfirmationDialog";
+import { CheckCircle, Clock3, AlertTriangle } from "lucide-react";
 import { usePagination } from "@/hooks/usePagination";
 import {
   Pagination,
@@ -48,6 +50,7 @@ import {
   PaginationPrevious,
   PaginationEllipsis,
 } from "@/components/ui/pagination";
+import { useUsuarios } from "@/hooks/useUsuarios";
 
 export default function ServicosPage() {
   const { clientes } = useClientes();
@@ -56,7 +59,12 @@ export default function ServicosPage() {
     createServico,
     updateServico,
     deleteServico,
+    togglePagamento,
+    confirmarPagamento,
   } = useServicos();
+  const {
+    usuarios
+  } = useUsuarios();
   const [searchTerm, setSearchTerm] = useState("");
   const [searchResponsavel, setSearchResponsavel] = useState("todos");
   const [filtroDataInicio, setFiltroDataInicio] = useState("");
@@ -70,6 +78,8 @@ export default function ServicosPage() {
   }>({ campo: "dataVencimento", direcao: "desc" });
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<Servico | null>(null);
+  const [isPagamentoDialogOpen, setIsPagamentoDialogOpen] = useState(false);
+  const [itemParaPagamento, setItemParaPagamento] = useState<Servico | null>(null);
   const { toast } = useToast();
 
   const servicosNormalizados = useMemo(
@@ -77,29 +87,45 @@ export default function ServicosPage() {
     [servicosRaw]
   );
 
-  const responsaveisDisponiveis = useMemo(() => {
-    // Primeiro tenta pegar dos serviços
-    const responsaveisServicos = servicosNormalizados
-      .map((servico) => servico.responsavel)
-      .filter(Boolean);
-    
-    // Se não houver responsáveis nos serviços, pega dos clientes
-    if (responsaveisServicos.length === 0) {
-      return Array.from(
-        new Set(clientes.map((cliente) => cliente.responsavel).filter(Boolean))
-      ).sort();
-    }
-    
-    return Array.from(new Set(responsaveisServicos)).sort();
-  }, [servicosNormalizados, clientes]);
+  // Lista de IDs de clientes que já têm registros de serviços
+  const clientesComServico = useMemo(
+    () => new Set(servicosNormalizados.map((s) => s.clienteId)),
+    [servicosNormalizados]
+  );
 
-  // Clientes disponíveis para seleção - sempre mostra todos
-  const clientesDisponiveis = useMemo(() => {
+  const responsaveisDisponiveis = useMemo(
+    () =>
+      usuarios
+        .filter((usuario) => usuario.type !== "dev")
+        .map((usuario) => usuario.nome)
+        .sort(),
+    [usuarios]
+  );
+
+  // Clientes disponíveis para seleção no formulário
+  // Ao criar novo registro, mostra apenas clientes não cadastrados
+  // Ao editar, mostra todos os clientes (incluindo o que está sendo editado)
+  const clientesDisponiveisFormulario = useMemo(() => {
+    let clientesFiltrados = clientes;
+
+    if (!editingItem) {
+      // Novo registro: exibe apenas clientes que ainda não possuem serviço
+      clientesFiltrados = clientes.filter(
+        (c) => !clientesComServico.has(c.id)
+      );
+    } else {
+      // Edição: inclui o cliente atual mesmo que já tenha serviço,
+      // e esconde apenas os demais clientes que já possuem serviço
+      clientesFiltrados = clientes.filter(
+        (c) => !clientesComServico.has(c.id) || c.id === editingItem.clienteId
+      );
+    }
+
     // Ordenar alfabeticamente por nome
-    return [...clientes].sort((a, b) =>
+    return [...clientesFiltrados].sort((a, b) =>
       a.nome.localeCompare(b.nome, "pt-BR", { sensitivity: "base" })
     );
-  }, [clientes]);
+  }, [clientes, clientesComServico, editingItem]);
 
   const [formData, setFormData] = useState({
     clienteId: "",
@@ -214,83 +240,15 @@ export default function ServicosPage() {
     }
   };
 
-  /**
-   * Adiciona um mês a uma data no formato YYYY-MM-DD
-   * Trabalha diretamente com strings para evitar problemas de timezone
-   */
-  const adicionarMes = (dataString: string): string => {
-    if (!dataString) {
-      const hoje = new Date();
-      return hoje.toISOString().split("T")[0];
-    }
-
-    const partes = dataString.split("-");
-    if (partes.length !== 3) {
-      return dataString;
-    }
-
-    const ano = parseInt(partes[0], 10);
-    const mes = parseInt(partes[1], 10);
-    const dia = parseInt(partes[2], 10);
-
-    let novoAno = ano;
-    let novoMes = mes + 1;
-
-    if (novoMes > 12) {
-      novoMes = 1;
-      novoAno += 1;
-    }
-
-    // Garante que o dia não ultrapasse os dias do mês
-    const ultimoDiaDoMes = new Date(novoAno, novoMes, 0).getDate();
-    const novoDia = Math.min(dia, ultimoDiaDoMes);
-
-    return `${novoAno}-${String(novoMes).padStart(2, "0")}-${String(
-      novoDia
-    ).padStart(2, "0")}`;
-  };
-
-  /**
-   * Remove um mês de uma data no formato YYYY-MM-DD
-   * Trabalha diretamente com strings para evitar problemas de timezone
-   */
-  const removerMes = (dataString: string): string => {
-    if (!dataString) {
-      const hoje = new Date();
-      return hoje.toISOString().split("T")[0];
-    }
-
-    const partes = dataString.split("-");
-    if (partes.length !== 3) {
-      return dataString;
-    }
-
-    const ano = parseInt(partes[0], 10);
-    const mes = parseInt(partes[1], 10);
-    const dia = parseInt(partes[2], 10);
-
-    let novoAno = ano;
-    let novoMes = mes - 1;
-
-    if (novoMes < 1) {
-      novoMes = 12;
-      novoAno -= 1;
-    }
-
-    // Garante que o dia não ultrapasse os dias do mês
-    const ultimoDiaDoMes = new Date(novoAno, novoMes, 0).getDate();
-    const novoDia = Math.min(dia, ultimoDiaDoMes);
-
-    return `${novoAno}-${String(novoMes).padStart(2, "0")}-${String(
-      novoDia
-    ).padStart(2, "0")}`;
-  };
-
   const handleTogglePagamento = async (item: Servico) => {
     if (item.status === "Recebido") {
+      // Quando remove o pagamento, sempre volta exatamente 1 mês da data atual
+      // (já que o pagamento avançou 1 mês quando foi registrado)
       const vencimentoAnterior = removerMes(item.dataVencimento);
+
+      // Calcula o status baseado na nova data de vencimento, sem considerar o status antigo
       const statusAjustado = calcularStatusServico({
-        status: item.status,
+        status: "A Vencer", // Força recalcular baseado apenas na data
         dataPagamento: null,
         dataVencimento: vencimentoAnterior,
       });
@@ -298,6 +256,7 @@ export default function ServicosPage() {
       try {
         await updateServico(item.id, {
           dataPagamento: null,
+          meioPagamento: "Pix", // Reset para valor padrão
           dataVencimento: vencimentoAnterior,
           status: statusAjustado,
         });
@@ -305,7 +264,7 @@ export default function ServicosPage() {
           title: "Pagamento removido.",
           description:
             statusAjustado === "A Vencer"
-              ? `${item.clienteNome} voltou a ficar pendente neste mês.`
+              ? `${item.clienteNome} voltou a ficar pendente.`
               : `${item.clienteNome} foi marcado como vencido.`,
         });
       } catch (error) {
@@ -314,26 +273,35 @@ export default function ServicosPage() {
       return;
     }
 
-    // Obtém a data de hoje no formato YYYY-MM-DD (timezone local)
-    const hoje = new Date();
-    const ano = hoje.getFullYear();
-    const mes = String(hoje.getMonth() + 1).padStart(2, "0");
-    const dia = String(hoje.getDate()).padStart(2, "0");
-    const novaDataPagamento = `${ano}-${mes}-${dia}`;
-    const novoVencimento = adicionarMes(item.dataVencimento);
+    // Abre modal para confirmar pagamento
+    setItemParaPagamento(item);
+    setIsPagamentoDialogOpen(true);
+  };
+
+  const handleConfirmarPagamento = async (data: {
+    dataPagamento: string;
+    meioPagamento: "Pix" | "Boleto";
+  }) => {
+    if (!itemParaPagamento) return;
 
     try {
-      await updateServico(item.id, {
-        dataPagamento: novaDataPagamento,
-        dataVencimento: novoVencimento,
-        status: "Recebido",
-      });
-      toast({
-        title: "Pagamento registrado!",
-        description: `${item.clienteNome} foi marcado como pago.`,
-      });
+      await confirmarPagamento(
+        itemParaPagamento,
+        data,
+        (title, description) => {
+          toast({
+            title,
+            description,
+          });
+        },
+        (title) => {
+          toast({ title, variant: "destructive" });
+        }
+      );
+      setIsPagamentoDialogOpen(false);
+      setItemParaPagamento(null);
     } catch (error) {
-      toast({ title: "Erro ao registrar pagamento", variant: "destructive" });
+      // Erro já foi tratado no hook
     }
   };
 
@@ -449,10 +417,7 @@ export default function ServicosPage() {
     { recebidas: 0, aReceber: 0 }
   );
 
-  const STATUS_META: Record<
-    Servico["status"],
-    { label: string; className: string; icon: LucideIcon }
-  > = {
+  const STATUS_META: Record<Servico["status"], StatusMeta> = {
     Recebido: {
       label: "Pago",
       className: "bg-success/10 text-success hover:bg-success/20",
@@ -529,7 +494,7 @@ export default function ServicosPage() {
                       <SelectValue placeholder="Selecione um cliente" />
                     </SelectTrigger>
                     <SelectContent>
-                      {clientesDisponiveis.map((cliente) => (
+                      {clientesDisponiveisFormulario.map((cliente) => (
                         <SelectItem key={cliente.id} value={cliente.id}>
                           {cliente.nome} - {cliente.cnpj}
                         </SelectItem>
@@ -665,6 +630,23 @@ export default function ServicosPage() {
             </DialogContent>
           </Dialog>
         </div>
+
+        {/* Modal de Confirmação de Pagamento */}
+        <PaymentConfirmationDialog
+          open={isPagamentoDialogOpen}
+          onOpenChange={(open) => {
+            setIsPagamentoDialogOpen(open);
+            if (!open) {
+              setItemParaPagamento(null);
+            }
+          }}
+          item={itemParaPagamento}
+          valor={itemParaPagamento?.valorMensalidade || 0}
+          clienteNome={itemParaPagamento?.clienteNome || ""}
+          onConfirm={handleConfirmarPagamento}
+          dataPagamentoInicial={itemParaPagamento?.dataPagamento || undefined}
+          meioPagamentoInicial={itemParaPagamento?.meioPagamento || "Pix"}
+        />
 
         <div className="mb-4 space-y-4">
           <div className="flex gap-4 items-end">
@@ -903,25 +885,12 @@ export default function ServicosPage() {
                     })}
                   </td>
                   <td className="p-3">
-                    {(() => {
-                      const meta = STATUS_META[item.status];
-                      const Icon = meta.icon;
-                      return (
-                        <button
-                          type="button"
-                          onClick={() => handleTogglePagamento(item)}
-                          title={getToggleTitle(item)}
-                          className={cn(
-                            "flex items-center gap-2 rounded-full px-3 py-1 text-xs font-medium transition-colors",
-                            "border border-transparent focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
-                            meta.className
-                          )}
-                        >
-                          <Icon className="h-4 w-4" />
-                          {meta.label}
-                        </button>
-                      );
-                    })()}
+                    <StatusButton
+                      status={item.status}
+                      statusMeta={STATUS_META}
+                      onClick={() => handleTogglePagamento(item)}
+                      title={getToggleTitle(item)}
+                    />
                   </td>
                   <td className="p-3">
                     <div className="flex flex-col gap-1">

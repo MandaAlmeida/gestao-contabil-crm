@@ -150,7 +150,7 @@ service cloud.firestore {
                       request.resource.data.observacoes is string &&
                       request.resource.data.clienteId.size() > 0 &&
                       request.resource.data.tipoCertificado in ['A1', 'A3'] &&
-                      request.resource.data.status in ['Válido', 'A Vencer', 'Vencido'];
+                      request.resource.data.status in ['Pendente', 'Avisado', 'Renovado'];
       
       // Permitir atualização para usuários autenticados
       allow update: if isAuthenticated() &&
@@ -165,7 +165,7 @@ service cloud.firestore {
                       request.resource.data.observacoes is string &&
                       request.resource.data.clienteId.size() > 0 &&
                       request.resource.data.tipoCertificado in ['A1', 'A3'] &&
-                      request.resource.data.status in ['Válido', 'A Vencer', 'Vencido'];
+                      request.resource.data.status in ['Pendente', 'Avisado', 'Renovado'];
       
       // Permitir exclusão para usuários autenticados
       allow delete: if isAuthenticated();

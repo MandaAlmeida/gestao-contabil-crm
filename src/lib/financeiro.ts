@@ -30,12 +30,11 @@ const mesmoMesEAno = (dataA: Date, dataB: Date) =>
 export const calcularStatusFinanceiro = (
   item: Pick<Financeiro, "status" | "dataPagamento" | "dataVencimento">
 ): Financeiro["status"] => {
-  const statusBase = normalizarStatusAntigo(item.status);
-
   if (item.dataPagamento) {
     return "Recebido";
   }
 
+  // Sem data de pagamento, nunca pode ser "Recebido"
   const hoje = startOfDay(new Date());
   const vencimento = startOfDay(new Date(item.dataVencimento));
 
@@ -43,7 +42,7 @@ export const calcularStatusFinanceiro = (
     return "Vencido";
   }
 
-  return statusBase === "Recebido" ? "Recebido" : "A Vencer";
+  return "A Vencer";
 };
 
 export const normalizarFinanceiros = (lista: Financeiro[]) => {

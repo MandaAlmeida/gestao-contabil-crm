@@ -134,7 +134,7 @@ export function usePushNotifications(
         return null;
       }
     } catch (err) {
-      console.error("[usePushNotifications] Erro ao obter token:", err);
+      // Removido console.error para não poluir o console
       setError(err instanceof Error ? err.message : "Erro ao obter token");
       return null;
     }

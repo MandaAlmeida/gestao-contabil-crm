@@ -27,13 +27,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus, Wallet, Edit, Trash2 } from "lucide-react";
+import { Plus, Wallet, Edit, Trash2, CheckCircle, Clock3, type LucideIcon } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useDespesas } from "@/hooks/useDespesas";
 import type { Despesa } from "@/types/despesas";
 import { usePagination } from "@/hooks/usePagination";
 import { PaginationControls } from "@/components/PaginationControls";
-import { formatarDataBR } from "@/lib/utils";
+import { cn, formatarDataBR } from "@/lib/utils";
+import { StatusButton, type StatusMeta } from "@/components/StatusButton";
 
 interface FormState {
   descricao: string;
@@ -51,6 +52,19 @@ const DEFAULT_FORM: FormState = {
   data: new Date().toISOString().split("T")[0],
   fixo: false,
   pago: false,
+};
+
+const STATUS_META: Record<"pago" | "pendente", StatusMeta> = {
+  pago: {
+    label: "Pago",
+    className: "bg-success/10 text-success hover:bg-success/20",
+    icon: CheckCircle as LucideIcon,
+  },
+  pendente: {
+    label: "Pendente",
+    className: "bg-warning/10 text-warning hover:bg-warning/20",
+    icon: Clock3 as LucideIcon,
+  },
 };
 
 const adicionarMes = (dataString: string): string => {
@@ -98,6 +112,10 @@ export default function DespesasPage() {
   const [filtroStatus, setFiltroStatus] = useState<
     "todos" | "pago" | "pendente"
   >("todos");
+  const [ordenacao, setOrdenacao] = useState<{
+    campo: "descricao" | "data" | "valor" | "status";
+    direcao: "asc" | "desc";
+  }>({ campo: "data", direcao: "desc" });
 
   const despesasFiltradas = useMemo(() => {
     return despesas.filter((despesa) => {
@@ -118,16 +136,40 @@ export default function DespesasPage() {
     });
   }, [despesas, filtroDataInicio, filtroDataFim, filtroStatus]);
 
-  const despesasOrdenadas = useMemo(
-    () =>
-      [...despesasFiltradas].sort((a, b) => {
-        if (a.data === b.data) {
-          return b.createdAt.localeCompare(a.createdAt);
-        }
-        return b.data.localeCompare(a.data);
-      }),
-    [despesasFiltradas]
-  );
+  const despesasOrdenadas = useMemo(() => {
+    const items = [...despesasFiltradas];
+    items.sort((a, b) => {
+      let comparacao = 0;
+
+      switch (ordenacao.campo) {
+        case "descricao":
+          comparacao = a.descricao.localeCompare(b.descricao, "pt-BR", {
+            sensitivity: "base",
+          });
+          break;
+        case "data":
+          comparacao = a.data.localeCompare(b.data);
+          // Se as datas forem iguais, ordenar por createdAt
+          if (comparacao === 0) {
+            comparacao = b.createdAt.localeCompare(a.createdAt);
+          }
+          break;
+        case "valor":
+          comparacao = a.valor - b.valor;
+          break;
+        case "status":
+          const statusA = a.pago ? "pago" : "pendente";
+          const statusB = b.pago ? "pago" : "pendente";
+          comparacao = statusA.localeCompare(statusB, "pt-BR", {
+            sensitivity: "base",
+          });
+          break;
+      }
+
+      return ordenacao.direcao === "asc" ? comparacao : -comparacao;
+    });
+    return items;
+  }, [despesasFiltradas, ordenacao]);
 
   const {
     currentPage,
@@ -213,14 +255,67 @@ export default function DespesasPage() {
     setIsDialogOpen(true);
   };
 
+  const STATUS_META: Record<
+    "pago" | "pendente",
+    { label: string; className: string; icon: typeof CheckCircle | typeof Clock3 }
+  > = {
+    pago: {
+      label: "Pago",
+      className: "bg-success/10 text-success hover:bg-success/20",
+      icon: CheckCircle,
+    },
+    pendente: {
+      label: "Pendente",
+      className: "bg-warning/10 text-warning hover:bg-warning/20",
+      icon: Clock3,
+    },
+  };
+
+  const removerMes = (dataString: string): string => {
+    if (!dataString) {
+      const hoje = new Date();
+      return hoje.toISOString().split("T")[0];
+    }
+
+    const partes = dataString.split("-");
+    if (partes.length !== 3) {
+      return dataString;
+    }
+
+    const ano = parseInt(partes[0], 10);
+    const mes = parseInt(partes[1], 10);
+    const dia = parseInt(partes[2], 10);
+
+    let novoAno = ano;
+    let novoMes = mes - 1;
+
+    if (novoMes < 1) {
+      novoMes = 12;
+      novoAno -= 1;
+    }
+
+    // Garante que o dia não ultrapasse os dias do mês
+    const ultimoDiaDoMes = new Date(novoAno, novoMes, 0).getDate();
+    const novoDia = Math.min(dia, ultimoDiaDoMes);
+
+    return `${novoAno}-${String(novoMes).padStart(2, "0")}-${String(
+      novoDia
+    ).padStart(2, "0")}`;
+  };
+
   const handleTogglePago = async (despesa: Despesa) => {
     try {
       const novoStatusPago = !despesa.pago;
       let novaData = despesa.data;
 
-      // Avanço automático da data para despesas fixas quando marcadas como pagas
-      if (despesa.fixo && novoStatusPago && !despesa.pago) {
-        novaData = adicionarMes(despesa.data);
+      if (despesa.fixo) {
+        if (novoStatusPago && !despesa.pago) {
+          // Avanço automático da data para despesas fixas quando marcadas como pagas
+          novaData = adicionarMes(despesa.data);
+        } else if (!novoStatusPago && despesa.pago) {
+          // Volta um mês quando mudar de pago para pendente
+          novaData = removerMes(despesa.data);
+        }
       }
 
       await updateDespesa(despesa.id, {
@@ -235,6 +330,8 @@ export default function DespesasPage() {
         description:
           despesa.fixo && novoStatusPago
             ? `Data avançada para ${formatarDataBR(novaData)}`
+            : despesa.fixo && !novoStatusPago && novaData !== despesa.data
+            ? `Data voltou para ${formatarDataBR(novaData)}`
             : undefined,
       });
     } catch (error) {
@@ -480,6 +577,42 @@ export default function DespesasPage() {
                 </SelectContent>
               </Select>
             </div>
+            <div className="space-y-1">
+              <Label
+                htmlFor="ordenacao"
+                className="text-xs text-muted-foreground"
+              >
+                Ordenar por
+              </Label>
+              <Select
+                value={`${ordenacao.campo}-${ordenacao.direcao}`}
+                onValueChange={(value) => {
+                  const [campo, direcao] = value.split("-") as [
+                    "descricao" | "data" | "valor" | "status",
+                    "asc" | "desc"
+                  ];
+                  setOrdenacao({ campo, direcao });
+                }}
+              >
+                <SelectTrigger id="ordenacao" className="w-48">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="descricao-asc">
+                    Descrição (A-Z)
+                  </SelectItem>
+                  <SelectItem value="descricao-desc">
+                    Descrição (Z-A)
+                  </SelectItem>
+                  <SelectItem value="data-desc">Data (Mais recente)</SelectItem>
+                  <SelectItem value="data-asc">Data (Mais antigo)</SelectItem>
+                  <SelectItem value="valor-desc">Valor (Maior)</SelectItem>
+                  <SelectItem value="valor-asc">Valor (Menor)</SelectItem>
+                  <SelectItem value="status-asc">Status (A-Z)</SelectItem>
+                  <SelectItem value="status-desc">Status (Z-A)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
             {totalItems > 11 && (
               <div className="space-y-1">
                 <Label
@@ -568,13 +701,30 @@ export default function DespesasPage() {
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      <Button
-                        variant={despesa.pago ? "outline" : "secondary"}
-                        size="sm"
-                        onClick={() => handleTogglePago(despesa)}
-                      >
-                        {despesa.pago ? "Pago" : "Pendente"}
-                      </Button>
+                      {(() => {
+                        const status = despesa.pago ? "pago" : "pendente";
+                        const meta = STATUS_META[status];
+                        const Icon = meta.icon;
+                        return (
+                          <button
+                            type="button"
+                            onClick={() => handleTogglePago(despesa)}
+                            title={
+                              despesa.pago
+                                ? "Marcar como pendente"
+                                : "Marcar como pago"
+                            }
+                            className={cn(
+                              "flex items-center gap-2 rounded-full px-3 py-1 text-xs font-medium transition-colors",
+                              "border border-transparent focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
+                              meta.className
+                            )}
+                          >
+                            <Icon className="h-4 w-4" />
+                            {meta.label}
+                          </button>
+                        );
+                      })()}
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">

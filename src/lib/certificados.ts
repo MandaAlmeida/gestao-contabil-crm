@@ -27,23 +27,8 @@ export const calcularStatusCertificado = (
 };
 
 export const normalizarCertificados = (lista: Certificado[]) => {
-  let houveAlteracao = false;
-
-  const normalizados = lista.map((item) => {
-    const statusCalculado = calcularStatusCertificado(item);
-
-    if (statusCalculado !== item.status) {
-      houveAlteracao = true;
-      return {
-        ...item,
-        status: statusCalculado,
-      };
-    }
-
-    return item;
-  });
-
-  return houveAlteracao ? normalizados : lista;
+  // Status agora são manuais (iguais aos de Renovação), não calculamos automaticamente
+  return lista;
 };
 
 

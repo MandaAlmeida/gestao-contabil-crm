@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { useClientes } from "@/hooks/useClientes";
 import { useRenovacao } from "@/hooks/useRenovacao";
 import { Cliente, Renovacao } from "@/types/crm";
-import { Plus, Search, Edit, Trash2 } from "lucide-react";
+import { Plus, Search, Edit, Trash2, LucideIcon } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -26,17 +26,11 @@ import { useToast } from "@/hooks/use-toast";
 import { usePagination } from "@/hooks/usePagination";
 import { PaginationControls } from "@/components/PaginationControls";
 import { formatarDataBR } from "@/lib/utils";
+import { StatusSelect } from "@/components/StatusSelect";
 
 export default function RenovacaoPage() {
   const { clientes } = useClientes();
-  
-  // Clientes ordenados alfabeticamente
-  const clientesOrdenados = useMemo(() => {
-    return [...clientes].sort((a, b) =>
-      a.nome.localeCompare(b.nome, "pt-BR", { sensitivity: "base" })
-    );
-  }, [clientes]);
-  const { renovacoes, createRenovacao, updateRenovacao, deleteRenovacao } =
+  const { renovacoes, createRenovacao, updateRenovacao, deleteRenovacao, refresh } =
     useRenovacao();
   const [searchTerm, setSearchTerm] = useState("");
   const [searchResponsavel, setSearchResponsavel] = useState("todos");
@@ -45,9 +39,19 @@ export default function RenovacaoPage() {
   const [filtroStatus, setFiltroStatus] = useState<
     Renovacao["status"] | "todos"
   >("todos");
+  const [ordenacao, setOrdenacao] = useState<{
+    campo: "clienteNome" | "dataRenovacao" | "valorRenovacao" | "status";
+    direcao: "asc" | "desc";
+  }>({ campo: "dataRenovacao", direcao: "desc" });
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<Renovacao | null>(null);
   const { toast } = useToast();
+
+  // Lista de IDs de clientes que já têm renovação cadastrada
+  const clientesComRenovacao = useMemo(
+    () => new Set(renovacoes.map((r) => r.clienteId)),
+    [renovacoes]
+  );
 
   const responsaveisDisponiveis = useMemo(
     () =>
@@ -194,6 +198,38 @@ export default function RenovacaoPage() {
     );
   });
 
+  // Aplicar ordenação
+  const itemsOrdenados = useMemo(() => {
+    const items = [...filteredItems];
+    items.sort((a, b) => {
+      let comparacao = 0;
+
+      switch (ordenacao.campo) {
+        case "clienteNome":
+          comparacao = a.clienteNome.localeCompare(b.clienteNome, "pt-BR", {
+            sensitivity: "base",
+          });
+          break;
+        case "dataRenovacao":
+          comparacao =
+            new Date(a.dataRenovacao).getTime() -
+            new Date(b.dataRenovacao).getTime();
+          break;
+        case "valorRenovacao":
+          comparacao = a.valorRenovacao - b.valorRenovacao;
+          break;
+        case "status":
+          comparacao = a.status.localeCompare(b.status, "pt-BR", {
+            sensitivity: "base",
+          });
+          break;
+      }
+
+      return ordenacao.direcao === "asc" ? comparacao : -comparacao;
+    });
+    return items;
+  }, [filteredItems, ordenacao]);
+
   const {
     currentPage,
     totalPages,
@@ -206,101 +242,21 @@ export default function RenovacaoPage() {
     totalItems,
     itemsPerPage,
     setItemsPerPage,
-  } = usePagination(filteredItems, 10);
+  } = usePagination(itemsOrdenados, 10);
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "Renovado":
-        return "bg-success/10 text-success";
-      case "Pendente":
-        return "bg-destructive/10 text-destructive";
-      case "Avisado":
-        return "bg-warning/10 text-warning";
-      case "Em Negociação":
-        return "bg-orange-500/10 text-orange-500";
-      case "Parcelado":
-        return "bg-blue-500/10 text-blue-500";
-      case "Cancelado":
-        return "bg-muted text-muted-foreground";
-      default:
-        return "bg-muted/50 text-muted-foreground";
-    }
-  };
+ // Lista ordenada das opções do select
+const STATUS_OPTIONS = [
+  { value: "Pendente", label: "Pendente" },
+  { value: "Avisado", label: "Avisado" },
+  { value: "Em Negociação", label: "Em Negociação" },
+  { value: "Parcelado (1 Vez)", label: "Parcelado (1 Vez)" },
+  { value: "Parcelado (2 Vezes)", label: "Parcelado (2 Vezes)" },
+  { value: "Parcelado (3 Vezes)", label: "Parcelado (3 Vezes)" },
+  { value: "Renovado", label: "Renovado" },
+  { value: "Cancelado", label: "Cancelado" },
+];
 
-  const handleStatusChange = async (item: Renovacao, value: string) => {
-    // Se o valor contém "Parcelado", extrair a parcela
-    if (value.startsWith("Parcelado")) {
-      const parcelaMatch = value.match(/\((.+)\)/);
-      const parcela = parcelaMatch
-        ? (parcelaMatch[1] as "1 Vez" | "2 Vezes" | "3 Vezes")
-        : "1 Vez";
 
-      const novoStatus: Renovacao["status"] = "Parcelado";
-
-      // Se o status e parcela não mudaram, não faz nada
-      if (item.status === novoStatus && item.parcela === parcela) return;
-
-      try {
-        await updateRenovacao(item.id, {
-          status: novoStatus,
-          parcela: parcela,
-        });
-        toast({
-          title: "Status atualizado!",
-          description: `Status alterado para "${novoStatus}" (${parcela}).`,
-        });
-      } catch (error) {
-        console.error("Erro ao atualizar status:", error);
-        toast({
-          title: "Erro ao atualizar status",
-          description:
-            error instanceof Error
-              ? error.message
-              : "Ocorreu um erro ao atualizar o status.",
-          variant: "destructive",
-        });
-      }
-    } else {
-      const novoStatus = value as Renovacao["status"];
-
-      // Se o status não mudou, não faz nada
-      if (item.status === novoStatus) return;
-
-    try {
-      const updateData: Partial<Renovacao> = {
-          status: novoStatus,
-      };
-
-        // Se mudar para outro status que não seja Parcelado, remover parcela
-        if (novoStatus !== "Parcelado") {
-        updateData.parcela = null;
-      }
-
-      await updateRenovacao(item.id, updateData);
-      toast({
-        title: "Status atualizado!",
-          description: `Status alterado para "${novoStatus}".`,
-      });
-    } catch (error) {
-      console.error("Erro ao atualizar status:", error);
-      toast({
-        title: "Erro ao atualizar status",
-        description:
-          error instanceof Error
-            ? error.message
-            : "Ocorreu um erro ao atualizar o status.",
-        variant: "destructive",
-      });
-    }
-    }
-  };
-
-  const getStatusValue = (item: Renovacao): string => {
-    if (item.status === "Parcelado") {
-      return `Parcelado (${item.parcela || "1 Vez"})`;
-    }
-    return item.status;
-  };
 
   return (
     <Layout>
@@ -344,11 +300,31 @@ export default function RenovacaoPage() {
                       <SelectValue placeholder="Selecione um cliente" />
                     </SelectTrigger>
                     <SelectContent>
-                      {clientesOrdenados.map((cliente) => (
-                        <SelectItem key={cliente.id} value={cliente.id}>
-                          {cliente.nome} - {cliente.cnpj}
-                        </SelectItem>
-                      ))}
+                      {(() => {
+                        const clientesFiltrados = clientes.filter((c) => {
+                          if (!editingItem) {
+                            // Novo registro: não exibir clientes que já possuem renovação
+                            return !clientesComRenovacao.has(c.id);
+                          }
+                          // Edição: permitir o cliente atual mesmo que já tenha renovação
+                          return (
+                            !clientesComRenovacao.has(c.id) ||
+                            c.id === editingItem.clienteId
+                          );
+                        });
+
+                        const ordenados = [...clientesFiltrados].sort((a, b) =>
+                          a.nome.localeCompare(b.nome, "pt-BR", {
+                            sensitivity: "base",
+                          })
+                        );
+
+                        return ordenados.map((cliente) => (
+                          <SelectItem key={cliente.id} value={cliente.id}>
+                            {cliente.nome} - {cliente.cnpj}
+                          </SelectItem>
+                        ));
+                      })()}
                     </SelectContent>
                   </Select>
                 </div>
@@ -563,6 +539,48 @@ export default function RenovacaoPage() {
                 </SelectContent>
               </Select>
             </div>
+            <div className="space-y-1">
+              <Label
+                htmlFor="ordenacao"
+                className="text-xs text-muted-foreground"
+              >
+                Ordenar por
+              </Label>
+              <Select
+                value={`${ordenacao.campo}-${ordenacao.direcao}`}
+                onValueChange={(value) => {
+                  const [campo, direcao] = value.split("-") as [
+                    "clienteNome" | "dataRenovacao" | "valorRenovacao" | "status",
+                    "asc" | "desc"
+                  ];
+                  setOrdenacao({ campo, direcao });
+                }}
+              >
+                <SelectTrigger id="ordenacao" className="w-48">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="clienteNome-asc">Cliente (A-Z)</SelectItem>
+                  <SelectItem value="clienteNome-desc">
+                    Cliente (Z-A)
+                  </SelectItem>
+                  <SelectItem value="dataRenovacao-desc">
+                    Data (Mais recente)
+                  </SelectItem>
+                  <SelectItem value="dataRenovacao-asc">
+                    Data (Mais antigo)
+                  </SelectItem>
+                  <SelectItem value="valorRenovacao-desc">
+                    Valor (Maior)
+                  </SelectItem>
+                  <SelectItem value="valorRenovacao-asc">
+                    Valor (Menor)
+                  </SelectItem>
+                  <SelectItem value="status-asc">Status (A-Z)</SelectItem>
+                  <SelectItem value="status-desc">Status (Z-A)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
             {totalItems > 11 && (
               <div className="space-y-1">
                 <Label
@@ -637,34 +655,14 @@ export default function RenovacaoPage() {
                     })}
                   </td>
                   <td className="p-3">
-                    <Select
-                      value={getStatusValue(item)}
-                      onValueChange={(value) => handleStatusChange(item, value)}
-                    >
-                      <SelectTrigger
-                        className={`w-48 ${getStatusColor(item.status)}`}
-                      >
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Pendente">Pendente</SelectItem>
-                        <SelectItem value="Avisado">Avisado</SelectItem>
-                        <SelectItem value="Em Negociação">
-                          Em Negociação
-                        </SelectItem>
-                        <SelectItem value="Parcelado (1 Vez)">
-                          Parcelado (1 Vez)
-                        </SelectItem>
-                        <SelectItem value="Parcelado (2 Vezes)">
-                          Parcelado (2 Vezes)
-                        </SelectItem>
-                        <SelectItem value="Parcelado (3 Vezes)">
-                          Parcelado (3 Vezes)
-                        </SelectItem>
-                        <SelectItem value="Renovado">Renovado</SelectItem>
-                        <SelectItem value="Cancelado">Cancelado</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <div className="flex gap-2">
+                      <StatusSelect
+                        item={item}
+                        onUpdateStatus={updateRenovacao}
+                        onStatusChange={refresh}
+                        statusOptions={STATUS_OPTIONS}
+                      />
+                    </div>
                   </td>
                   <td className="p-3">
                     <div className="flex gap-2">
@@ -683,7 +681,7 @@ export default function RenovacaoPage() {
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
-                  </td>
+                    </td>
                 </tr>
               ))}
             </tbody>

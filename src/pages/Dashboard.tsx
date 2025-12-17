@@ -467,10 +467,10 @@ export default function Dashboard() {
                 Certificados que vencem nos próximos 30 dias
               </CardDescription>
             </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {certificadosFiltrados
-                  .filter((cert) => {
+            <CardContent className="p-6 pt-0 overflow-hidden">
+              {(() => {
+                const certificadosVencendoLista = certificadosFiltrados.filter(
+                  (cert) => {
                     const dataVencimento = new Date(cert.dataVencimento);
                     const hoje = new Date();
                     const diff = Math.ceil(
@@ -478,30 +478,38 @@ export default function Dashboard() {
                         (1000 * 60 * 60 * 24)
                     );
                     return diff <= 30 && diff >= 0;
-                  })
-                  .slice(0, 5)
-                  .map((cert) => (
-                    <div
-                      key={cert.id}
-                      className="flex items-center justify-between"
-                    >
-                      <div>
-                        <p className="font-medium">{cert.clienteNome}</p>
-                        <p className="text-sm text-muted-foreground">
-                          Vence em {formatarDataBR(cert.dataVencimento)}
-                        </p>
-                      </div>
-                      <span className="rounded-full bg-warning/10 px-3 py-1 text-xs font-medium text-warning">
-                        {cert.tipoCertificado}
-                      </span>
-                    </div>
-                  ))}
-                {certificadosVencendo === 0 && (
-                  <p className="text-sm text-muted-foreground">
-                    Nenhum certificado vencendo
-                  </p>
-                )}
-              </div>
+                  }
+                );
+
+                return (
+                  <div
+                    className="space-y-4 h-[400px] overflow-y-auto overflow-x-hidden pr-2"
+                  >
+                    {certificadosVencendoLista.length > 0 ? (
+                      certificadosVencendoLista.map((cert) => (
+                        <div
+                          key={cert.id}
+                          className="flex items-center justify-between"
+                        >
+                          <div>
+                            <p className="font-medium">{cert.clienteNome}</p>
+                            <p className="text-sm text-muted-foreground">
+                              Vence em {formatarDataBR(cert.dataVencimento)}
+                            </p>
+                          </div>
+                          <span className="rounded-full bg-warning/10 px-3 py-1 text-xs font-medium text-warning">
+                            {cert.tipoCertificado}
+                          </span>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="text-sm text-muted-foreground">
+                        Nenhum certificado vencendo
+                      </p>
+                    )}
+                  </div>
+                );
+              })()}
             </CardContent>
           </Card>
 
@@ -512,31 +520,41 @@ export default function Dashboard() {
                 Obrigações fiscais aguardando conclusão
               </CardDescription>
             </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {sintegrasFiltradas
-                  .filter((s) => s.status === "Pendente")
-                  .slice(0, 5)
-                  .map((sintegra) => (
-                    <div
-                      key={sintegra.id}
-                      className="flex items-center justify-between"
-                    >
-                      <div>
-                        <p className="font-medium">{sintegra.clienteNome}</p>
-                        <p className="text-sm text-muted-foreground">
-                          Prazo: {formatarDataBR(sintegra.dataPrazo)}
-                        </p>
-                      </div>
-                      <Calendar className="h-4 w-4 text-muted-foreground" />
-                    </div>
-                  ))}
-                {sintegrasPendentes === 0 && (
-                  <p className="text-sm text-muted-foreground">
-                    Nenhum Sintegra pendente
-                  </p>
-                )}
-              </div>
+            <CardContent className="p-6 pt-0 overflow-hidden">
+              {(() => {
+                const sintegrasPendentesLista = sintegrasFiltradas.filter(
+                  (s) => s.status === "Pendente"
+                );
+
+                return (
+                  <div
+                    className="space-y-4 h-[400px] overflow-y-auto overflow-x-hidden pr-2"
+                  >
+                    {sintegrasPendentesLista.length > 0 ? (
+                      sintegrasPendentesLista.map((sintegra) => (
+                        <div
+                          key={sintegra.id}
+                          className="flex items-center justify-between"
+                        >
+                          <div>
+                            <p className="font-medium">
+                              {sintegra.clienteNome}
+                            </p>
+                            <p className="text-sm text-muted-foreground">
+                              Prazo: {formatarDataBR(sintegra.dataPrazo)}
+                            </p>
+                          </div>
+                          <Calendar className="h-4 w-4 text-muted-foreground" />
+                        </div>
+                      ))
+                    ) : (
+                      <p className="text-sm text-muted-foreground">
+                        Nenhum Sintegra pendente
+                      </p>
+                    )}
+                  </div>
+                );
+              })()}
             </CardContent>
           </Card>
         </div>

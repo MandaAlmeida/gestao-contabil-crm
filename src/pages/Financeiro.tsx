@@ -10,11 +10,7 @@ import {
   Search,
   Edit,
   Trash2,
-  CheckCircle,
-  Clock3,
-  AlertTriangle,
 } from "lucide-react";
-import type { LucideIcon } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -37,7 +33,10 @@ import {
   calcularStatusFinanceiro,
   normalizarFinanceiros,
 } from "@/lib/financeiro";
-import { cn, formatarDataBR } from "@/lib/utils";
+import { formatarDataBR } from "@/lib/utils";
+import { StatusButton, type StatusMeta } from "@/components/StatusButton";
+import { CheckCircle, Clock3, AlertTriangle, type LucideIcon } from "lucide-react";
+import { PaymentConfirmationDialog } from "@/components/PaymentConfirmationDialog";
 import { usePagination } from "@/hooks/usePagination";
 import {
   Pagination,
@@ -72,6 +71,8 @@ export default function FinanceiroPage() {
   }>({ campo: "dataVencimento", direcao: "desc" });
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<Financeiro | null>(null);
+  const [isPagamentoDialogOpen, setIsPagamentoDialogOpen] = useState(false);
+  const [itemParaPagamento, setItemParaPagamento] = useState<Financeiro | null>(null);
   const { toast } = useToast();
 
   const responsaveisDisponiveis = useMemo(
@@ -301,9 +302,13 @@ export default function FinanceiroPage() {
 
   const handleTogglePagamento = async (item: Financeiro) => {
     if (item.status === "Recebido") {
+      // Quando remove o pagamento, sempre volta exatamente 1 mês da data atual
+      // (já que o pagamento avançou 1 mês quando foi registrado)
       const vencimentoAnterior = removerMes(item.dataVencimento);
+
+      // Calcula o status baseado na nova data de vencimento, sem considerar o status antigo
       const statusAjustado = calcularStatusFinanceiro({
-        status: item.status,
+        status: "A Vencer", // Força recalcular baseado apenas na data
         dataPagamento: null,
         dataVencimento: vencimentoAnterior,
       });
@@ -311,6 +316,7 @@ export default function FinanceiroPage() {
       try {
         await updateFinanceiro(item.id, {
           dataPagamento: null,
+          meioPagamento: "Pix", // Reset para valor padrão
           dataVencimento: vencimentoAnterior,
           status: statusAjustado,
         });
@@ -318,7 +324,7 @@ export default function FinanceiroPage() {
           title: "Pagamento removido.",
           description:
             statusAjustado === "A Vencer"
-              ? `${item.clienteNome} voltou a ficar pendente neste mês.`
+              ? `${item.clienteNome} voltou a ficar pendente.`
               : `${item.clienteNome} foi marcado como vencido.`,
         });
       } catch (error) {
@@ -327,24 +333,32 @@ export default function FinanceiroPage() {
       return;
     }
 
-    // Obtém a data de hoje no formato YYYY-MM-DD (timezone local)
-    const hoje = new Date();
-    const ano = hoje.getFullYear();
-    const mes = String(hoje.getMonth() + 1).padStart(2, "0");
-    const dia = String(hoje.getDate()).padStart(2, "0");
-    const novaDataPagamento = `${ano}-${mes}-${dia}`;
-    const novoVencimento = adicionarMes(item.dataVencimento);
+    // Abre modal para confirmar pagamento
+    setItemParaPagamento(item);
+    setIsPagamentoDialogOpen(true);
+  };
+
+  const handleConfirmarPagamento = async (data: {
+    dataPagamento: string;
+    meioPagamento: "Pix" | "Boleto";
+  }) => {
+    if (!itemParaPagamento) return;
+
+    const novoVencimento = adicionarMes(itemParaPagamento.dataVencimento);
 
     try {
-      await updateFinanceiro(item.id, {
-        dataPagamento: novaDataPagamento,
+      await updateFinanceiro(itemParaPagamento.id, {
+        dataPagamento: data.dataPagamento,
         dataVencimento: novoVencimento,
         status: "Recebido",
+        meioPagamento: data.meioPagamento,
       });
       toast({
         title: "Pagamento registrado!",
-        description: `${item.clienteNome} foi marcado como pago.`,
+        description: `${itemParaPagamento.clienteNome} foi marcado como pago.`,
       });
+      setIsPagamentoDialogOpen(false);
+      setItemParaPagamento(null);
     } catch (error) {
       toast({ title: "Erro ao registrar pagamento", variant: "destructive" });
     }
@@ -470,10 +484,7 @@ export default function FinanceiroPage() {
     { recebidas: 0, aReceber: 0 }
   );
 
-  const STATUS_META: Record<
-    Financeiro["status"],
-    { label: string; className: string; icon: LucideIcon }
-  > = {
+  const STATUS_META: Record<Financeiro["status"], StatusMeta> = {
     Recebido: {
       label: "Pago",
       className: "bg-success/10 text-success hover:bg-success/20",
@@ -644,6 +655,23 @@ export default function FinanceiroPage() {
             </DialogContent>
           </Dialog>
         </div>
+
+        {/* Modal de Confirmação de Pagamento */}
+        <PaymentConfirmationDialog
+          open={isPagamentoDialogOpen}
+          onOpenChange={(open) => {
+            setIsPagamentoDialogOpen(open);
+            if (!open) {
+              setItemParaPagamento(null);
+            }
+          }}
+          item={itemParaPagamento}
+          valor={itemParaPagamento?.valorMensalidade || 0}
+          clienteNome={itemParaPagamento?.clienteNome || ""}
+          onConfirm={handleConfirmarPagamento}
+          dataPagamentoInicial={itemParaPagamento?.dataPagamento || undefined}
+          meioPagamentoInicial={itemParaPagamento?.meioPagamento || "Pix"}
+        />
 
         <div className="mb-4 space-y-4">
           <div className="flex gap-4 items-end">
@@ -885,25 +913,12 @@ export default function FinanceiroPage() {
                     })}
                   </td>
                   <td className="p-3">
-                    {(() => {
-                      const meta = STATUS_META[item.status];
-                      const Icon = meta.icon;
-                      return (
-                        <button
-                          type="button"
-                          onClick={() => handleTogglePagamento(item)}
-                          title={getToggleTitle(item)}
-                          className={cn(
-                            "flex items-center gap-2 rounded-full px-3 py-1 text-xs font-medium transition-colors",
-                            "border border-transparent focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
-                            meta.className
-                          )}
-                        >
-                          <Icon className="h-4 w-4" />
-                          {meta.label}
-                        </button>
-                      );
-                    })()}
+                    <StatusButton
+                      status={item.status}
+                      statusMeta={STATUS_META}
+                      onClick={() => handleTogglePagamento(item)}
+                      title={getToggleTitle(item)}
+                    />
                   </td>
                   <td className="p-3">
                     <div className="flex flex-col gap-1">
