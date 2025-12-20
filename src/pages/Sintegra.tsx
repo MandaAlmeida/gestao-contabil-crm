@@ -338,7 +338,7 @@ export default function SintegraPage() {
             </p>
           </div>
           <div className="flex gap-2 items-end">
-          <NotificationButton onClick={() => setNotificationsOpen(true)} filterBy="sintegra" />
+          <NotificationButton onClick={() => setNotificationsOpen(true)} filterBy={["sintegra"]} />
           <Dialog
             open={isDialogOpen}
             onOpenChange={(open) => {
@@ -741,7 +741,7 @@ export default function SintegraPage() {
         <NotificationPanel
           isOpen={notificationsOpen}
           onToggle={() => setNotificationsOpen(!notificationsOpen)}
-          filterBy="sintegra"
+          filterBy={["sintegra"]}
         />
       </div>
       {ConfirmationDialogComponent}

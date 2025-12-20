@@ -21,8 +21,9 @@ import {
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { PersistentNotification, NotificationData } from "@/types/notifications";
+import { NotificationType } from "@/components/NotificationPanel";
 
-export function useNotificationsData(filterBy: "all" | "certificados" | "financeiro" | "servicos" | "renovacoes" | "sintegra" | "despesas" | "geral" = "all"): {
+export function useNotificationsData(filterBy: NotificationType[] = ["all"]): {
   notifications: NotificationData[];
   notificationCount: number;
   viewedNotifications: Set<string>;
@@ -303,7 +304,7 @@ export function useNotificationsData(filterBy: "all" | "certificados" | "finance
         const notificationData = {
           userId: user.uid,
           itemId: `cert-${cert.id}`,
-          type: "certificado" as const,
+          type: "certificado" as NotificationType,
           title: diasRestantes < 0 ? "Certificado Vencido" : "Certificado a Vencer",
           message: `Cliente: ${cert.clienteNome} - ${diasRestantes < 0 ? `Vencido há ${Math.abs(diasRestantes)} dias` : `Vence em ${diasRestantes} dia${diasRestantes !== 1 ? 's' : ''}`}`,
           daysRemaining: diasRestantes,
@@ -329,7 +330,7 @@ export function useNotificationsData(filterBy: "all" | "certificados" | "finance
         const notificationData = {
           userId: user.uid,
           itemId: `fin-${pag.id}`,
-          type: "pagamento" as const,
+          type: "pagamento" as NotificationType,
           title: diasDiferenca < 0 ? "Pagamento Vencido" : "Pagamento a Vencer",
           message: `R$ ${pag.valorMensalidade.toFixed(2)} - ${diasDiferenca < 0 ? `Vencido há ${Math.abs(diasDiferenca)} dias` : `Vence em ${diasDiferenca} dias`}`,
           daysRemaining: diasDiferenca,
@@ -355,7 +356,7 @@ export function useNotificationsData(filterBy: "all" | "certificados" | "finance
         const notificationData = {
           userId: user.uid,
           itemId: `serv-${serv.id}`,
-          type: "servico" as const,
+          type: "servico" as NotificationType,
           title: diasDiferenca < 0 ? "Serviço Vencido" : "Serviço a Vencer",
           message: `R$ ${serv.valorMensalidade.toFixed(2)} - ${diasDiferenca < 0 ? `Vencido há ${Math.abs(diasDiferenca)} dias` : `Vence em ${diasDiferenca} dias`}`,
           daysRemaining: diasDiferenca,
@@ -381,7 +382,7 @@ export function useNotificationsData(filterBy: "all" | "certificados" | "finance
         const notificationData = {
           userId: user.uid,
           itemId: `ren-${ren.id}`,
-          type: "renovacao" as const,
+          type: "renovacao" as NotificationType,
           title: diasRestantes < 0 ? "Renovação Atrasada" : "Renovação Pendente",
           message: `${diasRestantes === 0 ? 'Hoje' : diasRestantes === 1 ? 'Amanhã' : diasRestantes < 0 ? `Atrasada há ${Math.abs(diasRestantes)} dias` : `Em ${diasRestantes} dias`} - Status: ${ren.status}`,
           daysRemaining: diasRestantes,
@@ -407,7 +408,7 @@ export function useNotificationsData(filterBy: "all" | "certificados" | "finance
         const notificationData = {
           userId: user.uid,
           itemId: `sin-${sin.id}`,
-          type: "sintegra" as const,
+          type: "sintegra" as NotificationType,
           title: diasRestantes < 0 ? "Sintegra Vencida" : "Sintegra Pendente",
           message: `Cliente: ${sin.clienteNome} - ${diasRestantes < 0 ? `Vencida há ${Math.abs(diasRestantes)} dias` : `Prazo em ${diasRestantes} dia${diasRestantes !== 1 ? 's' : ''}`}`,
           daysRemaining: diasRestantes,
@@ -433,7 +434,7 @@ export function useNotificationsData(filterBy: "all" | "certificados" | "finance
         const notificationData = {
           userId: user.uid,
           itemId: `despesa-${despesa.id}`,
-          type: "despesa" as const,
+          type: "despesa" as NotificationType,
           title: diasDiferenca < 0 ? "Despesa Vencida" : "Despesa a Vencer",
           message: `R$ ${despesa.valor.toFixed(2)} - ${despesa.descricao} - ${diasDiferenca < 0 ? `Vencida há ${Math.abs(diasDiferenca)} dias` : `Vence em ${diasDiferenca} dias`}`,
           daysRemaining: diasDiferenca,
@@ -471,36 +472,25 @@ export function useNotificationsData(filterBy: "all" | "certificados" | "finance
     }
   }, [certificados, financeiros, renovacoes, sintegras, servicos, despesas, loading, user]);
 
-  // Filtrar e ordenar notificações para o painel (apenas 3 e 7 dias)
+  // Filtrar e ordenar notificações para o painel (3, 7, 15, 30 dias e vencidas)
   const notifications = useMemo(() => {
     let filtered = persistentNotifications.filter(notification =>
       !notification.isViewed &&
-      (notification.daysRemaining === 3 || notification.daysRemaining === 7 || notification.daysRemaining < 0)
+      (notification.daysRemaining === 3 || notification.daysRemaining === 7 ||
+       notification.daysRemaining === 15 || notification.daysRemaining === 30 ||
+       notification.daysRemaining < 0)
     );
 
-    if (filterBy !== "all") {
-      filtered = filtered.filter((notification) => {
-        switch (filterBy) {
-          case "certificados":
-            return notification.type === "certificado";
-          case "financeiro":
-            return notification.type === "pagamento";
-          case "servicos":
-            return notification.type === "servico";
-          case "renovacoes":
-            return notification.type === "renovacao";
-          case "sintegra":
-            return notification.type === "sintegra";
-          case "despesas":
-            return notification.type === "despesa";
-          case "geral":
-            // Tudo exceto financeiro (pagamentos e serviços)
-            return notification.type !== "pagamento" && notification.type !== "servico";
-          default:
-            return true;
-        }
-      });
-    }
+    filtered = filtered.filter((notification) => {
+      // Regra especial: "all" = tudo
+      if (filterBy.includes("all")) {
+        return true;
+      }
+
+      // Filtro normal: aceita múltiplos tipos
+      return filterBy.some(type => notification.type.includes(type));
+    });
+    
 
     // Ordenar por prioridade (high primeiro) e depois por dias restantes
     filtered.sort((a, b) => {
@@ -521,10 +511,23 @@ export function useNotificationsData(filterBy: "all" | "certificados" | "finance
     }));
   }, [persistentNotifications, filterBy]);
 
-  // Calcular contador para o botão (todas as notificações não visualizadas)
+  // Calcular contador para o botão (notificações filtradas não visualizadas)
   const notificationCount = useMemo(() => {
-    return persistentNotifications.filter(notification => !notification.isViewed).length;
-  }, [persistentNotifications]);
+    let filtered = persistentNotifications.filter(notification => !notification.isViewed);
+
+    // Aplicar o mesmo filtro do painel
+    filtered = filtered.filter((notification) => {
+      // Regra especial: "all" = tudo
+      if (filterBy.includes("all")) {
+        return true;
+      }
+
+      // Filtro normal: aceita múltiplos tipos
+      return filterBy.some(type => notification.type.includes(type));
+    });
+
+    return filtered.length;
+  }, [persistentNotifications, filterBy]);
 
   const markAsViewed = async (notificationId: string) => {
     try {

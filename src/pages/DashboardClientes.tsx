@@ -184,7 +184,7 @@ export default function DashboardClientes() {
           </div>
           <div className="flex flex-col gap-4 md:flex-row">
             <div className="w-full max-w-xs md:w-auto">
-              <NotificationButton onClick={() => setNotificationsOpen(true)} filterBy="all" />
+              <NotificationButton onClick={() => setNotificationsOpen(true)} filterBy={["all"]} />
             </div>
             <div className="w-full max-w-xs md:w-auto">
               <Select
@@ -526,7 +526,7 @@ export default function DashboardClientes() {
         <NotificationPanel
           isOpen={notificationsOpen}
           onToggle={() => setNotificationsOpen(!notificationsOpen)}
-          filterBy="all"
+          filterBy={["all"]}
         />
       </div>
     </Layout>

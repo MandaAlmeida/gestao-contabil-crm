@@ -419,7 +419,7 @@ export default function DespesasPage() {
             </p>
           </div>
             <div  className="flex gap-2 items-end">
-              <NotificationButton onClick={() => setNotificationsOpen(true)} filterBy="despesas" />
+              <NotificationButton onClick={() => setNotificationsOpen(true)} filterBy={["despesa"]} />
             
           <Dialog
             open={isDialogOpen}
@@ -850,7 +850,7 @@ export default function DespesasPage() {
         <NotificationPanel
           isOpen={notificationsOpen}
           onToggle={() => setNotificationsOpen(!notificationsOpen)}
-          filterBy="despesas"
+          filterBy={["despesa"]}
         />
       </div>
       {ConfirmationDialogComponent}

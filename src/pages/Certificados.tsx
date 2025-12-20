@@ -352,7 +352,7 @@ export default function Certificados() {
             </p>
           </div>
           <div className="flex w-auto gap-2 items-end">
-              <NotificationButton onClick={() => setNotificationsOpen(true)} filterBy="certificados" />
+              <NotificationButton onClick={() => setNotificationsOpen(true)} filterBy={["certificado"]} />
             
           <Dialog
             open={isDialogOpen}
@@ -826,7 +826,7 @@ export default function Certificados() {
         <NotificationPanel
           isOpen={notificationsOpen}
           onToggle={() => setNotificationsOpen(!notificationsOpen)}
-          filterBy="certificados"
+          filterBy={["certificado"]}
         />
       </div>
       {ConfirmationDialogComponent}

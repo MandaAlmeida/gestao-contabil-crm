@@ -1,8 +1,10 @@
+import { NotificationType } from "@/components/NotificationPanel";
+
 export interface PersistentNotification {
   id: string;
   userId: string;
   itemId: string;
-  type: "certificado" | "pagamento" | "servico" | "renovacao" | "sintegra" | "despesa";
+  type: NotificationType;
   title: string;
   message: string;
   daysRemaining: number;
@@ -15,7 +17,7 @@ export interface PersistentNotification {
 
 export interface NotificationData {
   id: string;
-  type: "certificado" | "pagamento" | "servico" | "renovacao" | "sintegra" | "despesa";
+  type: NotificationType;
   title: string;
   message: string;
   daysRemaining: number;

@@ -531,7 +531,7 @@ export default function FinanceiroPage() {
             </p>
           </div>
           <div className="flex gap-2 items-end">
-          <NotificationButton onClick={() => setNotificationsOpen(true)} filterBy="financeiro" />
+          <NotificationButton onClick={() => setNotificationsOpen(true)} filterBy={["pagamento"]} />
           <Dialog
             open={isDialogOpen}
             onOpenChange={(open) => {
@@ -1039,7 +1039,7 @@ export default function FinanceiroPage() {
       <NotificationPanel
           isOpen={notificationsOpen}
           onToggle={() => setNotificationsOpen(!notificationsOpen)}
-          filterBy="financeiro"
+          filterBy={["pagamento"]}
         />
     </Layout>
   );

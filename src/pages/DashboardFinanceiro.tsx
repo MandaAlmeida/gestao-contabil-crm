@@ -186,7 +186,7 @@ export default function DashboardFinanceiro() {
           </div>
           <div className="flex flex-col gap-4 md:flex-row items-end">
             <div className="w-full max-w-xs md:w-auto">
-              <NotificationButton onClick={() => setNotificationsOpen(true)} filterBy="financeiro" />
+              <NotificationButton onClick={() => setNotificationsOpen(true)} filterBy={["pagamento", "despesa"]} />
             </div>
             <div className="w-full max-w-xs md:w-auto">
               <Select
@@ -550,7 +550,7 @@ export default function DashboardFinanceiro() {
         <NotificationPanel
           isOpen={notificationsOpen}
           onToggle={() => setNotificationsOpen(!notificationsOpen)}
-          filterBy="financeiro"
+          filterBy={["pagamento", "despesa"]}
         />
       </div>
     </Layout>

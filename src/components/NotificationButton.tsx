@@ -2,14 +2,15 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Bell } from "lucide-react";
 import { useNotificationsData } from "@/hooks/useNotificationsData";
+import { NotificationType } from "./NotificationPanel";
 
 interface NotificationButtonProps {
   onClick: () => void;
-  className?: string;
-  filterBy?: "all" | "certificados" | "financeiro" | "servicos" | "renovacoes" | "sintegra" | "despesas" | "geral";
+    className?: string;
+    filterBy?: NotificationType[];
 }
 
-export function NotificationButton({ onClick, className = "", filterBy = "all" }: NotificationButtonProps) {
+export function NotificationButton({ onClick, className = "", filterBy = ["all"] }: NotificationButtonProps) {
   const { notificationCount } = useNotificationsData(filterBy);
 
   return (

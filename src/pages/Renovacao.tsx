@@ -283,7 +283,7 @@ const STATUS_OPTIONS = [
             </p>
           </div>
           <div className="flex gap-2 items-end">
-          <NotificationButton onClick={() => setNotificationsOpen(true)} filterBy="renovacoes" />
+          <NotificationButton onClick={() => setNotificationsOpen(true)} filterBy={["renovacao"]} />
           <Dialog
             open={isDialogOpen}
             onOpenChange={(open) => {
@@ -723,7 +723,7 @@ const STATUS_OPTIONS = [
         <NotificationPanel
           isOpen={notificationsOpen}
           onToggle={() => setNotificationsOpen(!notificationsOpen)}
-          filterBy="renovacoes"
+          filterBy={["renovacao"]}
         />
       </div>
       {ConfirmationDialogComponent}

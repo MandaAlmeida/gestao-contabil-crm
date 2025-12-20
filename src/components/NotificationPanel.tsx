@@ -21,10 +21,12 @@ import { doc, setDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useNavigate } from "react-router-dom";
 
+export type NotificationType = "all" | "certificado" | "pagamento" | "servico" | "renovacao" | "sintegra" | "despesa";
+
 
 interface NotificationItem {
   id: string;
-  type: "certificado" | "pagamento" | "servico" | "renovacao" | "sintegra" | "despesa";
+  type: NotificationType;
   title: string;
   message: string;
   daysRemaining: number;
@@ -35,10 +37,10 @@ interface NotificationItem {
 interface NotificationPanelProps {
   isOpen: boolean;
   onToggle: () => void;
-  filterBy?: "all" | "certificados" | "financeiro" | "servicos" | "renovacoes" | "sintegra" | "geral" | "despesas";
+  filterBy?: NotificationType[];
 }
 
-export function NotificationPanel({ isOpen, onToggle, filterBy = "all" }: NotificationPanelProps) {
+export function NotificationPanel({ isOpen, onToggle, filterBy = ["all"] }: NotificationPanelProps) {
   const { user } = useAuth();
   const { notifications, viewedNotifications } = useNotificationsData(filterBy);
   const navigate = useNavigate();
@@ -85,40 +87,33 @@ export function NotificationPanel({ isOpen, onToggle, filterBy = "all" }: Notifi
     saveViewedNotifications(updatedViewed);
   };
 
-  // Função para navegar para o item relacionado à notificação
   const navigateToItem = (notification: NotificationItem) => {
-    // Extrair o ID real do itemId (formato: tipo-id)
-    const parts = notification.id.split('-');
-    const itemId = parts.slice(1).join('-'); // Remove o prefixo do tipo
-
-    switch (notification.type) {
-      case 'certificado':
-        navigate(`/certificados`);
-        break;
-      case 'pagamento':
-        navigate(`/financeiro`);
-        break;
-      case 'servico':
-        navigate(`/servicos`);
-        break;
-      case 'renovacao':
-        navigate(`/renovacao`);
-        break;
-      case 'sintegra':
-        navigate(`/sintegra`);
-        break;
-      case 'despesa':
-        navigate(`/despesas`);
-        break;
-      default:
-        // Fallback para dashboard
-        navigate('/dashboard');
-    }
-
-    // Fechar o painel de notificações
+    // Extrair o ID real (tipo-id)
+    const [, ...rest] = notification.id.split("-");
+    const itemId = rest.join("-");
+  
+    // Mapa de rotas por tipo
+    const routeByType: Record<NotificationType, string> = {
+      certificado: "/certificados",
+      pagamento: "/financeiro",
+      servico: "/servicos",
+      renovacao: "/renovacao",
+      sintegra: "/sintegra",
+      despesa: "/despesas",
+      all: "/dashboard",
+    };
+  
+    // Pega o primeiro tipo válido (ignorando "all")
+    const typeToNavigate = notification.type;
+  
+    // Navega para a rota correspondente ou fallback
+    navigate(routeByType[typeToNavigate ?? "all"]);
+  
+    // Fecha o painel de notificações
     onToggle();
   };
-
+  
+  
 
   const getIcon = (type: string) => {
     switch (type) {
@@ -139,25 +134,16 @@ export function NotificationPanel({ isOpen, onToggle, filterBy = "all" }: Notifi
     }
   };
 
-  const getPriorityColor = (daysRemaining: number) => {
-    if (daysRemaining < 0) {
-      // Já venceu - vermelho escuro
-      return "bg-red-100 text-red-900 border-red-300";
-    } else if (daysRemaining <= 1) {
-      // Vence hoje ou amanhã - vermelho
-      return "bg-red-100 text-red-800 border-red-200";
-    } else if (daysRemaining <= 3) {
-      // Vence em até 3 dias - vermelho alaranjado
-      return "bg-orange-100 text-orange-800 border-orange-200";
-    } else if (daysRemaining <= 7) {
-      // Vence em 4-7 dias - amarelo
-      return "bg-yellow-100 text-yellow-800 border-yellow-200";
-    } else if (daysRemaining <= 15) {
-      // Vence em 8-15 dias - amarelo claro
-      return "bg-yellow-50 text-yellow-700 border-yellow-200";
-    } else {
-      // Vence em mais de 15 dias - azul/verde claro
-      return "bg-blue-50 text-blue-700 border-blue-200";
+  const getPriorityColor = (priority: string) => {
+    switch (priority) {
+      case "high":
+        return "bg-red-100 text-red-800 border-red-200";
+      case "medium":
+        return "bg-yellow-100 text-yellow-800 border-yellow-200";
+      case "low":
+        return "bg-blue-100 text-blue-800 border-blue-200";
+      default:
+        return "bg-gray-100 text-gray-800 border-gray-200";
     }
   };
 
@@ -232,7 +218,7 @@ export function NotificationPanel({ isOpen, onToggle, filterBy = "all" }: Notifi
                               </h4>
                               <Badge
                                 variant="outline"
-                                className={`text-xs ${getPriorityColor(notification.daysRemaining)}`}
+                                className={`text-xs ${getPriorityColor(notification.priority)}`}
                               >
                                 {notification.daysRemaining <= 0
                                   ? "Vencido"

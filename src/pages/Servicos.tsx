@@ -470,7 +470,7 @@ export default function ServicosPage() {
             </p>
           </div>
           <div className="flex gap-2 items-end">
-          <NotificationButton onClick={() => setNotificationsOpen(true)} filterBy="servicos" />
+          <NotificationButton onClick={() => setNotificationsOpen(true)} filterBy={["servico"]} />
           <Dialog
             open={isDialogOpen}
             onOpenChange={(open) => {
@@ -1015,7 +1015,7 @@ export default function ServicosPage() {
         <NotificationPanel
           isOpen={notificationsOpen}
           onToggle={() => setNotificationsOpen(!notificationsOpen)}
-          filterBy="servicos"
+          filterBy={["servico"]}
         />
       </div>
       {ConfirmationDialogComponent}
