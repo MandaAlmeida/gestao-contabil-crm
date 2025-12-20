@@ -109,3 +109,8 @@ All colors MUST be HSL.
     @apply bg-background text-foreground;
   }
 }
+
+[data-radix-select-scroll-up-button],
+[data-radix-select-scroll-down-button] {
+  display: none;
+}

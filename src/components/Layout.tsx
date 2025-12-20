@@ -1,5 +1,6 @@
 import { ReactNode, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { useConfirmationDialog } from "@/components/ConfirmationDialog";
 import { NavLink } from "./NavLink";
 import {
   Users,
@@ -25,6 +26,7 @@ import { ThemeToggle } from "./ThemeToggle";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 
+
 interface LayoutProps {
   children: ReactNode;
 }
@@ -34,15 +36,17 @@ export function Layout({ children }: LayoutProps) {
     const saved = localStorage.getItem("sidebar-collapsed");
     return saved ? JSON.parse(saved) : false;
   });
+
   const { resolvedTheme, setTheme } = useTheme();
-  const [mounted, setMounted] = useState(false);
-  const { logout, user } = useAuth();
+  // con st [mounted, setMounted] = useState(false);
+  const { logout } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { showConfirmation, ConfirmationDialogComponent } = useConfirmationDialog();
 
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  // useEffect(() => {
+  //   setMounted(true);
+  // }, []);
 
   useEffect(() => {
     localStorage.setItem("sidebar-collapsed", JSON.stringify(collapsed));
@@ -55,18 +59,27 @@ export function Layout({ children }: LayoutProps) {
   };
 
   const handleLogout = async () => {
-    if (confirm("Tem certeza que deseja sair?")) {
-      try {
-        await logout();
-        toast({ title: "Logout realizado com sucesso!" });
-        navigate("/login");
-      } catch (error) {
-        toast({
-          title: "Erro ao fazer logout",
-          variant: "destructive",
-        });
+    showConfirmation(
+      "Sair do Sistema",
+      "Tem certeza que deseja sair da sua conta?",
+      async () => {
+        try {
+          await logout();
+          toast({ title: "Logout realizado com sucesso!" });
+          navigate("/login");
+        } catch (error) {
+          toast({
+            title: "Erro ao fazer logout",
+            variant: "destructive",
+          });
+        }
+      },
+      {
+        confirmText: "Sair",
+        cancelText: "Cancelar",
+        variant: "warning"
       }
-    }
+    );
   };
 
   return (
@@ -213,6 +226,7 @@ export function Layout({ children }: LayoutProps) {
       >
         {children}
       </main>
+      {ConfirmationDialogComponent}
     </div>
   );
 }

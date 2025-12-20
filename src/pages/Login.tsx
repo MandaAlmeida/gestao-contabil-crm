@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { LogIn, Mail, Lock, AlertCircle } from "lucide-react";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+import { CustomAlert } from "@/components/CustomAlert";
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -82,10 +82,9 @@ export default function Login() {
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
             {error && (
-              <Alert variant="destructive">
-                <AlertCircle className="h-4 w-4" />
-                <AlertDescription>{error}</AlertDescription>
-              </Alert>
+              <CustomAlert variant="destructive" title="Erro de login">
+                {error}
+              </CustomAlert>
             )}
             
             <div className="space-y-2">

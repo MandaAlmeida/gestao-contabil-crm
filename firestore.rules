@@ -219,7 +219,8 @@ service cloud.firestore {
                       request.resource.data.fixo is bool &&
                       request.resource.data.pago is bool &&
                       request.resource.data.descricao.size() > 0 &&
-                      request.resource.data.valor >= 0;
+                      request.resource.data.valor >= 0 &&
+                      (!('dataPagamento' in request.resource.data) || request.resource.data.dataPagamento is string || request.resource.data.dataPagamento == null);
       
       // Permitir atualização para usuários autenticados
       allow update: if isAuthenticated() &&
@@ -231,7 +232,8 @@ service cloud.firestore {
                       request.resource.data.fixo is bool &&
                       request.resource.data.pago is bool &&
                       request.resource.data.descricao.size() > 0 &&
-                      request.resource.data.valor >= 0;
+                      request.resource.data.valor >= 0 &&
+                      (!('dataPagamento' in request.resource.data) || request.resource.data.dataPagamento is string || request.resource.data.dataPagamento == null);
       
       // Permitir exclusão para usuários autenticados
       allow delete: if isAuthenticated();
@@ -331,7 +333,7 @@ service cloud.firestore {
     match /usuarios/{usuarioId} {
       // Permitir leitura para usuários autenticados
       allow read: if isAuthenticated();
-      
+
       // Permitir criação para usuários autenticados
       // Permite que qualquer usuário autenticado crie um registro de usuário
       allow create: if isAuthenticated() &&
@@ -344,7 +346,7 @@ service cloud.firestore {
                       ('updatedAt' in request.resource.data) &&
                       request.resource.data.createdAt is string &&
                       request.resource.data.updatedAt is string;
-      
+
       // Permitir atualização para usuários autenticados
       allow update: if isAuthenticated() &&
                      request.resource.data.nome is string &&
@@ -356,7 +358,66 @@ service cloud.firestore {
                      request.resource.data.updatedAt is string &&
                      (resource == null || resource.data.createdAt == request.resource.data.createdAt) &&
                      (!('telefone' in request.resource.data) || request.resource.data.telefone is string);
-      
+
+      // Permitir exclusão para usuários autenticados
+      allow delete: if isAuthenticated();
+    }
+
+    // ==================== USER PREFERENCES ====================
+    match /userPreferences/{userId} {
+      // Permitir leitura apenas para o próprio usuário
+      allow read: if isAuthenticated() && request.auth.uid == userId;
+
+      // Permitir criação e atualização apenas para o próprio usuário
+      allow create, update: if isAuthenticated() &&
+                            request.auth.uid == userId &&
+                            (!('viewedNotifications' in request.resource.data) ||
+                             request.resource.data.viewedNotifications is map) &&
+                            (!('updatedAt' in request.resource.data) ||
+                             request.resource.data.updatedAt is number);
+
+      // Permitir exclusão apenas para o próprio usuário
+      allow delete: if isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // ==================== NOTIFICATIONS ====================
+    match /notifications/{notificationId} {
+      // Permitir leitura apenas para usuários autenticados
+      allow read: if isAuthenticated();
+
+      // Permitir criação para usuários autenticados com validação
+      allow create: if isAuthenticated() &&
+                      hasValidTimestamps() &&
+                      request.resource.data.userId is string &&
+                      request.resource.data.itemId is string &&
+                      request.resource.data.type is string &&
+                      request.resource.data.title is string &&
+                      request.resource.data.message is string &&
+                      request.resource.data.daysRemaining is number &&
+                      request.resource.data.priority is string &&
+                      request.resource.data.clienteNome is string &&
+                      request.resource.data.isViewed is bool &&
+                      request.resource.data.userId.size() > 0 &&
+                      request.resource.data.itemId.size() > 0 &&
+                      request.resource.data.type in ['certificado', 'pagamento', 'servico', 'renovacao', 'sintegra', 'despesa'] &&
+                      request.resource.data.priority in ['high', 'medium', 'low'];
+
+      // Permitir atualização para usuários autenticados
+      allow update: if isAuthenticated() &&
+                      request.resource.data.updatedAt is string &&
+                      createdAtUnchanged() &&
+                      request.resource.data.userId is string &&
+                      request.resource.data.itemId is string &&
+                      request.resource.data.type is string &&
+                      request.resource.data.title is string &&
+                      request.resource.data.message is string &&
+                      request.resource.data.daysRemaining is number &&
+                      request.resource.data.priority is string &&
+                      request.resource.data.clienteNome is string &&
+                      request.resource.data.isViewed is bool &&
+                      request.resource.data.userId.size() > 0 &&
+                      request.resource.data.itemId.size() > 0;
+
       // Permitir exclusão para usuários autenticados
       allow delete: if isAuthenticated();
     }

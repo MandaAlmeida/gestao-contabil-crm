@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Layout } from "@/components/Layout";
 import {
   Card,
@@ -14,44 +15,32 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { Button } from "@/components/ui/button";
 import { useClientes } from "@/hooks/useClientes";
 import { useFinanceiro } from "@/hooks/useFinanceiro";
 import { useServicos } from "@/hooks/useServicos";
 import { useCertificados } from "@/hooks/useCertificados";
 import { useSintegra } from "@/hooks/useSintegra";
 import { useRenovacao } from "@/hooks/useRenovacao";
+import { NotificationButton } from "@/components/NotificationButton";
+import { NotificationPanel } from "@/components/NotificationPanel";
 import { formatarDataBR } from "@/lib/utils";
-import {
-  Cliente,
-  Financeiro,
-  Servico,
-  Certificado,
-  Sintegra,
-  Renovacao,
-} from "@/types/crm";
 import {
   Users,
   DollarSign,
   AlertCircle,
   FileCheck,
   Calendar,
-  Building2,
-  MapPin,
   RefreshCw,
   Wrench,
+  ChevronDown,
 } from "lucide-react";
 import { normalizarFinanceiros } from "@/lib/financeiro";
 import { normalizarServicos } from "@/lib/servicos";
+import { Separator } from "@/components/ui/separator";
 
 export default function DashboardClientes() {
+  const navigate = useNavigate();
   const { clientes } = useClientes();
   const { financeiros: financeirosRaw } = useFinanceiro();
   const { servicos: servicosRaw } = useServicos();
@@ -60,6 +49,7 @@ export default function DashboardClientes() {
   const { renovacoes } = useRenovacao();
   const [responsavelSelecionado, setResponsavelSelecionado] =
     useState<string>("todos");
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
 
   const financeirosNormalizados = useMemo(
     () => normalizarFinanceiros(financeirosRaw),
@@ -91,10 +81,6 @@ export default function DashboardClientes() {
 
   const certificadosFiltrados = certificados.filter((certificado) =>
     clienteIdsFiltrados.has(certificado.clienteId)
-  );
-
-  const sintegrasFiltradas = sintegras.filter((sintegra) =>
-    clienteIdsFiltrados.has(sintegra.clienteId)
   );
 
   const renovacoesFiltradas = renovacoes.filter((renovacao) =>
@@ -141,13 +127,14 @@ export default function DashboardClientes() {
   const certificadosVencendo = certificadosFiltrados.filter((cert) => {
     const dataVencimento = new Date(cert.dataVencimento);
     const hoje = new Date();
+    hoje.setHours(hoje.getHours() - 3); // Horário brasileiro
     const diff = Math.ceil(
       (dataVencimento.getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24)
     );
     return diff <= 30 && diff >= 0;
   }).length;
 
-  const sintegrasPendentes = sintegrasFiltradas.filter(
+  const sintegrasPendentes = sintegras.filter(
     (s) => s.status === "Pendente"
   ).length;
 
@@ -183,31 +170,6 @@ export default function DashboardClientes() {
     (f) => f.status === "Vencido"
   ).length;
 
-  // Estatísticas por cidade
-  const clientesPorCidade = useMemo(() => {
-    const cidadeMap = new Map<string, number>();
-    clientesFiltrados.forEach((cliente) => {
-      const count = cidadeMap.get(cliente.cidade) || 0;
-      cidadeMap.set(cliente.cidade, count + 1);
-    });
-    return Array.from(cidadeMap.entries())
-      .map(([cidade, count]) => ({ cidade, count }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 5);
-  }, [clientesFiltrados]);
-
-  // Estatísticas por responsável
-  const clientesPorResponsavel = useMemo(() => {
-    const responsavelMap = new Map<string, number>();
-    clientesFiltrados.forEach((cliente) => {
-      const count = responsavelMap.get(cliente.responsavel) || 0;
-      responsavelMap.set(cliente.responsavel, count + 1);
-    });
-    return Array.from(responsavelMap.entries())
-      .map(([responsavel, count]) => ({ responsavel, count }))
-      .sort((a, b) => b.count - a.count);
-  }, [clientesFiltrados]);
-
   return (
     <Layout>
       <div className="p-8">
@@ -220,11 +182,15 @@ export default function DashboardClientes() {
               Acompanhe informações e métricas dos clientes
             </p>
           </div>
-          <div className="w-full max-w-xs md:w-auto">
-            <Select
-              value={responsavelSelecionado}
-              onValueChange={setResponsavelSelecionado}
-            >
+          <div className="flex flex-col gap-4 md:flex-row">
+            <div className="w-full max-w-xs md:w-auto">
+              <NotificationButton onClick={() => setNotificationsOpen(true)} filterBy="all" />
+            </div>
+            <div className="w-full max-w-xs md:w-auto">
+              <Select
+                value={responsavelSelecionado}
+                onValueChange={setResponsavelSelecionado}
+              >
               <SelectTrigger>
                 <SelectValue placeholder="Selecione o responsável" />
               </SelectTrigger>
@@ -239,7 +205,8 @@ export default function DashboardClientes() {
                   </SelectItem>
                 ))}
               </SelectContent>
-            </Select>
+              </Select>
+            </div>
           </div>
         </div>
 
@@ -401,41 +368,60 @@ export default function DashboardClientes() {
                 Certificados que vencem nos próximos 30 dias
               </CardDescription>
             </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {certificadosFiltrados
-                  .filter((cert) => {
+            <CardContent className="p-6 pt-0 overflow-hidden">
+              {(() => {
+                const certificadosVencendoLista = certificadosFiltrados.filter(
+                  (cert) => {
                     const dataVencimento = new Date(cert.dataVencimento);
                     const hoje = new Date();
+                    hoje.setHours(hoje.getHours() - 3); // Horário brasileiro
                     const diff = Math.ceil(
                       (dataVencimento.getTime() - hoje.getTime()) /
                         (1000 * 60 * 60 * 24)
                     );
                     return diff <= 30 && diff >= 0;
-                  })
-                  .slice(0, 5)
-                  .map((cert) => (
+                  }
+                );
+
+                return (
+                  <div className="relative">
                     <div
-                      key={cert.id}
-                      className="flex items-center justify-between"
+                      className="space-y-4 max-h-[300px] overflow-x-hidden  overflow-y-auto
+      [scrollbar-width:none]
+      [-ms-overflow-style:none]
+      [&::-webkit-scrollbar]:hidden"
                     >
-                      <div>
-                        <p className="font-medium">{cert.clienteNome}</p>
+                      {certificadosVencendoLista.length > 0 ? (
+                        certificadosVencendoLista.map((cert) => (
+                          <div
+                            key={cert.id}
+                            className="flex items-center justify-between"
+                          >
+                            <div>
+                              <p className="font-medium">{cert.clienteNome}</p>
+                              <p className="text-sm text-muted-foreground">
+                                Vence em {formatarDataBR(cert.dataVencimento)}
+                              </p>
+                            </div>
+                            <span className="rounded-full bg-warning/10 px-3 py-1 text-xs font-medium text-warning">
+                              {cert.tipoCertificado}
+                            </span>
+                          </div>
+                        ))
+                      ) : (
                         <p className="text-sm text-muted-foreground">
-                          Vence em {formatarDataBR(cert.dataVencimento)}
+                          Nenhum certificado vencendo
                         </p>
-                      </div>
-                      <span className="rounded-full bg-warning/10 px-3 py-1 text-xs font-medium text-warning">
-                        {cert.tipoCertificado}
-                      </span>
+                      )}
                     </div>
-                  ))}
-                {certificadosVencendo === 0 && (
-                  <p className="text-sm text-muted-foreground">
-                    Nenhum certificado vencendo
-                  </p>
-                )}
-              </div>
+                    {certificadosVencendoLista.length > 3 && (
+                      <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 rounded-full p-1">
+                        <ChevronDown className="h-4 w-4 text-muted-foreground animate-bounce" />
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
             </CardContent>
           </Card>
 
@@ -446,31 +432,49 @@ export default function DashboardClientes() {
                 Obrigações fiscais aguardando conclusão
               </CardDescription>
             </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {sintegrasFiltradas
-                  .filter((s) => s.status === "Pendente")
-                  .slice(0, 5)
-                  .map((sintegra) => (
+            <CardContent className="p-6 pt-0 overflow-hidden">
+              {(() => {
+                const sintegrasPendentesLista = sintegras.filter(
+                  (s) => s.status === "Pendente"
+                );
+
+                return (
+                  <div className="relative">
                     <div
-                      key={sintegra.id}
-                      className="flex items-center justify-between"
+                      className="space-y-4 max-h-[300px] overflow-x-hidden  overflow-y-auto
+      [scrollbar-width:none]
+      [-ms-overflow-style:none]
+      [&::-webkit-scrollbar]:hidden"
                     >
-                      <div>
-                        <p className="font-medium">{sintegra.clienteNome}</p>
+                      {sintegrasPendentesLista.length > 0 ? (
+                        sintegrasPendentesLista.map((sintegra) => (
+                          <div
+                            key={sintegra.id}
+                            className="flex items-center justify-between"
+                          >
+                            <div>
+                              <p className="font-medium">{sintegra.clienteNome}</p>
+                              <p className="text-sm text-muted-foreground">
+                                Prazo: {formatarDataBR(sintegra.dataPrazo)}
+                              </p>
+                            </div>
+                            <Calendar className="h-4 w-4 text-muted-foreground" />
+                          </div>
+                        ))
+                      ) : (
                         <p className="text-sm text-muted-foreground">
-                          Prazo: {formatarDataBR(sintegra.dataPrazo)}
+                          Nenhum Sintegra pendente
                         </p>
-                      </div>
-                      <Calendar className="h-4 w-4 text-muted-foreground" />
+                      )}
                     </div>
-                  ))}
-                {sintegrasPendentes === 0 && (
-                  <p className="text-sm text-muted-foreground">
-                    Nenhum Sintegra pendente
-                  </p>
-                )}
-              </div>
+                    {sintegrasPendentesLista.length > 3 && (
+                      <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 rounded-full p-1">
+                        <ChevronDown className="h-4 w-4 text-muted-foreground animate-bounce" />
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
             </CardContent>
           </Card>
 
@@ -482,103 +486,48 @@ export default function DashboardClientes() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="text-right">Quantidade</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  <TableRow>
-                    <TableCell>Recebido</TableCell>
-                    <TableCell className="text-right">
-                      {totalRecebidos}
-                    </TableCell>
-                  </TableRow>
-                  <TableRow>
-                    <TableCell>A vencer</TableCell>
-                    <TableCell className="text-right">{totalAVencer}</TableCell>
-                  </TableRow>
-                  <TableRow>
-                    <TableCell>Vencido</TableCell>
-                    <TableCell className="text-right">
-                      {totalVencidos}
-                    </TableCell>
-                  </TableRow>
-                </TableBody>
-              </Table>
+
+              <div>
+                <div className="flex items-center justify-between text-muted-foreground p-4">
+                  <span className="font-medium text-sm">Status</span>
+                  <span className="font-medium text-sm">Quantidade</span>
+                </div>
+                <Separator />
+                <Button
+                  variant="outline"
+                  className="w-full h-full rounded-none justify-between border-none p-4"
+                  onClick={() => navigate('/financeiro', { state: { statusFilter: 'Recebido', responsavelFilter: responsavelSelecionado } })}
+                >
+                  <span className="font-normal">Recebido</span>
+                  <span className="font-medium">{totalRecebidos}</span>
+                </Button>
+                <Separator />
+                <Button
+                  variant="outline"
+                  className="w-full h-full rounded-none justify-between border-none p-4"
+                  onClick={() => navigate('/financeiro', { state: { statusFilter: 'A Vencer', responsavelFilter: responsavelSelecionado } })}
+                >
+                  <span className="font-normal">A vencer</span>
+                  <span className="font-medium">{totalAVencer}</span>
+                </Button>
+                <Separator />
+                <Button
+                  variant="outline"
+                  className="w-full h-full rounded-none justify-between border-none p-4"
+                  onClick={() => navigate('/financeiro', { state: { statusFilter: 'Vencido', responsavelFilter: responsavelSelecionado } })}
+                >
+                  <span className="font-normal">Vencido</span>
+                  <span className="font-medium">{totalVencidos}</span>
+                </Button>
+              </div>
             </CardContent>
           </Card>
         </div>
-
-        {/* Estatísticas Adicionais
-        <div className="mt-8 grid gap-4 md:grid-cols-2">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <MapPin className="h-5 w-5 text-muted-foreground" />
-                Clientes por Cidade
-              </CardTitle>
-              <CardDescription>
-                Distribuição geográfica dos clientes
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                {clientesPorCidade.map((item, index) => (
-                  <div
-                    key={index}
-                    className="flex items-center justify-between"
-                  >
-                    <div className="flex items-center gap-2">
-                      <Building2 className="h-4 w-4 text-muted-foreground" />
-                      <span className="font-medium">{item.cidade}</span>
-                    </div>
-                    <span className="text-sm text-muted-foreground">
-                      {item.count} clientes
-                    </span>
-                  </div>
-                ))}
-                {clientesPorCidade.length === 0 && (
-                  <p className="text-sm text-muted-foreground">
-                    Nenhum dado disponível
-                  </p>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Users className="h-5 w-5 text-muted-foreground" />
-                Clientes por Responsável
-              </CardTitle>
-              <CardDescription>Distribuição por responsável</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                {clientesPorResponsavel.map((item, index) => (
-                  <div
-                    key={index}
-                    className="flex items-center justify-between"
-                  >
-                    <span className="font-medium">{item.responsavel}</span>
-                    <span className="text-sm text-muted-foreground">
-                      {item.count} clientes
-                    </span>
-                  </div>
-                ))}
-                {clientesPorResponsavel.length === 0 && (
-                  <p className="text-sm text-muted-foreground">
-                    Nenhum dado disponível
-                  </p>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        </div> */}
+        <NotificationPanel
+          isOpen={notificationsOpen}
+          onToggle={() => setNotificationsOpen(!notificationsOpen)}
+          filterBy="all"
+        />
       </div>
     </Layout>
   );

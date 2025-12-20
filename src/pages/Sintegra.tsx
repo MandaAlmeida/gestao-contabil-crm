@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useClientes } from "@/hooks/useClientes";
 import { useSintegra } from "@/hooks/useSintegra";
+import { useConfirmationDialog } from "@/components/ConfirmationDialog";
 import { Cliente, Sintegra } from "@/types/crm";
 import { Plus, Search, Edit, Trash2, Clock3, CheckCircle } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -24,6 +25,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { NotificationButton } from "@/components/NotificationButton";
+import { NotificationPanel } from "@/components/NotificationPanel";
 import { usePagination } from "@/hooks/usePagination";
 import { PaginationControls } from "@/components/PaginationControls";
 import { cn, formatarDataBR } from "@/lib/utils";
@@ -70,6 +73,7 @@ export default function SintegraPage() {
   const { clientes } = useClientes();
   const { sintegras, createSintegra, updateSintegra, deleteSintegra } =
     useSintegra();
+  const { showConfirmation, ConfirmationDialogComponent } = useConfirmationDialog();
   const [searchTerm, setSearchTerm] = useState("");
   const [searchResponsavel, setSearchResponsavel] = useState("todos");
   const [filtroDataInicio, setFiltroDataInicio] = useState("");
@@ -80,9 +84,10 @@ export default function SintegraPage() {
   const [ordenacao, setOrdenacao] = useState<{
     campo: "clienteNome" | "dataPrazo" | "status";
     direcao: "asc" | "desc";
-  }>({ campo: "dataPrazo", direcao: "desc" });
+  }>({ campo: "dataPrazo", direcao: "asc" });
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<Sintegra | null>(null);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
   const { toast } = useToast();
 
   // Lista de IDs de clientes que já têm Sintegra cadastrado
@@ -188,14 +193,23 @@ export default function SintegraPage() {
   };
 
   const handleDelete = async (id: string) => {
-    if (confirm("Tem certeza que deseja excluir este Sintegra?")) {
-      try {
-        await deleteSintegra(id);
-        toast({ title: "Sintegra excluído com sucesso!" });
-      } catch (error) {
-        toast({ title: "Erro ao excluir sintegra", variant: "destructive" });
+    showConfirmation(
+      "Excluir Sintegra",
+      "Tem certeza que deseja excluir este Sintegra? Esta ação não pode ser desfeita.",
+      async () => {
+        try {
+          await deleteSintegra(id);
+          toast({ title: "Sintegra excluído com sucesso!" });
+        } catch (error) {
+          toast({ title: "Erro ao excluir sintegra", variant: "destructive" });
+        }
+      },
+      {
+        confirmText: "Excluir",
+        cancelText: "Cancelar",
+        variant: "destructive"
       }
-    }
+    );
   };
 
   const handleToggleStatus = async (item: Sintegra) => {
@@ -323,6 +337,8 @@ export default function SintegraPage() {
               Acompanhe obrigações fiscais SINTEGRA
             </p>
           </div>
+          <div className="flex gap-2 items-end">
+          <NotificationButton onClick={() => setNotificationsOpen(true)} filterBy="sintegra" />
           <Dialog
             open={isDialogOpen}
             onOpenChange={(open) => {
@@ -454,7 +470,8 @@ export default function SintegraPage() {
                 </div>
               </form>
             </DialogContent>
-          </Dialog>
+          </Dialog> 
+          </div>
         </div>
 
         <div className="mb-4 space-y-4">
@@ -584,10 +601,10 @@ export default function SintegraPage() {
                   <SelectItem value="clienteNome-desc">
                     Cliente (Z-A)
                   </SelectItem>
-                  <SelectItem value="dataPrazo-desc">
+                  <SelectItem value="dataPrazo-asc">
                     Data (Mais recente)
                   </SelectItem>
-                  <SelectItem value="dataPrazo-asc">
+                  <SelectItem value="dataPrazo-desc">
                     Data (Mais antigo)
                   </SelectItem>
                   <SelectItem value="status-asc">Status (A-Z)</SelectItem>
@@ -721,7 +738,13 @@ export default function SintegraPage() {
             itemLabel="registros"
           />
         </div>
+        <NotificationPanel
+          isOpen={notificationsOpen}
+          onToggle={() => setNotificationsOpen(!notificationsOpen)}
+          filterBy="sintegra"
+        />
       </div>
+      {ConfirmationDialogComponent}
     </Layout>
   );
 }

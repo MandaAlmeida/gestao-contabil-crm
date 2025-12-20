@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useClientes } from "@/hooks/useClientes";
 import { useRenovacao } from "@/hooks/useRenovacao";
+import { useConfirmationDialog } from "@/components/ConfirmationDialog";
 import { Cliente, Renovacao } from "@/types/crm";
 import { Plus, Search, Edit, Trash2, LucideIcon } from "lucide-react";
 import {
@@ -23,6 +24,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { NotificationButton } from "@/components/NotificationButton";
+import { NotificationPanel } from "@/components/NotificationPanel";
 import { usePagination } from "@/hooks/usePagination";
 import { PaginationControls } from "@/components/PaginationControls";
 import { formatarDataBR } from "@/lib/utils";
@@ -32,6 +35,7 @@ export default function RenovacaoPage() {
   const { clientes } = useClientes();
   const { renovacoes, createRenovacao, updateRenovacao, deleteRenovacao, refresh } =
     useRenovacao();
+  const { showConfirmation, ConfirmationDialogComponent } = useConfirmationDialog();
   const [searchTerm, setSearchTerm] = useState("");
   const [searchResponsavel, setSearchResponsavel] = useState("todos");
   const [filtroDataInicio, setFiltroDataInicio] = useState("");
@@ -42,9 +46,10 @@ export default function RenovacaoPage() {
   const [ordenacao, setOrdenacao] = useState<{
     campo: "clienteNome" | "dataRenovacao" | "valorRenovacao" | "status";
     direcao: "asc" | "desc";
-  }>({ campo: "dataRenovacao", direcao: "desc" });
+  }>({ campo: "dataRenovacao", direcao: "asc" });
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<Renovacao | null>(null);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
   const { toast } = useToast();
 
   // Lista de IDs de clientes que já têm renovação cadastrada
@@ -159,14 +164,23 @@ export default function RenovacaoPage() {
   };
 
   const handleDelete = async (id: string) => {
-    if (confirm("Tem certeza que deseja excluir esta renovação?")) {
-      try {
-        await deleteRenovacao(id);
-        toast({ title: "Renovação excluída com sucesso!" });
-      } catch (error) {
-        toast({ title: "Erro ao excluir renovação", variant: "destructive" });
+    showConfirmation(
+      "Excluir Renovação",
+      "Tem certeza que deseja excluir esta renovação? Esta ação não pode ser desfeita.",
+      async () => {
+        try {
+          await deleteRenovacao(id);
+          toast({ title: "Renovação excluída com sucesso!" });
+        } catch (error) {
+          toast({ title: "Erro ao excluir renovação", variant: "destructive" });
+        }
+      },
+      {
+        confirmText: "Excluir",
+        cancelText: "Cancelar",
+        variant: "destructive"
       }
-    }
+    );
   };
 
   const filteredItems = renovacoes.filter((item) => {
@@ -268,6 +282,8 @@ const STATUS_OPTIONS = [
               Acompanhe renovações de serviços
             </p>
           </div>
+          <div className="flex gap-2 items-end">
+          <NotificationButton onClick={() => setNotificationsOpen(true)} filterBy="renovacoes" />
           <Dialog
             open={isDialogOpen}
             onOpenChange={(open) => {
@@ -434,6 +450,7 @@ const STATUS_OPTIONS = [
               </form>
             </DialogContent>
           </Dialog>
+          </div>
         </div>
 
         <div className="mb-4 space-y-4">
@@ -564,10 +581,10 @@ const STATUS_OPTIONS = [
                   <SelectItem value="clienteNome-desc">
                     Cliente (Z-A)
                   </SelectItem>
-                  <SelectItem value="dataRenovacao-desc">
+                  <SelectItem value="dataRenovacao-asc">
                     Data (Mais recente)
                   </SelectItem>
-                  <SelectItem value="dataRenovacao-asc">
+                  <SelectItem value="dataRenovacao-desc">
                     Data (Mais antigo)
                   </SelectItem>
                   <SelectItem value="valorRenovacao-desc">
@@ -703,7 +720,13 @@ const STATUS_OPTIONS = [
             itemLabel="renovações"
           />
         </div>
+        <NotificationPanel
+          isOpen={notificationsOpen}
+          onToggle={() => setNotificationsOpen(!notificationsOpen)}
+          filterBy="renovacoes"
+        />
       </div>
+      {ConfirmationDialogComponent}
     </Layout>
   );
 }

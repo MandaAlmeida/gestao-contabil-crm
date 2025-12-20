@@ -26,6 +26,7 @@ export function NotificationSystem() {
   useEffect(() => {
     const checkNotifications = () => {
       const hoje = new Date();
+      hoje.setHours(hoje.getHours() - 3); // Horário brasileiro
       hoje.setHours(0, 0, 0, 0);
       const newNotifications: Notification[] = [];
 

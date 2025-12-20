@@ -95,6 +95,21 @@ export function CustomAlertExample() {
             </Button>
           </div>
         </CustomAlert>
+
+        {/* Novo: Exemplo de confirmação com CustomAlert */}
+        <CustomAlert variant="destructive" title="Confirmação de Exclusão">
+          <div className="space-y-3">
+            <p>Esta ação não pode ser desfeita. Todos os dados serão permanentemente removidos.</p>
+            <div className="flex gap-2 justify-end">
+              <Button size="sm" variant="outline">
+                Cancelar
+              </Button>
+              <Button size="sm" variant="destructive">
+                Excluir
+              </Button>
+            </div>
+          </div>
+        </CustomAlert>
       </div>
     </div>
   );

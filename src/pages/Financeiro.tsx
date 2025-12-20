@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
+import { useLocation } from "react-router-dom";
 import { Layout } from "@/components/Layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useClientes } from "@/hooks/useClientes";
 import { useFinanceiro } from "@/hooks/useFinanceiro";
-import { Cliente, Financeiro } from "@/types/crm";
+import { useConfirmationDialog } from "@/components/ConfirmationDialog";
+import { Financeiro } from "@/types/crm";
 import {
   Plus,
   Search,
@@ -47,8 +49,11 @@ import {
   PaginationPrevious,
   PaginationEllipsis,
 } from "@/components/ui/pagination";
+import { NotificationButton } from "@/components/NotificationButton";
+import { NotificationPanel } from "@/components/NotificationPanel";
 
 export default function FinanceiroPage() {
+  const location = useLocation();
   const { clientes } = useClientes();
   const {
     financeiros: financeirosRaw,
@@ -56,6 +61,7 @@ export default function FinanceiroPage() {
     updateFinanceiro,
     deleteFinanceiro,
   } = useFinanceiro();
+  const { showConfirmation, ConfirmationDialogComponent } = useConfirmationDialog();
   const [searchTerm, setSearchTerm] = useState("");
   const [searchResponsavel, setSearchResponsavel] = useState("todos");
   const [filtroDataInicio, setFiltroDataInicio] = useState("");
@@ -63,17 +69,34 @@ export default function FinanceiroPage() {
   const [filtroStatus, setFiltroStatus] = useState<
     Financeiro["status"] | "todos"
   >("todos");
-  const [filtroClientesNaoCadastrados, setFiltroClientesNaoCadastrados] =
-    useState(true); // Sempre inicia com filtro ativo
   const [ordenacao, setOrdenacao] = useState<{
     campo: "clienteNome" | "dataVencimento" | "valorMensalidade" | "status";
     direcao: "asc" | "desc";
-  }>({ campo: "dataVencimento", direcao: "desc" });
+  }>({ campo: "dataVencimento", direcao: "asc" });
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<Financeiro | null>(null);
   const [isPagamentoDialogOpen, setIsPagamentoDialogOpen] = useState(false);
   const [itemParaPagamento, setItemParaPagamento] = useState<Financeiro | null>(null);
   const { toast } = useToast();
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+
+  // Aplicar filtros do state quando a página é carregada
+  useEffect(() => {
+    if (location.state) {
+      const { statusFilter, responsavelFilter } = location.state as {
+        statusFilter?: string;
+        responsavelFilter?: string;
+      };
+
+      if (statusFilter) {
+        setFiltroStatus(statusFilter as Financeiro["status"] | "todos");
+      }
+
+      if (responsavelFilter && responsavelFilter !== "todos") {
+        setSearchResponsavel(responsavelFilter);
+      }
+    }
+  }, [location.state]);
 
   const responsaveisDisponiveis = useMemo(
     () =>
@@ -118,20 +141,6 @@ export default function FinanceiroPage() {
       a.nome.localeCompare(b.nome, "pt-BR", { sensitivity: "base" })
     );
   }, [clientes, clientesComFinanceiro, editingItem]);
-
-  // Clientes disponíveis para o filtro da tabela (filtrados se necessário)
-  const clientesDisponiveis = useMemo(() => {
-    let clientesFiltrados = clientes;
-    if (filtroClientesNaoCadastrados) {
-      clientesFiltrados = clientes.filter(
-        (c) => !clientesComFinanceiro.has(c.id)
-      );
-    }
-    // Ordenar alfabeticamente por nome
-    return [...clientesFiltrados].sort((a, b) =>
-      a.nome.localeCompare(b.nome, "pt-BR", { sensitivity: "base" })
-    );
-  }, [clientes, clientesComFinanceiro, filtroClientesNaoCadastrados]);
 
   const [formData, setFormData] = useState({
     clienteId: "",
@@ -378,14 +387,23 @@ export default function FinanceiroPage() {
   };
 
   const handleDelete = async (id: string) => {
-    if (confirm("Tem certeza que deseja excluir este registro?")) {
-      try {
-        await deleteFinanceiro(id);
-        toast({ title: "Registro excluído com sucesso!" });
-      } catch (error) {
-        toast({ title: "Erro ao excluir registro", variant: "destructive" });
+    showConfirmation(
+      "Excluir Registro Financeiro",
+      "Tem certeza que deseja excluir este registro? Esta ação não pode ser desfeita.",
+      async () => {
+        try {
+          await deleteFinanceiro(id);
+          toast({ title: "Registro excluído com sucesso!" });
+        } catch (error) {
+          toast({ title: "Erro ao excluir registro", variant: "destructive" });
+        }
+      },
+      {
+        confirmText: "Excluir",
+        cancelText: "Cancelar",
+        variant: "destructive"
       }
-    }
+    );
   };
 
   const filteredItems = financeirosNormalizados.filter((item) => {
@@ -408,21 +426,12 @@ export default function FinanceiroPage() {
     const matchesStatus =
       filtroStatus === "todos" || item.status === filtroStatus;
 
-    // Filtro de clientes não cadastrados: mostra apenas registros de clientes
-    // que não têm outros registros financeiros (exceto o próprio registro)
-    const matchesFiltroClientesNaoCadastrados = filtroClientesNaoCadastrados
-      ? financeirosNormalizados.filter(
-          (f) => f.clienteId === item.clienteId && f.id !== item.id
-        ).length === 0
-      : true;
-
     return (
       matchesSearch &&
       matchesResponsavel &&
       matchesDataInicio &&
       matchesDataFim &&
-      matchesStatus &&
-      matchesFiltroClientesNaoCadastrados
+      matchesStatus
     );
   });
 
@@ -522,6 +531,8 @@ export default function FinanceiroPage() {
               Gerencie pagamentos e mensalidades
             </p>
           </div>
+          <div className="flex gap-2 items-end">
+          <NotificationButton onClick={() => setNotificationsOpen(true)} filterBy="financeiro" />
           <Dialog
             open={isDialogOpen}
             onOpenChange={(open) => {
@@ -654,6 +665,7 @@ export default function FinanceiroPage() {
               </form>
             </DialogContent>
           </Dialog>
+          </div>
         </div>
 
         {/* Modal de Confirmação de Pagamento */}
@@ -806,10 +818,10 @@ export default function FinanceiroPage() {
                   <SelectItem value="clienteNome-desc">
                     Cliente (Z-A)
                   </SelectItem>
-                  <SelectItem value="dataVencimento-desc">
+                  <SelectItem value="dataVencimento-asc">
                     Vencimento (Mais recente)
                   </SelectItem>
-                  <SelectItem value="dataVencimento-asc">
+                  <SelectItem value="dataVencimento-desc">
                     Vencimento (Mais antigo)
                   </SelectItem>
                   <SelectItem value="valorMensalidade-desc">
@@ -1024,6 +1036,12 @@ export default function FinanceiroPage() {
           )}
         </div>
       </div>
+      {ConfirmationDialogComponent}
+      <NotificationPanel
+          isOpen={notificationsOpen}
+          onToggle={() => setNotificationsOpen(!notificationsOpen)}
+          filterBy="financeiro"
+        />
     </Layout>
   );
 }

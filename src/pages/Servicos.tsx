@@ -3,6 +3,7 @@ import { Layout } from "@/components/Layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useClientes } from "@/hooks/useClientes";
+import { useConfirmationDialog } from "@/components/ConfirmationDialog";
 import { Cliente, Servico } from "@/types/crm";
 import {
   Plus,
@@ -27,6 +28,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { NotificationButton } from "@/components/NotificationButton";
+import { NotificationPanel } from "@/components/NotificationPanel";
 import {
   calcularStatusServico,
   normalizarServicos,
@@ -65,6 +68,7 @@ export default function ServicosPage() {
   const {
     usuarios
   } = useUsuarios();
+  const { showConfirmation, ConfirmationDialogComponent } = useConfirmationDialog();
   const [searchTerm, setSearchTerm] = useState("");
   const [searchResponsavel, setSearchResponsavel] = useState("todos");
   const [filtroDataInicio, setFiltroDataInicio] = useState("");
@@ -75,11 +79,12 @@ export default function ServicosPage() {
   const [ordenacao, setOrdenacao] = useState<{
     campo: "clienteNome" | "dataVencimento" | "valorMensalidade" | "status";
     direcao: "asc" | "desc";
-  }>({ campo: "dataVencimento", direcao: "desc" });
+  }>({ campo: "dataVencimento", direcao: "asc" });
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<Servico | null>(null);
   const [isPagamentoDialogOpen, setIsPagamentoDialogOpen] = useState(false);
   const [itemParaPagamento, setItemParaPagamento] = useState<Servico | null>(null);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
   const { toast } = useToast();
 
   const servicosNormalizados = useMemo(
@@ -321,14 +326,23 @@ export default function ServicosPage() {
   };
 
   const handleDelete = async (id: string) => {
-    if (confirm("Tem certeza que deseja excluir este registro?")) {
-      try {
-        await deleteServico(id);
-        toast({ title: "Registro excluído com sucesso!" });
-      } catch (error) {
-        toast({ title: "Erro ao excluir registro", variant: "destructive" });
+    showConfirmation(
+      "Excluir Serviço",
+      "Tem certeza que deseja excluir este registro? Esta ação não pode ser desfeita.",
+      async () => {
+        try {
+          await deleteServico(id);
+          toast({ title: "Registro excluído com sucesso!" });
+        } catch (error) {
+          toast({ title: "Erro ao excluir registro", variant: "destructive" });
+        }
+      },
+      {
+        confirmText: "Excluir",
+        cancelText: "Cancelar",
+        variant: "destructive"
       }
-    }
+    );
   };
 
   const filteredItems = servicosNormalizados.filter((item) => {
@@ -455,6 +469,8 @@ export default function ServicosPage() {
               Gerencie pagamentos e mensalidades de serviços
             </p>
           </div>
+          <div className="flex gap-2 items-end">
+          <NotificationButton onClick={() => setNotificationsOpen(true)} filterBy="servicos" />
           <Dialog
             open={isDialogOpen}
             onOpenChange={(open) => {
@@ -629,6 +645,7 @@ export default function ServicosPage() {
               </form>
             </DialogContent>
           </Dialog>
+          </div>
         </div>
 
         {/* Modal de Confirmação de Pagamento */}
@@ -778,10 +795,10 @@ export default function ServicosPage() {
                   <SelectItem value="clienteNome-desc">
                     Cliente (Z-A)
                   </SelectItem>
-                  <SelectItem value="dataVencimento-desc">
+                  <SelectItem value="dataVencimento-asc">
                     Vencimento (Mais recente)
                   </SelectItem>
-                  <SelectItem value="dataVencimento-asc">
+                  <SelectItem value="dataVencimento-desc">
                     Vencimento (Mais antigo)
                   </SelectItem>
                   <SelectItem value="valorMensalidade-desc">
@@ -995,7 +1012,13 @@ export default function ServicosPage() {
             </div>
           )}
         </div>
+        <NotificationPanel
+          isOpen={notificationsOpen}
+          onToggle={() => setNotificationsOpen(!notificationsOpen)}
+          filterBy="servicos"
+        />
       </div>
+      {ConfirmationDialogComponent}
     </Layout>
   );
 }

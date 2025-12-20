@@ -18,14 +18,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useFinanceiro } from "@/hooks/useFinanceiro";
 import { useDespesas } from "@/hooks/useDespesas";
-import { Financeiro } from "@/types/crm";
-import { Despesa } from "@/types/despesas";
+import { useClientes } from "@/hooks/useClientes";
+import { NotificationButton } from "@/components/NotificationButton";
+import { NotificationPanel } from "@/components/NotificationPanel";
 import {
   DollarSign,
   TrendingUp,
   TrendingDown,
-  ArrowUpCircle,
-  ArrowDownCircle,
 } from "lucide-react";
 import { normalizarFinanceiros } from "@/lib/financeiro";
 import {
@@ -50,12 +49,23 @@ import {
 export default function DashboardFinanceiro() {
   const { financeiros: financeirosRaw } = useFinanceiro();
   const { despesas } = useDespesas();
+  const { clientes } = useClientes();
   const [periodoFiltro, setPeriodoFiltro] = useState<PeriodoFiltro>("mes");
   const [periodoCustomizado, setPeriodoCustomizado] =
     useState<PeriodoCustomizado>({
       dataInicio: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
       dataFim: new Date(),
     });
+  const [recebedorFiltro, setRecebedorFiltro] = useState<string>("todos");
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+
+  const recebedoresDisponiveis = useMemo(
+    () =>
+      Array.from(
+        new Set(despesas.map((despesa) => despesa.recebedor).filter(Boolean))
+      ).sort(),
+    [despesas]
+  );
 
   const financeirosNormalizados = useMemo(
     () => normalizarFinanceiros(financeirosRaw),
@@ -67,26 +77,63 @@ export default function DashboardFinanceiro() {
     () =>
       calcularTotalEntrada(
         financeirosNormalizados,
+        despesas,
         periodoFiltro,
         periodoCustomizado
       ),
-    [financeirosNormalizados, periodoFiltro, periodoCustomizado]
+    [financeirosNormalizados, despesas, periodoFiltro, periodoCustomizado]
   );
 
+  const despesasFiltradas = useMemo(() => {
+    let filtered = despesas;
+
+    // Filtro por período
+    const dataInicio = periodoFiltro === "dia"
+      ? new Date()
+      : periodoFiltro === "semana"
+      ? new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+      : periodoFiltro === "mes"
+      ? new Date(new Date().getFullYear(), new Date().getMonth(), 1)
+      : periodoCustomizado.dataInicio;
+
+    const dataFim = periodoFiltro === "dia"
+      ? new Date()
+      : periodoFiltro === "semana"
+      ? new Date()
+      : periodoFiltro === "mes"
+      ? new Date()
+      : periodoCustomizado.dataFim;
+
+    filtered = filtered.filter((despesa) => {
+      // Para despesas pagas, usa dataPagamento; para não pagas, usa data de vencimento
+      const despesaDate = despesa.pago && despesa.dataPagamento
+        ? new Date(despesa.dataPagamento)
+        : new Date(despesa.data);
+      return despesaDate >= dataInicio && despesaDate <= dataFim;
+    });
+
+    // Filtro por recebedor
+    if (recebedorFiltro !== "todos") {
+      filtered = filtered.filter((despesa) => despesa.recebedor === recebedorFiltro);
+    }
+
+    return filtered;
+  }, [despesas, periodoFiltro, periodoCustomizado, recebedorFiltro]);
+
   const totalSaida = useMemo(
-    () => calcularTotalSaida(despesas, periodoFiltro, periodoCustomizado),
-    [despesas, periodoFiltro, periodoCustomizado]
+    () => calcularTotalSaida(despesasFiltradas, periodoFiltro, periodoCustomizado),
+    [despesasFiltradas, periodoFiltro, periodoCustomizado]
   );
 
   const dadosGrafico = useMemo(
     () =>
       gerarDadosGrafico(
         financeirosNormalizados,
-        despesas,
+        despesasFiltradas,
         periodoFiltro,
         periodoCustomizado
       ),
-    [financeirosNormalizados, despesas, periodoFiltro, periodoCustomizado]
+    [financeirosNormalizados, despesasFiltradas, periodoFiltro, periodoCustomizado]
   );
 
   const dadosGraficoFormatado = useMemo(
@@ -139,6 +186,9 @@ export default function DashboardFinanceiro() {
           </div>
           <div className="flex flex-col gap-4 md:flex-row items-end">
             <div className="w-full max-w-xs md:w-auto">
+              <NotificationButton onClick={() => setNotificationsOpen(true)} filterBy="financeiro" />
+            </div>
+            <div className="w-full max-w-xs md:w-auto">
               <Select
                 value={periodoFiltro}
                 onValueChange={(value) =>
@@ -155,6 +205,27 @@ export default function DashboardFinanceiro() {
                   <SelectItem value="customizado">
                     Período Customizado
                   </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="w-full max-w-xs md:w-auto">
+              <Select
+                value={recebedorFiltro}
+                onValueChange={setRecebedorFiltro}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione o recebedor" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todos os recebedores</SelectItem>
+                  {recebedoresDisponiveis.map((recebedor, index) => (
+                    <SelectItem
+                      key={`recebedor-${index}-${recebedor}`}
+                      value={recebedor}
+                    >
+                      {recebedor?.toUpperCase()}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -476,6 +547,11 @@ export default function DashboardFinanceiro() {
             </CardContent>
           </Card>
         </div>
+        <NotificationPanel
+          isOpen={notificationsOpen}
+          onToggle={() => setNotificationsOpen(!notificationsOpen)}
+          filterBy="financeiro"
+        />
       </div>
     </Layout>
   );

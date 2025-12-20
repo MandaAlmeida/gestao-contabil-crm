@@ -3,6 +3,37 @@ import { Renovacao } from "@/types/crm";
 import { useToast } from "@/hooks/use-toast";
 import { updateRenovacao } from "@/lib/firestore/renovacao";
 
+const adicionarAno = (data?: string) => {
+  const baseDate = data ? new Date(data) : new Date();
+  if (Number.isNaN(baseDate.getTime())) {
+    return new Date();
+  }
+  const novaData = new Date(baseDate);
+  novaData.setFullYear(novaData.getFullYear() + 1);
+  return novaData;
+};
+
+const removerAno = (data: string) => {
+  const baseDate = data ? new Date(data) : new Date();
+  if (Number.isNaN(baseDate.getTime())) {
+    return new Date();
+  }
+  const novaData = new Date(baseDate);
+  novaData.setFullYear(novaData.getFullYear() - 1);
+  return novaData;
+};
+
+const STATUS_OPTIONS = [
+  { value: "Pendente", label: "Pendente" },
+  { value: "Avisado", label: "Avisado" },
+  { value: "Em Negociação", label: "Em Negociação" },
+  { value: "Parcelado (1 Vez)", label: "Parcelado (1 Vez)" },
+  { value: "Parcelado (2 Vezes)", label: "Parcelado (2 Vezes)" },
+  { value: "Parcelado (3 Vezes)", label: "Parcelado (3 Vezes)" },
+  { value: "Renovado", label: "Renovado" },
+  { value: "Cancelado", label: "Cancelado" },
+];
+
 interface RenovacaoStatusSelectProps {
   item: Renovacao;
   onUpdateStatus?: (id: string, updates: Partial<Renovacao>) => Promise<void>;
@@ -49,13 +80,18 @@ export function RenovacaoStatusSelect({ item, onUpdateStatus, onStatusChange }: 
       if (item.status === novoStatus && item.parcela === parcela) return;
 
       try {
+        // Quando muda para Parcelado, adicionar 1 ano à dataRenovacao
+        const novaDataRenovacao = adicionarAno(item.dataRenovacao);
+        const dataRenovacaoISO = novaDataRenovacao.toISOString().split("T")[0];
+
         await updateRenovacao(item.id, {
           status: novoStatus,
           parcela: parcela,
+          dataRenovacao: dataRenovacaoISO,
         });
         toast({
           title: "Status atualizado!",
-          description: `Status alterado para "${novoStatus}" (${parcela}).`,
+          description: `Status alterado para "${novoStatus}" (${parcela}). Data renovação: ${dataRenovacaoISO}.`,
         });
         onStatusChange?.();
       } catch (error) {
@@ -85,12 +121,23 @@ export function RenovacaoStatusSelect({ item, onUpdateStatus, onStatusChange }: 
           updateData.parcela = null;
         }
 
+        // Quando muda para Renovado, adicionar 1 ano à dataRenovacao
+        if (novoStatus === "Renovado") {
+          const novaDataRenovacao = adicionarAno(item.dataRenovacao);
+          updateData.dataRenovacao = novaDataRenovacao.toISOString().split("T")[0];
+        }
+
         console.log("Atualizando status para:", novoStatus, "com dados:", updateData);
         await onUpdateStatus?.(item.id, updateData);
         console.log("Status atualizado com sucesso!");
+
+        const description = novoStatus === "Renovado"
+          ? `Status alterado para "${novoStatus}". Data renovação: ${updateData.dataRenovacao}.`
+          : `Status alterado para "${novoStatus}".`;
+
         toast({
           title: "Status atualizado!",
-          description: `Status alterado para "${novoStatus}".`,
+          description,
         });
         onStatusChange?.();
       } catch (error) {

@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { Mail, ArrowLeft, CheckCircle2, AlertCircle } from "lucide-react";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+import { CustomAlert } from "@/components/CustomAlert";
 
 export default function EsqueciSenha() {
   const [email, setEmail] = useState("");
@@ -73,13 +73,12 @@ export default function EsqueciSenha() {
         <CardContent>
           {success ? (
             <div className="space-y-4">
-              <Alert>
-                <CheckCircle2 className="h-4 w-4" />
-                <AlertDescription>
-                  Um email foi enviado para <strong>{email}</strong>. 
+              <CustomAlert variant="success" title="Email enviado">
+                <p>
+                  Um email foi enviado para <strong>{email}</strong>.
                   Verifique sua caixa de entrada e siga as instruções para redefinir sua senha.
-                </AlertDescription>
-              </Alert>
+                </p>
+              </CustomAlert>
               <Button asChild variant="outline" className="w-full">
                 <Link to="/login">
                   <ArrowLeft className="mr-2 h-4 w-4" />
@@ -90,10 +89,9 @@ export default function EsqueciSenha() {
           ) : (
             <form onSubmit={handleSubmit} className="space-y-4">
               {error && (
-                <Alert variant="destructive">
-                  <AlertCircle className="h-4 w-4" />
-                  <AlertDescription>{error}</AlertDescription>
-                </Alert>
+                <CustomAlert variant="destructive" title="Erro">
+                  {error}
+                </CustomAlert>
               )}
 
               <div className="space-y-2">

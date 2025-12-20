@@ -93,18 +93,23 @@ export const calcularPeriodo = (
 
 export const calcularTotalEntrada = (
   financeiros: Financeiro[],
+  despesas: Despesa[],
   periodo: PeriodoFiltro,
   periodoCustomizado?: PeriodoCustomizado
 ): number => {
   const { inicio, fim } = calcularPeriodo(periodo, periodoCustomizado);
 
-  return financeiros
+  const entradasFinanceiras = financeiros
     .filter((f) => {
       if (f.status !== "Recebido" || !f.dataPagamento) return false;
       const dataPagamento = new Date(f.dataPagamento);
       return dataPagamento >= inicio && dataPagamento <= fim;
     })
     .reduce((acc, f) => acc + f.valorMensalidade, 0);
+
+  // Agora as despesas são mostradas como saídas positivas no gráfico,
+  // então não subtraímos elas das entradas aqui
+  return entradasFinanceiras;
 };
 
 export const calcularTotalEntradaServicos = (
@@ -130,11 +135,12 @@ export const calcularTotalSaida = (
 ): number => {
   const { inicio, fim } = calcularPeriodo(periodo, periodoCustomizado);
 
+  // Apenas despesas pagas aparecem como saídas realizadas
   return despesas
     .filter((d) => {
-      if (!d.pago) return false;
-      const dataDespesa = new Date(d.data);
-      return dataDespesa >= inicio && dataDespesa <= fim;
+      return d.pago && d.dataPagamento &&
+        new Date(d.dataPagamento) >= inicio &&
+        new Date(d.dataPagamento) <= fim;
     })
     .reduce((acc, d) => acc + d.valor, 0);
 };
@@ -148,7 +154,7 @@ export const gerarDadosGrafico = (
   const { inicio, fim } = calcularPeriodo(periodo, periodoCustomizado);
   const dados: Map<string, { entrada: number; saida: number }> = new Map();
 
-  // Processar entradas
+  // Processar entradas (financeiros recebidos + despesas pagas como negativas)
   financeiros
     .filter((f) => {
       if (f.status !== "Recebido" || !f.dataPagamento) return false;
@@ -163,17 +169,20 @@ export const gerarDadosGrafico = (
       dados.set(chave, atual);
     });
 
-  // Processar saídas
+  // As despesas agora são processadas como saídas positivas abaixo
+
+  // Processar saídas (apenas despesas pagas) para o gráfico de evolução
   despesas
     .filter((d) => {
-      if (!d.pago) return false;
-      const dataDespesa = new Date(d.data);
-      return dataDespesa >= inicio && dataDespesa <= fim;
+      // Apenas despesas pagas aparecem no gráfico como saídas realizadas
+      return d.pago && d.dataPagamento &&
+        new Date(d.dataPagamento) >= inicio &&
+        new Date(d.dataPagamento) <= fim;
     })
     .forEach((d) => {
-      const chave = d.data.split("T")[0];
+      const chave = d.dataPagamento!.split("T")[0];
       const atual = dados.get(chave) || { entrada: 0, saida: 0 };
-      atual.saida += d.valor;
+      atual.saida += d.valor; // Apenas despesas pagas aparecem como saída no gráfico
       dados.set(chave, atual);
     });
 
@@ -240,17 +249,18 @@ export const gerarDadosGraficoServicos = (
       dados.set(chave, atual);
     });
 
-  // Processar saídas
+  // Processar saídas (apenas despesas pagas) para o gráfico de evolução
   despesas
     .filter((d) => {
-      if (!d.pago) return false;
-      const dataDespesa = new Date(d.data);
-      return dataDespesa >= inicio && dataDespesa <= fim;
+      // Apenas despesas pagas aparecem no gráfico como saídas realizadas
+      return d.pago && d.dataPagamento &&
+        new Date(d.dataPagamento) >= inicio &&
+        new Date(d.dataPagamento) <= fim;
     })
     .forEach((d) => {
-      const chave = d.data.split("T")[0];
+      const chave = d.dataPagamento!.split("T")[0];
       const atual = dados.get(chave) || { entrada: 0, saida: 0 };
-      atual.saida += d.valor;
+      atual.saida += d.valor; // Apenas despesas pagas aparecem como saída no gráfico
       dados.set(chave, atual);
     });
 

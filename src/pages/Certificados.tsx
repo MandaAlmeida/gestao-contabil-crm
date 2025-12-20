@@ -4,6 +4,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useClientes } from "@/hooks/useClientes";
 import { useCertificados } from "@/hooks/useCertificados";
+import { useConfirmationDialog } from "@/components/ConfirmationDialog";
+import { NotificationButton } from "@/components/NotificationButton";
+import { NotificationPanel } from "@/components/NotificationPanel";
 import { Cliente, Certificado } from "@/types/crm";
 import {
   Plus,
@@ -73,6 +76,7 @@ export default function Certificados() {
     deleteCertificado,
     refresh,
   } = useCertificados();
+  const { showConfirmation, ConfirmationDialogComponent } = useConfirmationDialog();
   const [searchTerm, setSearchTerm] = useState("");
   const [searchResponsavel, setSearchResponsavel] = useState("todos");
   const [filtroDataInicio, setFiltroDataInicio] = useState("");
@@ -83,12 +87,13 @@ export default function Certificados() {
   const [ordenacao, setOrdenacao] = useState<{
     campo: "clienteNome" | "dataVencimento" | "tipoCertificado" | "status";
     direcao: "asc" | "desc";
-  }>({ campo: "dataVencimento", direcao: "desc" });
+  }>({ campo: "dataVencimento", direcao: "asc" });
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<Certificado | null>(null);
   const [modoCliente, setModoCliente] = useState<"existente" | "novo">(
     "existente"
   );
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
   const { toast } = useToast();
 
   const responsaveisDisponiveis = useMemo(
@@ -238,14 +243,23 @@ export default function Certificados() {
   };
 
   const handleDelete = async (id: string) => {
-    if (confirm("Tem certeza que deseja excluir este certificado?")) {
-      try {
-        await deleteCertificado(id);
-        toast({ title: "Certificado excluído com sucesso!" });
-      } catch (error) {
-        toast({ title: "Erro ao excluir certificado", variant: "destructive" });
+    showConfirmation(
+      "Excluir Certificado",
+      "Tem certeza que deseja excluir este certificado? Esta ação não pode ser desfeita.",
+      async () => {
+        try {
+          await deleteCertificado(id);
+          toast({ title: "Certificado excluído com sucesso!" });
+        } catch (error) {
+          toast({ title: "Erro ao excluir certificado", variant: "destructive" });
+        }
+      },
+      {
+        confirmText: "Excluir",
+        cancelText: "Cancelar",
+        variant: "destructive"
       }
-    }
+    );
   };
 
   const filteredItems = certificadosNormalizados.filter((item) => {
@@ -343,6 +357,9 @@ export default function Certificados() {
               Gerencie certificados digitais
             </p>
           </div>
+          <div className="flex w-auto gap-2 items-end">
+              <NotificationButton onClick={() => setNotificationsOpen(true)} filterBy="certificados" />
+            
           <Dialog
             open={isDialogOpen}
             onOpenChange={(open) => {
@@ -550,6 +567,7 @@ export default function Certificados() {
               </form>
             </DialogContent>
           </Dialog>
+          </div>
         </div>
 
         <div className="mb-4 space-y-4">
@@ -677,10 +695,10 @@ export default function Certificados() {
                   <SelectItem value="clienteNome-desc">
                     Cliente (Z-A)
                   </SelectItem>
-                  <SelectItem value="dataVencimento-desc">
+                  <SelectItem value="dataVencimento-asc">
                     Vencimento (Mais recente)
                   </SelectItem>
-                  <SelectItem value="dataVencimento-asc">
+                  <SelectItem value="dataVencimento-desc">
                     Vencimento (Mais antigo)
                   </SelectItem>
                   <SelectItem value="tipoCertificado-asc">
@@ -811,7 +829,13 @@ export default function Certificados() {
             itemLabel="certificados"
           />
         </div>
+        <NotificationPanel
+          isOpen={notificationsOpen}
+          onToggle={() => setNotificationsOpen(!notificationsOpen)}
+          filterBy="certificados"
+        />
       </div>
+      {ConfirmationDialogComponent}
     </Layout>
   );
 }

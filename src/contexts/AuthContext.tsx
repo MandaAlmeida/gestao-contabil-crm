@@ -8,7 +8,7 @@ import {
 import {
   User,
   signInWithEmailAndPassword,
-  // createUserWithEmailAndPassword,
+  createUserWithEmailAndPassword,
   signOut,
   onAuthStateChanged,
   sendPasswordResetEmail,
@@ -29,7 +29,7 @@ interface AuthContextType {
   user: User | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
-  // register: (email: string, password: string, displayName: string) => Promise<void>;
+  register: (email: string, password: string, displayName: string) => Promise<void>;
   logout: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
   updateUserProfile: (nome: string, telefone?: string) => Promise<void>;
@@ -70,15 +70,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await signInWithEmailAndPassword(auth, email, password);
   };
 
-  // Função de registro comentada
-  // const register = async (email: string, password: string, displayName: string) => {
-  //   const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-  //   if (userCredential.user) {
-  //     await updateProfile(userCredential.user, {
-  //       displayName,
-  //     });
-  //   }
-  // };
+  const register = async (email: string, password: string, displayName: string) => {
+    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+    if (userCredential.user) {
+      await updateProfile(userCredential.user, {
+        displayName,
+      });
+    }
+  };
 
   const logout = async () => {
     await signOut(auth);
@@ -225,6 +224,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         user,
         loading,
         login,
+        register,
         logout,
         resetPassword,
         updateUserProfile,

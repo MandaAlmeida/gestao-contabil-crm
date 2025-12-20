@@ -30,6 +30,10 @@ import {
 import { Plus, Wallet, Edit, Trash2, CheckCircle, Clock3, type LucideIcon } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useDespesas } from "@/hooks/useDespesas";
+import { NotificationButton } from "@/components/NotificationButton";
+import { NotificationPanel } from "@/components/NotificationPanel";
+import { useClientes } from "@/hooks/useClientes";
+import { useConfirmationDialog } from "@/components/ConfirmationDialog";
 import type { Despesa } from "@/types/despesas";
 import { usePagination } from "@/hooks/usePagination";
 import { PaginationControls } from "@/components/PaginationControls";
@@ -43,6 +47,7 @@ interface FormState {
   data: string;
   fixo: boolean;
   pago: boolean;
+  recebedor: string;
 }
 
 const DEFAULT_FORM: FormState = {
@@ -52,6 +57,7 @@ const DEFAULT_FORM: FormState = {
   data: new Date().toISOString().split("T")[0],
   fixo: false,
   pago: false,
+  recebedor: "",
 };
 
 const STATUS_META: Record<"pago" | "pendente", StatusMeta> = {
@@ -104,9 +110,12 @@ export default function DespesasPage() {
   const [editingItem, setEditingItem] = useState<Despesa | null>(null);
   const [formState, setFormState] = useState<FormState>(DEFAULT_FORM);
   const [isSaving, setIsSaving] = useState(false);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
   const { toast } = useToast();
   const { despesas, createDespesa, updateDespesa, deleteDespesa } =
     useDespesas();
+  const { clientes } = useClientes();
+  const { showConfirmation, ConfirmationDialogComponent } = useConfirmationDialog();
   const [filtroDataInicio, setFiltroDataInicio] = useState("");
   const [filtroDataFim, setFiltroDataFim] = useState("");
   const [filtroStatus, setFiltroStatus] = useState<
@@ -116,6 +125,14 @@ export default function DespesasPage() {
     campo: "descricao" | "data" | "valor" | "status";
     direcao: "asc" | "desc";
   }>({ campo: "data", direcao: "desc" });
+
+  const responsaveisDisponiveis = useMemo(
+    () =>
+      Array.from(
+        new Set(clientes.map((cliente) => cliente.responsavel))
+      ).sort(),
+    [clientes]
+  );
 
   const despesasFiltradas = useMemo(() => {
     return despesas.filter((despesa) => {
@@ -214,6 +231,7 @@ export default function DespesasPage() {
           data: formState.data,
           fixo: formState.fixo,
           pago: formState.pago,
+          recebedor: formState.recebedor === "none" ? null : (formState.recebedor.trim() || null),
         });
         toast({ title: "Despesa atualizada com sucesso!" });
       } else {
@@ -224,6 +242,7 @@ export default function DespesasPage() {
           data: formState.data,
           fixo: formState.fixo,
           pago: formState.pago,
+          recebedor: formState.recebedor === "none" ? null : (formState.recebedor.trim() || null),
           ativo: true,
         });
         toast({ title: "Despesa registrada com sucesso!" });
@@ -251,6 +270,7 @@ export default function DespesasPage() {
       data: despesa.data,
       fixo: despesa.fixo,
       pago: despesa.pago,
+      recebedor: despesa.recebedor || "none",
     });
     setIsDialogOpen(true);
   };
@@ -307,20 +327,53 @@ export default function DespesasPage() {
     try {
       const novoStatusPago = !despesa.pago;
       let novaData = despesa.data;
+      let novaDataPagamento = despesa.dataPagamento;
 
       if (despesa.fixo) {
         if (novoStatusPago && !despesa.pago) {
+          // Salva a data de vencimento anterior como dataPagamento (para gráficos)
+          novaDataPagamento = despesa.data;
           // Avanço automático da data para despesas fixas quando marcadas como pagas
           novaData = adicionarMes(despesa.data);
         } else if (!novoStatusPago && despesa.pago) {
-          // Volta um mês quando mudar de pago para pendente
-          novaData = removerMes(despesa.data);
+          // Para despesas fixas, quando volta manualmente para pendente
+          const hoje = new Date();
+          const mesAtual = hoje.getMonth();
+          const anoAtual = hoje.getFullYear();
+
+          // Se tem dataPagamento e está no mesmo mês, volta para a data anterior
+          if (despesa.dataPagamento) {
+            const dataPagamento = new Date(despesa.dataPagamento);
+            const mesPagamento = dataPagamento.getMonth();
+            const anoPagamento = dataPagamento.getFullYear();
+
+            if (mesPagamento === mesAtual && anoPagamento === anoAtual) {
+              // Está no mesmo mês, volta para a data anterior (mês passado)
+              novaData = removerMes(despesa.data);
+            } else {
+              // Está em mês diferente, mantém a data atual
+              novaData = despesa.data;
+            }
+          } else {
+            // Não tem dataPagamento, mantém a data atual
+            novaData = despesa.data;
+          }
+
+          novaDataPagamento = null;
+        }
+      } else {
+        // Para despesas não fixas, define/remove data de pagamento
+        if (novoStatusPago && !despesa.pago) {
+          novaDataPagamento = new Date().toISOString().split('T')[0];
+        } else if (!novoStatusPago && despesa.pago) {
+          novaDataPagamento = null;
         }
       }
 
       await updateDespesa(despesa.id, {
         pago: novoStatusPago,
         data: novaData,
+        dataPagamento: novaDataPagamento,
       });
 
       toast({
@@ -343,19 +396,26 @@ export default function DespesasPage() {
   };
 
   const handleRemover = async (despesa: Despesa) => {
-    if (!confirm(`Excluir a despesa "${despesa.descricao}"?`)) {
-      return;
-    }
-
-    try {
-      await deleteDespesa(despesa.id);
-      toast({ title: "Despesa removida." });
-    } catch (error) {
-      toast({
-        title: "Erro ao remover despesa",
-        variant: "destructive",
-      });
-    }
+    showConfirmation(
+      "Excluir Despesa",
+      `Tem certeza que deseja excluir a despesa "${despesa.descricao}"? Esta ação não pode ser desfeita.`,
+      async () => {
+        try {
+          await deleteDespesa(despesa.id);
+          toast({ title: "Despesa removida." });
+        } catch (error) {
+          toast({
+            title: "Erro ao remover despesa",
+            variant: "destructive",
+          });
+        }
+      },
+      {
+        confirmText: "Excluir",
+        cancelText: "Cancelar",
+        variant: "destructive"
+      }
+    );
   };
 
   return (
@@ -371,7 +431,9 @@ export default function DespesasPage() {
               Controle seus gastos e acompanhe as despesas recorrentes.
             </p>
           </div>
-
+            <div  className="flex gap-2 items-end">
+              <NotificationButton onClick={() => setNotificationsOpen(true)} filterBy="despesas" />
+            
           <Dialog
             open={isDialogOpen}
             onOpenChange={(open) => {
@@ -425,6 +487,36 @@ export default function DespesasPage() {
                     }
                     placeholder="Informe a contabilidade, se aplicável"
                   />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="recebedor">
+                    Recebedor (opcional)
+                  </Label>
+                  <Select
+                    value={formState.recebedor}
+                    onValueChange={(value) =>
+                      setFormState((prev) => ({
+                        ...prev,
+                        recebedor: value,
+                      }))
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione o responsável" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Nenhum</SelectItem>
+                      {responsaveisDisponiveis.map((responsavel, index) => (
+                        <SelectItem
+                          key={`responsavel-${index}-${responsavel}`}
+                          value={responsavel}
+                        >
+                          {responsavel}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
@@ -515,6 +607,7 @@ export default function DespesasPage() {
               </form>
             </DialogContent>
           </Dialog>
+          </div>
         </header>
 
         <section className="rounded-lg border border-border bg-card">
@@ -662,8 +755,9 @@ export default function DespesasPage() {
               <TableRow>
                 <TableHead>Descrição</TableHead>
                 <TableHead>Contabilidade</TableHead>
+                <TableHead>Recebedor</TableHead>
                 <TableHead>Valor</TableHead>
-                <TableHead>Data</TableHead>
+                <TableHead>Próxima Venc.</TableHead>
                 <TableHead>Fixo</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="text-right">Ações</TableHead>
@@ -673,7 +767,7 @@ export default function DespesasPage() {
               {despesasOrdenadas.length === 0 ? (
                 <TableRow>
                   <TableCell
-                    colSpan={7}
+                    colSpan={9}
                     className="h-24 text-center text-muted-foreground"
                   >
                     Nenhuma despesa cadastrada até o momento.
@@ -683,9 +777,10 @@ export default function DespesasPage() {
                 paginatedItems.map((despesa) => (
                   <TableRow key={despesa.id}>
                     <TableCell className="font-medium">
-                      {despesa.descricao}
+                      {despesa.descricao.toUpperCase()}
                     </TableCell>
                     <TableCell>{despesa.contabilidade || "-"}</TableCell>
+                    <TableCell>{despesa.recebedor?.toUpperCase() || "-"}</TableCell>
                     <TableCell>
                       R${" "}
                       {despesa.valor.toLocaleString("pt-BR", {
@@ -765,7 +860,13 @@ export default function DespesasPage() {
             </div>
           )}
         </section>
+        <NotificationPanel
+          isOpen={notificationsOpen}
+          onToggle={() => setNotificationsOpen(!notificationsOpen)}
+          filterBy="despesas"
+        />
       </div>
+      {ConfirmationDialogComponent}
     </Layout>
   );
 }

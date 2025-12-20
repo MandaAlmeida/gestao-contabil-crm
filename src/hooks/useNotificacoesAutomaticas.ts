@@ -12,7 +12,7 @@ import { getUsuarioByEmail } from "@/lib/firestore/usuarios";
  * Verifica ao carregar a página e envia notificações do navegador
  *
  * FUNCIONAMENTO:
- * - Verifica itens vencendo nos próximos 7 dias
+ * - Verifica itens vencendo nos próximos 30, 15, 7 e 3 dias
  * - Envia notificações do navegador (Browser Notifications)
  * - Usa localStorage para evitar spam (1 notificação por item por dia)
  * - 100% gratuito - roda no navegador do usuário
@@ -42,13 +42,29 @@ export function useNotificacoesAutomaticas() {
         // Verificar permissão do navegador
         if (Notification.permission !== "granted") return;
 
-        // Data de hoje e daqui a 7 dias
+        // Data de hoje e prazos de notificação (horário brasileiro)
         const hoje = new Date();
+        hoje.setHours(hoje.getHours() - 3); // Ajusta para horário brasileiro
         hoje.setHours(0, 0, 0, 0);
-        const em7Dias = new Date(hoje);
-        em7Dias.setDate(hoje.getDate() + 7);
+        const prazosNotificacao = [3, 7, 15, 30].map(dias => {
+          const data = new Date(hoje);
+          data.setDate(hoje.getDate() + dias);
+          return data;
+        });
 
         const hojeStr = hoje.toISOString().split("T")[0];
+
+        // Função helper para verificar se data está nos prazos
+        const deveNotificar = (dataItem: Date) => {
+          dataItem.setHours(0, 0, 0, 0);
+          return prazosNotificacao.some(prazo => dataItem.getTime() === prazo.getTime());
+        };
+
+        // Função helper para calcular dias restantes
+        const calcularDiasRestantes = (dataItem: Date) => {
+          dataItem.setHours(0, 0, 0, 0);
+          return Math.ceil((dataItem.getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24));
+        };
 
         // Verificar se já enviou notificações hoje
         const ultimoEnvio = localStorage.getItem("ultimoEnvioNotificacoes");
@@ -65,12 +81,8 @@ export function useNotificacoesAutomaticas() {
             if (!cert.ativo) return;
 
             const dataVenc = new Date(cert.dataVencimento);
-            dataVenc.setHours(0, 0, 0, 0);
-
-            if (dataVenc >= hoje && dataVenc <= em7Dias) {
-              const diasRestantes = Math.ceil(
-                (dataVenc.getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24)
-              );
+            if (deveNotificar(dataVenc)) {
+              const diasRestantes = calcularDiasRestantes(dataVenc);
 
               const key = `cert-${cert.id}-${hojeStr}`;
               if (!notificacoesEnviadas.includes(key)) {
@@ -108,8 +120,8 @@ export function useNotificacoesAutomaticas() {
               (dataVenc.getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24)
             );
 
-            // Mostrar se já venceu ou vence nos próximos 7 dias
-            if (diasDiferenca <= 7) {
+            // Mostrar se já venceu ou vence nos prazos de notificação (3, 7, 15, 30 dias)
+            if (diasDiferenca === 3 || diasDiferenca === 7 || diasDiferenca === 15 || diasDiferenca === 30) {
               const key = `fin-${pag.id}-${hojeStr}`;
               if (!notificacoesEnviadas.includes(key)) {
                 let titulo = "";
@@ -125,12 +137,12 @@ export function useNotificacoesAutomaticas() {
                   )} - Vencido há ${diasVencidos} dia${
                     diasVencidos > 1 ? "s" : ""
                   }`;
-                } else if (diasDiferenca === 0) {
+                } else if (diasDiferenca === 3) {
                   titulo = "⚠️ Pagamento Vence Hoje";
                   mensagem = `${
                     pag.clienteNome
                   }: R$ ${pag.valorMensalidade.toFixed(2)}`;
-                } else if (diasDiferenca === 1) {
+                } else if (diasDiferenca === 7) {
                   titulo = "⚠️ Pagamento Vence Amanhã";
                   mensagem = `${
                     pag.clienteNome
@@ -169,7 +181,7 @@ export function useNotificacoesAutomaticas() {
               (dataVenc.getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24)
             );
 
-            if (diasDiferenca <= 7) {
+            if (diasDiferenca <= 30) {
               const key = `serv-${serv.id}-${hojeStr}`;
               if (!notificacoesEnviadas.includes(key)) {
                 let titulo = "";
@@ -224,12 +236,8 @@ export function useNotificacoesAutomaticas() {
               return;
 
             const dataRen = new Date(ren.dataRenovacao);
-            dataRen.setHours(0, 0, 0, 0);
-
-            if (dataRen >= hoje && dataRen <= em7Dias) {
-              const diasRestantes = Math.ceil(
-                (dataRen.getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24)
-              );
+            if (deveNotificar(dataRen)) {
+              const diasRestantes = calcularDiasRestantes(dataRen);
 
               const key = `ren-${ren.id}-${hojeStr}`;
               if (!notificacoesEnviadas.includes(key)) {
@@ -261,12 +269,8 @@ export function useNotificacoesAutomaticas() {
             if (!sin.ativo || sin.status !== "Pendente") return;
 
             const dataPrazo = new Date(sin.dataPrazo);
-            dataPrazo.setHours(0, 0, 0, 0);
-
-            if (dataPrazo >= hoje && dataPrazo <= em7Dias) {
-              const diasRestantes = Math.ceil(
-                (dataPrazo.getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24)
-              );
+            if (deveNotificar(dataPrazo)) {
+              const diasRestantes = calcularDiasRestantes(dataPrazo);
 
               const key = `sin-${sin.id}-${hojeStr}`;
               if (!notificacoesEnviadas.includes(key)) {

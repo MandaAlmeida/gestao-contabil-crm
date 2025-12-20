@@ -6,6 +6,7 @@ export const calcularStatusCertificado = (
   item: Pick<Certificado, "dataVencimento">
 ): Certificado["status"] => {
   const hoje = new Date();
+  hoje.setHours(hoje.getHours() - 3); // Horário brasileiro
   const vencimento = new Date(item.dataVencimento);
 
   if (Number.isNaN(vencimento.getTime())) {

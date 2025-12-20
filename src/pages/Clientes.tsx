@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useClientes } from "@/hooks/useClientes";
 import { useContabilidades } from "@/hooks/useContabilidades";
+import { useConfirmationDialog } from "@/components/ConfirmationDialog";
 import { useUsuarios } from "@/hooks/useUsuarios";
 import { useAuth } from "@/contexts/AuthContext";
 import { createUsuarioIfNotExists } from "@/lib/firestore/usuarios";
@@ -59,6 +60,7 @@ export default function Clientes() {
     refresh: refreshUsuarios,
   } = useUsuarios();
   const { user } = useAuth();
+  const { showConfirmation, ConfirmationDialogComponent } = useConfirmationDialog();
   const [searchTerm, setSearchTerm] = useState("");
   const [searchResponsavel, setSearchResponsavel] = useState("todos");
   const [filtroDataInicio, setFiltroDataInicio] = useState("");
@@ -75,6 +77,7 @@ export default function Clientes() {
   const [editingContabilidade, setEditingContabilidade] =
     useState<Contabilidade | null>(null);
   const [editingCliente, setEditingCliente] = useState<Cliente | null>(null);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
   const { toast } = useToast();
 
   // Sincronizar usuário atual quando carregar a página
@@ -187,17 +190,26 @@ export default function Clientes() {
   };
 
   const handleDeleteContabilidade = async (id: string) => {
-    if (confirm("Tem certeza que deseja excluir esta contabilidade?")) {
-      try {
-        await deleteContabilidade(id);
-        toast({ title: "Contabilidade excluída com sucesso!" });
-      } catch (error) {
-        toast({
-          title: "Erro ao excluir contabilidade",
-          variant: "destructive",
-        });
+    showConfirmation(
+      "Excluir Contabilidade",
+      "Tem certeza que deseja excluir esta contabilidade? Esta ação não pode ser desfeita.",
+      async () => {
+        try {
+          await deleteContabilidade(id);
+          toast({ title: "Contabilidade excluída com sucesso!" });
+        } catch (error) {
+          toast({
+            title: "Erro ao excluir contabilidade",
+            variant: "destructive",
+          });
+        }
+      },
+      {
+        confirmText: "Excluir",
+        cancelText: "Cancelar",
+        variant: "destructive"
       }
-    }
+    );
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -239,17 +251,26 @@ export default function Clientes() {
   };
 
   const handleDelete = async (id: string) => {
-    if (confirm("Tem certeza que deseja excluir este cliente?")) {
-      try {
-        await deleteCliente(id);
-        toast({ title: "Cliente excluído com sucesso!" });
-      } catch (error) {
-        toast({
-          title: "Erro ao excluir cliente",
-          variant: "destructive",
-        });
+    showConfirmation(
+      "Excluir Cliente",
+      "Tem certeza que deseja excluir este cliente? Esta ação não pode ser desfeita.",
+      async () => {
+        try {
+          await deleteCliente(id);
+          toast({ title: "Cliente excluído com sucesso!" });
+        } catch (error) {
+          toast({
+            title: "Erro ao excluir cliente",
+            variant: "destructive",
+          });
+        }
+      },
+      {
+        confirmText: "Excluir",
+        cancelText: "Cancelar",
+        variant: "destructive"
       }
-    }
+    );
   };
 
   const filteredClientes = clientes.filter((cliente) => {
@@ -1029,6 +1050,7 @@ export default function Clientes() {
           )}
         </div>
       </div>
+      {ConfirmationDialogComponent}
     </Layout>
   );
 }
