@@ -1,10 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Layout } from "@/components/Layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useClientes } from "@/hooks/useClientes";
 import { useConfirmationDialog } from "@/components/ConfirmationDialog";
-import { Cliente, Servico } from "@/types/crm";
+import { Servico } from "@/types/crm";
 import {
   Plus,
   Search,

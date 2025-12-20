@@ -4,9 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useClientes } from "@/hooks/useClientes";
 import { useRenovacao } from "@/hooks/useRenovacao";
-import { useConfirmationDialog } from "@/components/ConfirmationDialog";
-import { Cliente, Renovacao } from "@/types/crm";
-import { Plus, Search, Edit, Trash2, LucideIcon } from "lucide-react";
+import { Renovacao } from "@/types/crm";
+import { Plus, Search, Edit, Trash2 } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -30,6 +29,7 @@ import { usePagination } from "@/hooks/usePagination";
 import { PaginationControls } from "@/components/PaginationControls";
 import { formatarDataBR } from "@/lib/utils";
 import { StatusSelect } from "@/components/StatusSelect";
+import { useConfirmationDialog } from "@/components/ConfirmationDialog";
 
 export default function RenovacaoPage() {
   const { clientes } = useClientes();

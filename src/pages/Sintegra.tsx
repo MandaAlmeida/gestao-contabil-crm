@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { useClientes } from "@/hooks/useClientes";
 import { useSintegra } from "@/hooks/useSintegra";
 import { useConfirmationDialog } from "@/components/ConfirmationDialog";
-import { Cliente, Sintegra } from "@/types/crm";
+import { Sintegra } from "@/types/crm";
 import { Plus, Search, Edit, Trash2, Clock3, CheckCircle } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import {

@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
-import { Mail, ArrowLeft, CheckCircle2, AlertCircle } from "lucide-react";
+import { Mail, ArrowLeft } from "lucide-react";
 import { CustomAlert } from "@/components/CustomAlert";
 
 export default function EsqueciSenha() {

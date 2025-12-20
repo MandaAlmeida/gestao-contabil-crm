@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
-import { LogIn, Mail, Lock, AlertCircle } from "lucide-react";
+import { LogIn, Mail, Lock } from "lucide-react";
 import { CustomAlert } from "@/components/CustomAlert";
 
 export default function Login() {

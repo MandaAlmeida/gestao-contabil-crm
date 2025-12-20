@@ -1,9 +1,7 @@
-import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Separator } from "@/components/ui/separator";
 import {
   Bell,
   X,
@@ -141,16 +139,25 @@ export function NotificationPanel({ isOpen, onToggle, filterBy = "all" }: Notifi
     }
   };
 
-  const getPriorityColor = (priority: string) => {
-    switch (priority) {
-      case "high":
-        return "bg-red-100 text-red-800 border-red-200";
-      case "medium":
-        return "bg-yellow-100 text-yellow-800 border-yellow-200";
-      case "low":
-        return "bg-blue-100 text-blue-800 border-blue-200";
-      default:
-        return "bg-gray-100 text-gray-800 border-gray-200";
+  const getPriorityColor = (daysRemaining: number) => {
+    if (daysRemaining < 0) {
+      // Já venceu - vermelho escuro
+      return "bg-red-100 text-red-900 border-red-300";
+    } else if (daysRemaining <= 1) {
+      // Vence hoje ou amanhã - vermelho
+      return "bg-red-100 text-red-800 border-red-200";
+    } else if (daysRemaining <= 3) {
+      // Vence em até 3 dias - vermelho alaranjado
+      return "bg-orange-100 text-orange-800 border-orange-200";
+    } else if (daysRemaining <= 7) {
+      // Vence em 4-7 dias - amarelo
+      return "bg-yellow-100 text-yellow-800 border-yellow-200";
+    } else if (daysRemaining <= 15) {
+      // Vence em 8-15 dias - amarelo claro
+      return "bg-yellow-50 text-yellow-700 border-yellow-200";
+    } else {
+      // Vence em mais de 15 dias - azul/verde claro
+      return "bg-blue-50 text-blue-700 border-blue-200";
     }
   };
 
@@ -225,7 +232,7 @@ export function NotificationPanel({ isOpen, onToggle, filterBy = "all" }: Notifi
                               </h4>
                               <Badge
                                 variant="outline"
-                                className={`text-xs ${getPriorityColor(notification.priority)}`}
+                                className={`text-xs ${getPriorityColor(notification.daysRemaining)}`}
                               >
                                 {notification.daysRemaining <= 0
                                   ? "Vencido"

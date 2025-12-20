@@ -7,7 +7,7 @@ import { useCertificados } from "@/hooks/useCertificados";
 import { useConfirmationDialog } from "@/components/ConfirmationDialog";
 import { NotificationButton } from "@/components/NotificationButton";
 import { NotificationPanel } from "@/components/NotificationPanel";
-import { Cliente, Certificado } from "@/types/crm";
+import {Certificado } from "@/types/crm";
 import {
   Plus,
   Search,
@@ -35,12 +35,8 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import {
   normalizarCertificados,
-  calcularStatusCertificado,
 } from "@/lib/certificados";
 import { formatarDataBR } from "@/lib/utils";
-import { CertificadoStatusButton, type CertificadoStatusMeta } from "@/components/CertificadoStatusButton";
-import { CheckCircle, Clock3, AlertTriangle } from "lucide-react";
-import { cn, formatarTelefone } from "@/lib/utils";
 import { usePagination } from "@/hooks/usePagination";
 import { PaginationControls } from "@/components/PaginationControls";
 import { StatusSelect } from "@/components/StatusSelect";
@@ -64,8 +60,6 @@ const removerAno = (data: string) => {
   novaData.setFullYear(novaData.getFullYear() - 1);
   return novaData;
 };
-
-const formatarISO = (date: Date) => date.toISOString().split("T")[0];
 
 export default function Certificados() {
   const { clientes } = useClientes();

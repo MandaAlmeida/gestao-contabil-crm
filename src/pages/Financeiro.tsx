@@ -22,7 +22,6 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Switch } from "@/components/ui/switch";
 import {
   Select,
   SelectContent,
@@ -37,7 +36,7 @@ import {
 } from "@/lib/financeiro";
 import { formatarDataBR } from "@/lib/utils";
 import { StatusButton, type StatusMeta } from "@/components/StatusButton";
-import { CheckCircle, Clock3, AlertTriangle, type LucideIcon } from "lucide-react";
+import { CheckCircle, Clock3, AlertTriangle } from "lucide-react";
 import { PaymentConfirmationDialog } from "@/components/PaymentConfirmationDialog";
 import { usePagination } from "@/hooks/usePagination";
 import {

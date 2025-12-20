@@ -471,9 +471,12 @@ export function useNotificationsData(filterBy: "all" | "certificados" | "finance
     }
   }, [certificados, financeiros, renovacoes, sintegras, servicos, despesas, loading, user]);
 
-  // Filtrar e ordenar notificações
+  // Filtrar e ordenar notificações para o painel (apenas 3 e 7 dias)
   const notifications = useMemo(() => {
-    let filtered = persistentNotifications.filter(notification => !notification.isViewed);
+    let filtered = persistentNotifications.filter(notification =>
+      !notification.isViewed &&
+      (notification.daysRemaining === 3 || notification.daysRemaining === 7 || notification.daysRemaining < 0)
+    );
 
     if (filterBy !== "all") {
       filtered = filtered.filter((notification) => {
@@ -518,10 +521,10 @@ export function useNotificationsData(filterBy: "all" | "certificados" | "finance
     }));
   }, [persistentNotifications, filterBy]);
 
-  // Calcular contador para o botão
+  // Calcular contador para o botão (todas as notificações não visualizadas)
   const notificationCount = useMemo(() => {
-    return notifications.length;
-  }, [notifications]);
+    return persistentNotifications.filter(notification => !notification.isViewed).length;
+  }, [persistentNotifications]);
 
   const markAsViewed = async (notificationId: string) => {
     try {

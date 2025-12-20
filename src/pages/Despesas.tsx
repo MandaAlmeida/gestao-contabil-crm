@@ -27,7 +27,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus, Wallet, Edit, Trash2, CheckCircle, Clock3, type LucideIcon } from "lucide-react";
+import { Plus, Wallet, Edit, Trash2, CheckCircle, Clock3 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useDespesas } from "@/hooks/useDespesas";
 import { NotificationButton } from "@/components/NotificationButton";
@@ -38,7 +38,6 @@ import type { Despesa } from "@/types/despesas";
 import { usePagination } from "@/hooks/usePagination";
 import { PaginationControls } from "@/components/PaginationControls";
 import { cn, formatarDataBR } from "@/lib/utils";
-import { StatusButton, type StatusMeta } from "@/components/StatusButton";
 
 interface FormState {
   descricao: string;
@@ -60,18 +59,6 @@ const DEFAULT_FORM: FormState = {
   recebedor: "",
 };
 
-const STATUS_META: Record<"pago" | "pendente", StatusMeta> = {
-  pago: {
-    label: "Pago",
-    className: "bg-success/10 text-success hover:bg-success/20",
-    icon: CheckCircle as LucideIcon,
-  },
-  pendente: {
-    label: "Pendente",
-    className: "bg-warning/10 text-warning hover:bg-warning/20",
-    icon: Clock3 as LucideIcon,
-  },
-};
 
 const adicionarMes = (dataString: string): string => {
   if (!dataString) {
