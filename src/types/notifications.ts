@@ -10,9 +10,15 @@ export interface PersistentNotification {
   daysRemaining: number;
   priority: "high" | "medium" | "low";
   clienteNome: string;
-  isViewed: boolean;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface NotificationView {
+  id: string;
+  notificationId: string;
+  userId: string;
+  viewedAt: string;
 }
 
 export interface NotificationData {

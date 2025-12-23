@@ -396,7 +396,6 @@ service cloud.firestore {
                       request.resource.data.daysRemaining is number &&
                       request.resource.data.priority is string &&
                       request.resource.data.clienteNome is string &&
-                      request.resource.data.isViewed is bool &&
                       request.resource.data.userId.size() > 0 &&
                       request.resource.data.itemId.size() > 0 &&
                       request.resource.data.type in ['certificado', 'pagamento', 'servico', 'renovacao', 'sintegra', 'despesa'] &&
@@ -414,12 +413,27 @@ service cloud.firestore {
                       request.resource.data.daysRemaining is number &&
                       request.resource.data.priority is string &&
                       request.resource.data.clienteNome is string &&
-                      request.resource.data.isViewed is bool &&
                       request.resource.data.userId.size() > 0 &&
                       request.resource.data.itemId.size() > 0;
 
       // Permitir exclusão para usuários autenticados
       allow delete: if isAuthenticated();
+    }
+
+    // ==================== NOTIFICATION VIEWS ====================
+    match /notificationViews/{viewId} {
+      // Permitir leitura apenas para o próprio usuário
+      allow read: if isAuthenticated() && request.auth.uid == resource.data.userId;
+
+      // Permitir criação apenas para o próprio usuário
+      allow create: if isAuthenticated() &&
+                      request.auth.uid == request.resource.data.userId &&
+                      request.resource.data.notificationId is string &&
+                      request.resource.data.viewedAt is string &&
+                      request.resource.data.notificationId.size() > 0;
+
+      // Não permitir atualização ou exclusão (visualizações são imutáveis)
+      allow update, delete: if false;
     }
     
     // Negar todas as outras operações por padrão

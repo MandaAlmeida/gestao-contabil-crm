@@ -17,8 +17,6 @@ import {
 } from "lucide-react";
 import { useNotificationsData } from "@/hooks/useNotificationsData";
 import { useAuth } from "@/contexts/AuthContext";
-import { doc, setDoc } from "firebase/firestore";
-import { db } from "@/lib/firebase";
 import { useNavigate } from "react-router-dom";
 
 export type NotificationType = "all" | "certificado" | "pagamento" | "servico" | "renovacao" | "sintegra" | "despesa";
@@ -42,50 +40,8 @@ interface NotificationPanelProps {
 
 export function NotificationPanel({ isOpen, onToggle, filterBy = ["all"] }: NotificationPanelProps) {
   const { user } = useAuth();
-  const { notifications, viewedNotifications } = useNotificationsData(filterBy);
+  const { notifications, markAsViewed, markAllAsViewed } = useNotificationsData(filterBy);
   const navigate = useNavigate();
-
-  // Salvar notificações vistas no Firebase quando são marcadas
-  const saveViewedNotifications = async (notifications: Set<string>) => {
-    if (!user) return;
-
-    try {
-      const docRef = doc(db, "userPreferences", user.uid);
-      const now = Date.now();
-      const viewedData: Record<string, number> = {};
-
-      // Criar objeto com timestamps
-      notifications.forEach(notificationId => {
-        viewedData[notificationId] = now;
-      });
-
-      await setDoc(docRef, {
-        viewedNotifications: viewedData,
-        updatedAt: now
-      }, { merge: true });
-
-      // Também salvar no localStorage como backup
-      localStorage.setItem("viewed-notifications", JSON.stringify([...notifications]));
-    } catch (error) {
-      console.error("Erro ao salvar notificações vistas:", error);
-      // Fallback para localStorage
-      localStorage.setItem("viewed-notifications", JSON.stringify([...notifications]));
-    }
-  };
-
-  // Salvar quando notificações são marcadas como vistas
-  const markAsViewed = (notificationId: string) => {
-    // Atualizar localmente (o hook já faz isso)
-    const updatedViewed = new Set([...viewedNotifications, notificationId]);
-    saveViewedNotifications(updatedViewed);
-  };
-
-  const markAllAsViewed = () => {
-    // Atualizar localmente (o hook já faz isso)
-    const allIds = notifications.map(n => n.id);
-    const updatedViewed = new Set([...viewedNotifications, ...allIds]);
-    saveViewedNotifications(updatedViewed);
-  };
 
   const navigateToItem = (notification: NotificationItem) => {
     // Extrair o ID real (tipo-id)

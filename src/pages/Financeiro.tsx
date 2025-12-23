@@ -36,6 +36,8 @@ import {
 } from "@/lib/financeiro";
 import { formatarDataBR } from "@/lib/utils";
 import { StatusButton, type StatusMeta } from "@/components/StatusButton";
+import { generateFinanceiroPDF, generateFinanceiroExcel } from "@/lib/pdfGenerator";
+import { Download, FileSpreadsheet } from "lucide-react";
 import { CheckCircle, Clock3, AlertTriangle } from "lucide-react";
 import { PaymentConfirmationDialog } from "@/components/PaymentConfirmationDialog";
 import { usePagination } from "@/hooks/usePagination";
@@ -61,6 +63,30 @@ export default function FinanceiroPage() {
     deleteFinanceiro,
   } = useFinanceiro();
   const { showConfirmation, ConfirmationDialogComponent } = useConfirmationDialog();
+
+  // Função para gerar PDF
+  const handleGeneratePDF = async () => {
+    await generateFinanceiroPDF(filteredItems, {
+      title: "Relatório Financeiro",
+      filename: `financeiro-${new Date().toISOString().split('T')[0]}.pdf`,
+      dateRange: filtroDataInicio && filtroDataFim ? {
+        start: filtroDataInicio,
+        end: filtroDataFim
+      } : undefined
+    });
+  };
+
+  // Função para gerar Excel
+  const handleGenerateExcel = () => {
+    generateFinanceiroExcel(filteredItems, {
+      title: "Relatório Financeiro",
+      filename: `financeiro-${new Date().toISOString().split('T')[0]}.xlsx`,
+      dateRange: filtroDataInicio && filtroDataFim ? {
+        start: filtroDataInicio,
+        end: filtroDataFim
+      } : undefined
+    });
+  };
   const [searchTerm, setSearchTerm] = useState("");
   const [searchResponsavel, setSearchResponsavel] = useState("todos");
   const [filtroDataInicio, setFiltroDataInicio] = useState("");
@@ -532,6 +558,22 @@ export default function FinanceiroPage() {
           </div>
           <div className="flex gap-2 items-end">
           <NotificationButton onClick={() => setNotificationsOpen(true)} filterBy={["pagamento"]} />
+          <Button
+            variant="outline"
+            onClick={handleGeneratePDF}
+            disabled={filteredItems.length === 0}
+          >
+            <Download className="mr-2 h-4 w-4" />
+            Baixar PDF
+          </Button>
+          <Button
+            variant="outline"
+            onClick={handleGenerateExcel}
+            disabled={filteredItems.length === 0}
+          >
+            <FileSpreadsheet className="mr-2 h-4 w-4" />
+            Baixar Excel
+          </Button>
           <Dialog
             open={isDialogOpen}
             onOpenChange={(open) => {
