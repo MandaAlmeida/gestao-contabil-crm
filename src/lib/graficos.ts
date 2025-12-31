@@ -114,6 +114,7 @@ export const calcularTotalEntrada = (
 
 export const calcularTotalEntradaServicos = (
   servicos: Servico[],
+  financeiros: Financeiro[],
   periodo: PeriodoFiltro,
   periodoCustomizado?: PeriodoCustomizado
 ): number => {
@@ -121,8 +122,14 @@ export const calcularTotalEntradaServicos = (
 
   return servicos
     .filter((s) => {
-      if (s.status !== "Recebido" || !s.dataPagamento) return false;
-      const dataPagamento = new Date(s.dataPagamento);
+      // Verificar se o serviço foi pago no financeiro dentro do período
+      const financeiroRelacionado = financeiros.find(f =>
+        f.servicoId === s.id && f.status === "Recebido" && f.dataPagamento
+      );
+
+      if (!financeiroRelacionado || !financeiroRelacionado.dataPagamento) return false;
+
+      const dataPagamento = new Date(financeiroRelacionado.dataPagamento);
       return dataPagamento >= inicio && dataPagamento <= fim;
     })
     .reduce((acc, s) => acc + s.valorMensalidade, 0);
@@ -227,6 +234,7 @@ export const gerarDadosGrafico = (
 
 export const gerarDadosGraficoServicos = (
   servicos: Servico[],
+  financeiros: Financeiro[],
   despesas: Despesa[],
   periodo: PeriodoFiltro,
   periodoCustomizado?: PeriodoCustomizado
@@ -237,12 +245,22 @@ export const gerarDadosGraficoServicos = (
   // Processar entradas de serviços
   servicos
     .filter((s) => {
-      if (s.status !== "Recebido" || !s.dataPagamento) return false;
-      const dataPagamento = new Date(s.dataPagamento);
+      // Verificar se o serviço foi pago no financeiro dentro do período
+      const financeiroRelacionado = financeiros.find(f =>
+        f.servicoId === s.id && f.status === "Recebido" && f.dataPagamento
+      );
+
+      if (!financeiroRelacionado || !financeiroRelacionado.dataPagamento) return false;
+
+      const dataPagamento = new Date(financeiroRelacionado.dataPagamento);
       return dataPagamento >= inicio && dataPagamento <= fim;
     })
     .forEach((s) => {
-      const data = s.dataPagamento!;
+      // Usar a data do financeiro para o gráfico
+      const financeiroRelacionado = financeiros.find(f =>
+        f.servicoId === s.id && f.status === "Recebido" && f.dataPagamento
+      )!;
+      const data = financeiroRelacionado.dataPagamento!;
       const chave = data.split("T")[0];
       const atual = dados.get(chave) || { entrada: 0, saida: 0 };
       atual.entrada += s.valorMensalidade;

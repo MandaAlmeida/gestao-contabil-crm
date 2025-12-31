@@ -66,7 +66,6 @@ export function RenovacaoStatusSelect({ item, onUpdateStatus, onStatusChange }: 
   };
 
   const handleStatusChange = async (item: Renovacao, value: string) => {
-    console.log("handleStatusChange chamado com:", value, "para item:", item.id);
     // Se o valor contém "Parcelado", extrair a parcela
     if (value.startsWith("Parcelado")) {
       const parcelaMatch = value.match(/\((.+)\)/);
@@ -127,9 +126,7 @@ export function RenovacaoStatusSelect({ item, onUpdateStatus, onStatusChange }: 
           updateData.dataRenovacao = novaDataRenovacao.toISOString().split("T")[0];
         }
 
-        console.log("Atualizando status para:", novoStatus, "com dados:", updateData);
         await onUpdateStatus?.(item.id, updateData);
-        console.log("Status atualizado com sucesso!");
 
         const description = novoStatus === "Renovado"
           ? `Status alterado para "${novoStatus}". Data renovação: ${updateData.dataRenovacao}.`

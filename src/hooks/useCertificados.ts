@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import * as certificadosService from "@/lib/firestore/certificados";
+import { excluirNotificacoesItem } from "@/utils/notificacoes";
 import type { Certificado } from "@/types/crm";
 
 export function useCertificados() {
@@ -48,6 +49,9 @@ export function useCertificados() {
 
   const deleteCertificado = async (id: string) => {
     try {
+      // Excluir notificações relacionadas antes de excluir o certificado
+      await excluirNotificacoesItem(id, "certificado");
+
       await certificadosService.deleteCertificado(id);
       await loadCertificados();
     } catch (err) {

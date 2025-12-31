@@ -108,7 +108,6 @@ export async function createUsuarioIfNotExists(
     }
 
     const docRef = await addDoc(collection(db, COLLECTION_NAME), novoUsuario);
-    console.log("Usuário criado com sucesso:", docRef.id);
     return docRef.id;
   } catch (error: any) {
     // Se for erro de permissão, pode ser que o usuário não esteja autenticado ainda

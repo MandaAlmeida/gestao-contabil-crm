@@ -5,7 +5,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useClientes } from "@/hooks/useClientes";
 import { useFinanceiro } from "@/hooks/useFinanceiro";
+import { useServicos } from "@/hooks/useServicos";
 import { useConfirmationDialog } from "@/components/ConfirmationDialog";
+import { excluirNotificacoesItem } from "@/utils/notificacoes";
 import { Financeiro } from "@/types/crm";
 import {
   Plus,
@@ -36,10 +38,8 @@ import {
 } from "@/lib/financeiro";
 import { formatarDataBR } from "@/lib/utils";
 import { StatusButton, type StatusMeta } from "@/components/StatusButton";
-import { generateFinanceiroPDF, generateFinanceiroExcel } from "@/lib/pdfGenerator";
-import { Download, FileSpreadsheet } from "lucide-react";
+import { ExportButtons } from "@/components/ExportButtons";
 import { CheckCircle, Clock3, AlertTriangle } from "lucide-react";
-import { PaymentConfirmationDialog } from "@/components/PaymentConfirmationDialog";
 import { usePagination } from "@/hooks/usePagination";
 import {
   Pagination,
@@ -56,6 +56,7 @@ import { NotificationPanel } from "@/components/NotificationPanel";
 export default function FinanceiroPage() {
   const location = useLocation();
   const { clientes } = useClientes();
+  const { servicos, createServico, refresh: refreshServicos } = useServicos();
   const {
     financeiros: financeirosRaw,
     createFinanceiro,
@@ -64,29 +65,6 @@ export default function FinanceiroPage() {
   } = useFinanceiro();
   const { showConfirmation, ConfirmationDialogComponent } = useConfirmationDialog();
 
-  // Função para gerar PDF
-  const handleGeneratePDF = async () => {
-    await generateFinanceiroPDF(filteredItems, {
-      title: "Relatório Financeiro",
-      filename: `financeiro-${new Date().toISOString().split('T')[0]}.pdf`,
-      dateRange: filtroDataInicio && filtroDataFim ? {
-        start: filtroDataInicio,
-        end: filtroDataFim
-      } : undefined
-    });
-  };
-
-  // Função para gerar Excel
-  const handleGenerateExcel = () => {
-    generateFinanceiroExcel(filteredItems, {
-      title: "Relatório Financeiro",
-      filename: `financeiro-${new Date().toISOString().split('T')[0]}.xlsx`,
-      dateRange: filtroDataInicio && filtroDataFim ? {
-        start: filtroDataInicio,
-        end: filtroDataFim
-      } : undefined
-    });
-  };
   const [searchTerm, setSearchTerm] = useState("");
   const [searchResponsavel, setSearchResponsavel] = useState("todos");
   const [filtroDataInicio, setFiltroDataInicio] = useState("");
@@ -100,8 +78,6 @@ export default function FinanceiroPage() {
   }>({ campo: "dataVencimento", direcao: "asc" });
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<Financeiro | null>(null);
-  const [isPagamentoDialogOpen, setIsPagamentoDialogOpen] = useState(false);
-  const [itemParaPagamento, setItemParaPagamento] = useState<Financeiro | null>(null);
   const { toast } = useToast();
   const [notificationsOpen, setNotificationsOpen] = useState(false);
 
@@ -161,9 +137,9 @@ export default function FinanceiroPage() {
       );
     }
 
-    // Ordenar alfabeticamente por nome
+    // Ordenar alfabeticamente por nome (ignorando espaços no início)
     return [...clientesFiltrados].sort((a, b) =>
-      a.nome.localeCompare(b.nome, "pt-BR", { sensitivity: "base" })
+      a.nome.trim().localeCompare(b.nome.trim(), "pt-BR", { sensitivity: "base" })
     );
   }, [clientes, clientesComFinanceiro, editingItem]);
 
@@ -171,9 +147,10 @@ export default function FinanceiroPage() {
     clienteId: "",
     dataVencimento: "",
     valorMensalidade: "",
-    dataPagamento: "",
     meioPagamento: "Pix" as Financeiro["meioPagamento"],
+    valorServico: "",
     observacoes: "",
+    dataPagamento: null,
   });
 
   const resetForm = () => {
@@ -181,12 +158,14 @@ export default function FinanceiroPage() {
       clienteId: "",
       dataVencimento: "",
       valorMensalidade: "",
-      dataPagamento: "",
       meioPagamento: "Pix",
+      valorServico: "",
       observacoes: "",
+      dataPagamento: null,
     });
     setEditingItem(null);
   };
+
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -233,23 +212,70 @@ export default function FinanceiroPage() {
           dataPagamento,
           status,
           meioPagamento: formData.meioPagamento,
+          servicoId: editingItem.servicoId,
+          valorServico: formData.valorServico,
           observacoes: formData.observacoes,
         });
         toast({ title: "Registro atualizado com sucesso!" });
       } else {
+        // Verificar se já existe serviço para este cliente
+        let servicoRelacionado = servicos.find(s => s.clienteId === formData.clienteId);
+        let valorParaServico = valorMensalidadeNumber;
+
+        if (!servicoRelacionado) {
+          // Se não existe serviço, criar automaticamente
+          try {
+            const novoServico = {
+              clienteId: formData.clienteId,
+              clienteNome: cliente.nome,
+              clienteCNPJ: cliente.cnpj,
+              responsavel: cliente.responsavel,
+              descricao: `Serviço mensal - ${cliente.nome}`,
+              dataVencimento: dataVencimento,
+              valorMensalidade: valorMensalidadeNumber,
+              status: "A Vencer" as const,
+              meioPagamento: "Pix" as const,
+              observacoes: `Serviço criado automaticamente via financeiro - ${new Date().toLocaleDateString('pt-BR')}`,
+              ativo: true,
+            };
+
+            const servicoId = await createServico(novoServico);
+            // Forçar atualização dos serviços
+            await refreshServicos();
+            // Buscar o serviço recém-criado
+            servicoRelacionado = servicos.find(s => s.id === servicoId) || { ...novoServico, id: servicoId } as any;
+            valorParaServico = valorMensalidadeNumber;
+            toast({ title: "Serviço criado automaticamente!" });
+          } catch (error) {
+            console.error("Erro ao criar serviço:", error);
+            toast({
+              title: "Registro criado sem vínculo com serviço",
+              description: "Não foi possível criar o serviço automaticamente.",
+            });
+            servicoRelacionado = null;
+            valorParaServico = valorMensalidadeNumber;
+          }
+        } else {
+          // Se existe serviço, usar o valor dele
+          valorParaServico = servicoRelacionado.valorMensalidade;
+          toast({ title: "Serviço vinculado automaticamente!" });
+        }
+
         await createFinanceiro({
           clienteId: formData.clienteId,
           clienteNome: cliente.nome,
           clienteCNPJ: cliente.cnpj,
           dataVencimento,
-          valorMensalidade: valorMensalidadeNumber,
+          valorMensalidade: valorParaServico,
           dataPagamento,
           status,
           meioPagamento: formData.meioPagamento,
+          servicoId: servicoRelacionado?.id || null,
+          valorServico: formData.valorServico,
           observacoes: formData.observacoes,
           ativo: true,
         });
-        toast({ title: "Registro adicionado com sucesso!" });
+        toast({ title: "Registro financeiro adicionado com sucesso!" });
       }
 
       resetForm();
@@ -367,36 +393,30 @@ export default function FinanceiroPage() {
       return;
     }
 
-    // Abre modal para confirmar pagamento
-    setItemParaPagamento(item);
-    setIsPagamentoDialogOpen(true);
-  };
-
-  const handleConfirmarPagamento = async (data: {
-    dataPagamento: string;
-    meioPagamento: "Pix" | "Boleto";
-  }) => {
-    if (!itemParaPagamento) return;
-
-    const novoVencimento = adicionarMes(itemParaPagamento.dataVencimento);
+    // Marca como pago diretamente
+    const hoje = new Date().toISOString().split('T')[0]; // Data de hoje no formato YYYY-MM-DD
+    const novoVencimento = adicionarMes(item.dataVencimento);
 
     try {
-      await updateFinanceiro(itemParaPagamento.id, {
-        dataPagamento: data.dataPagamento,
+      await updateFinanceiro(item.id, {
+        dataPagamento: hoje,
         dataVencimento: novoVencimento,
         status: "Recebido",
-        meioPagamento: data.meioPagamento,
+        meioPagamento: "Pix",
       });
+
+      // Excluir notificações relacionadas ao pagamento
+      await excluirNotificacoesItem(item.id, "pagamento");
+
       toast({
         title: "Pagamento registrado!",
-        description: `${itemParaPagamento.clienteNome} foi marcado como pago.`,
+        description: `${item.clienteNome} foi marcado como pago.`,
       });
-      setIsPagamentoDialogOpen(false);
-      setItemParaPagamento(null);
     } catch (error) {
       toast({ title: "Erro ao registrar pagamento", variant: "destructive" });
     }
   };
+
 
   const handleEdit = (item: Financeiro) => {
     setEditingItem(item);
@@ -404,8 +424,9 @@ export default function FinanceiroPage() {
       clienteId: item.clienteId,
       dataVencimento: item.dataVencimento,
       valorMensalidade: item.valorMensalidade.toString(),
-      dataPagamento: item.dataPagamento ?? "",
-      meioPagamento: item.meioPagamento,
+      meioPagamento: item.meioPagamento ?? "Pix",
+      valorServico: item.valorServico?.toString() ?? "",
+      dataPagamento: item.dataPagamento ?? null,
       observacoes: item.observacoes,
     });
     setIsDialogOpen(true);
@@ -558,22 +579,11 @@ export default function FinanceiroPage() {
           </div>
           <div className="flex gap-2 items-end">
           <NotificationButton onClick={() => setNotificationsOpen(true)} filterBy={["pagamento"]} />
-          <Button
-            variant="outline"
-            onClick={handleGeneratePDF}
-            disabled={filteredItems.length === 0}
-          >
-            <Download className="mr-2 h-4 w-4" />
-            Baixar PDF
-          </Button>
-          <Button
-            variant="outline"
-            onClick={handleGenerateExcel}
-            disabled={filteredItems.length === 0}
-          >
-            <FileSpreadsheet className="mr-2 h-4 w-4" />
-            Baixar Excel
-          </Button>
+          <ExportButtons
+            data={filteredItems}
+            filtroDataInicio={filtroDataInicio}
+            filtroDataFim={filtroDataFim}
+          />
           <Dialog
             open={isDialogOpen}
             onOpenChange={(open) => {
@@ -598,9 +608,17 @@ export default function FinanceiroPage() {
                   <Label htmlFor="clienteId">Cliente</Label>
                   <Select
                     value={formData.clienteId}
-                    onValueChange={(value) =>
-                      setFormData({ ...formData, clienteId: value })
-                    }
+                    onValueChange={(value) => {
+                      setFormData(prev => {
+                        const novoFormData = { ...prev, clienteId: value, valorMensalidade: "" };
+                        // Preencher automaticamente valor do serviço se existir
+                        const servicoCliente = servicos.find(s => s.clienteId === value);
+                        if (servicoCliente) {
+                          novoFormData.valorMensalidade = servicoCliente.valorMensalidade.toString();
+                        }
+                        return novoFormData;
+                      });
+                    }}
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Selecione um cliente" />
@@ -651,15 +669,18 @@ export default function FinanceiroPage() {
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="dataPagamento">Data de Pagamento</Label>
+                    <Label htmlFor="valorServico">
+                      Valor do Serviço
+                    </Label>
                     <Input
-                      id="dataPagamento"
-                      type="date"
-                      value={formData.dataPagamento}
+                      id="valorServico"
+                      type="number"
+                      step="0.01"
+                      value={formData.valorServico}
                       onChange={(e) =>
                         setFormData({
                           ...formData,
-                          dataPagamento: e.target.value,
+                          valorServico: e.target.value,
                         })
                       }
                     />
@@ -709,22 +730,6 @@ export default function FinanceiroPage() {
           </div>
         </div>
 
-        {/* Modal de Confirmação de Pagamento */}
-        <PaymentConfirmationDialog
-          open={isPagamentoDialogOpen}
-          onOpenChange={(open) => {
-            setIsPagamentoDialogOpen(open);
-            if (!open) {
-              setItemParaPagamento(null);
-            }
-          }}
-          item={itemParaPagamento}
-          valor={itemParaPagamento?.valorMensalidade || 0}
-          clienteNome={itemParaPagamento?.clienteNome || ""}
-          onConfirm={handleConfirmarPagamento}
-          dataPagamentoInicial={itemParaPagamento?.dataPagamento || undefined}
-          meioPagamentoInicial={itemParaPagamento?.meioPagamento || "Pix"}
-        />
 
         <div className="mb-4 space-y-4">
           <div className="flex gap-4 items-end">
@@ -948,6 +953,7 @@ export default function FinanceiroPage() {
                   Vencimento
                 </th>
                 <th className="p-3 text-left text-sm font-medium">Valor</th>
+                <th className="p-3 text-left text-sm font-medium">Serviço</th>
                 <th className="p-3 text-left text-sm font-medium">Status</th>
                 <th className="p-3 text-left text-sm font-medium">Pagamento</th>
                 <th className="p-3 text-left text-sm font-medium">Ações</th>
@@ -966,6 +972,19 @@ export default function FinanceiroPage() {
                     })}
                   </td>
                   <td className="p-3">
+                    <span className="text-sm text-muted-foreground">
+                      {item.servicoId
+                        ? (() => {
+                            const servico = servicos.find(s => s.id === item.servicoId);
+                            return servico
+                              ? `R$ ${servico.valorMensalidade.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`
+                              : "Serviço não encontrado";
+                          })()
+                        : "Nenhum serviço vinculado"
+                      }
+                    </span>
+                  </td>
+                  <td className="p-3">
                     <StatusButton
                       status={item.status}
                       statusMeta={STATUS_META}
@@ -976,11 +995,6 @@ export default function FinanceiroPage() {
                   <td className="p-3">
                     <div className="flex flex-col gap-1">
                       <span>{item.meioPagamento}</span>
-                      <span className="text-xs text-muted-foreground">
-                        {item.dataPagamento
-                          ? formatarDataBR(item.dataPagamento)
-                          : "Sem registro"}
-                      </span>
                     </div>
                   </td>
                   <td className="p-3">

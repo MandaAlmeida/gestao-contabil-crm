@@ -25,11 +25,6 @@ try {
 
   // Handler para notificações em background
   messaging.onBackgroundMessage((payload) => {
-    console.log(
-      "[firebase-messaging-sw.js] Received background message ",
-      payload
-    );
-
     const notificationTitle = payload.notification?.title || "Nova Notificação";
     const notificationOptions = {
       body: payload.notification?.body || "Você tem uma nova notificação",
@@ -52,11 +47,6 @@ try {
 
   // Handler para clique nas notificações
   self.addEventListener("notificationclick", (event) => {
-    console.log(
-      "[firebase-messaging-sw.js] Notification click received.",
-      event
-    );
-
     event.notification.close();
 
     // Abrir a URL especificada ou a raiz da aplicação

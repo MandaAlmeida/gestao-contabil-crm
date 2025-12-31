@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import * as sintegraService from "@/lib/firestore/sintegra";
+import { excluirNotificacoesItem } from "@/utils/notificacoes";
 import type { Sintegra } from "@/types/crm";
 
 export function useSintegra() {
@@ -38,6 +39,12 @@ export function useSintegra() {
 
   const updateSintegra = async (id: string, updates: Partial<Omit<Sintegra, "id" | "createdAt">>) => {
     try {
+      // Verificar se o status está sendo alterado para "Concluído"
+      if (updates.status === "Concluído") {
+        // Buscar e excluir notificações relacionadas à sintegra
+        await excluirNotificacoesItem(id, "sintegra");
+      }
+
       await sintegraService.updateSintegra(id, updates);
       await loadSintegras();
     } catch (err) {
@@ -48,6 +55,9 @@ export function useSintegra() {
 
   const deleteSintegra = async (id: string) => {
     try {
+      // Excluir notificações relacionadas antes de excluir a sintegra
+      await excluirNotificacoesItem(id, "sintegra");
+
       await sintegraService.deleteSintegra(id);
       await loadSintegras();
     } catch (err) {

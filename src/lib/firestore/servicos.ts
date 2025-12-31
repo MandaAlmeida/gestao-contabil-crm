@@ -19,15 +19,17 @@ export async function getServicos(): Promise<Servico[]> {
     orderBy("dataVencimento", "desc")
   );
   const querySnapshot = await getDocs(q);
-  return querySnapshot.docs
-    .map(
-      (doc) =>
-        ({
-          id: doc.id,
-          ...doc.data(),
-        } as Servico)
-    )
-    .filter((servico) => servico.ativo !== false);
+  const todosServicos = querySnapshot.docs.map(
+    (doc) =>
+      ({
+        id: doc.id,
+        ...doc.data(),
+      } as Servico)
+  );
+  
+  const servicosAtivos = todosServicos.filter((servico) => servico.ativo !== false);
+  
+  return servicosAtivos;
 }
 
 export async function getServico(id: string): Promise<Servico | null> {
@@ -43,14 +45,21 @@ export async function getServico(id: string): Promise<Servico | null> {
 export async function createServico(
   servico: Omit<Servico, "id" | "createdAt" | "updatedAt">
 ): Promise<string> {
-  const now = new Date().toISOString();
-  const docRef = await addDoc(collection(db, COLLECTION_NAME), {
-    ...servico,
-    ativo: true,
-    createdAt: now,
-    updatedAt: now,
-  });
-  return docRef.id;
+  try {
+    const now = new Date().toISOString();
+    const dataToSave = {
+      ...servico,
+      ativo: true,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    const docRef = await addDoc(collection(db, COLLECTION_NAME), dataToSave);
+    return docRef.id;
+  } catch (error) {
+    console.error("Erro em firestore.createServico:", error);
+    throw error;
+  }
 }
 
 export async function updateServico(
@@ -65,9 +74,15 @@ export async function updateServico(
 }
 
 export async function deleteServico(id: string): Promise<void> {
-  const docRef = doc(db, COLLECTION_NAME, id);
-  await updateDoc(docRef, {
-    ativo: false,
-    updatedAt: new Date().toISOString(),
-  });
+  try {
+    const docRef = doc(db, COLLECTION_NAME, id);
+    
+    await updateDoc(docRef, {
+      ativo: false,
+      updatedAt: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error(`🔥 Firestore: Erro ao deletar serviço ${id}:`, error);
+    throw error;
+  }
 }

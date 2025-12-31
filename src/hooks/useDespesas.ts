@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import * as despesasService from "@/lib/firestore/despesas";
+import { excluirNotificacoesItem } from "@/utils/notificacoes";
 import type { Despesa } from "@/types/despesas";
 
 export function useDespesas() {
@@ -45,6 +46,12 @@ export function useDespesas() {
 
   const updateDespesa = async (id: string, updates: Partial<Omit<Despesa, "id" | "createdAt">>) => {
     try {
+      // Verificar se a despesa está sendo marcada como paga
+      if (updates.pago === true) {
+        // Buscar e excluir notificações relacionadas à despesa
+        await excluirNotificacoesItem(id, "despesa");
+      }
+
       await despesasService.updateDespesa(id, updates);
       await loadDespesas();
     } catch (err) {
@@ -55,6 +62,9 @@ export function useDespesas() {
 
   const deleteDespesa = async (id: string) => {
     try {
+      // Excluir notificações relacionadas antes de excluir a despesa
+      await excluirNotificacoesItem(id, "despesa");
+
       await despesasService.deleteDespesa(id);
       await loadDespesas();
     } catch (err) {
@@ -82,8 +92,6 @@ export function useDespesas() {
     });
 
     if (despesasParaResetar.length > 0) {
-      console.log(`Resetando ${despesasParaResetar.length} despesas fixas para pendente`);
-
       for (const despesa of despesasParaResetar) {
         try {
           await updateDespesa(despesa.id, {

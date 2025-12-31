@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import * as financeiroService from "@/lib/firestore/financeiro";
+import { excluirNotificacoesItem } from "@/utils/notificacoes";
 import type { Financeiro } from "@/types/crm";
 
 export function useFinanceiro() {
@@ -38,6 +39,12 @@ export function useFinanceiro() {
 
   const updateFinanceiro = async (id: string, updates: Partial<Omit<Financeiro, "id" | "createdAt">>) => {
     try {
+      // Verificar se o status está sendo alterado para "Pago"
+      if (updates.status === "Recebido") {
+        // Buscar e excluir notificações relacionadas ao pagamento
+        await excluirNotificacoesItem(id, "pagamento");
+      }
+
       await financeiroService.updateFinanceiro(id, updates);
       await loadFinanceiros();
     } catch (err) {
@@ -48,6 +55,9 @@ export function useFinanceiro() {
 
   const deleteFinanceiro = async (id: string) => {
     try {
+      // Excluir notificações relacionadas antes de excluir o financeiro
+      await excluirNotificacoesItem(id, "pagamento");
+
       await financeiroService.deleteFinanceiro(id);
       await loadFinanceiros();
     } catch (err) {

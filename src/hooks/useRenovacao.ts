@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import * as renovacaoService from "@/lib/firestore/renovacao";
+import { excluirNotificacoesItem } from "@/utils/notificacoes";
 import type { Renovacao } from "@/types/crm";
 
 export function useRenovacao() {
@@ -38,6 +39,12 @@ export function useRenovacao() {
 
   const updateRenovacao = async (id: string, updates: Partial<Omit<Renovacao, "id" | "createdAt">>) => {
     try {
+      // Verificar se o status está sendo alterado para "Renovado"
+      if (updates.status === "Renovado") {
+        // Buscar e excluir notificações relacionadas à renovação
+        await excluirNotificacoesItem(id, "renovacao");
+      }
+
       await renovacaoService.updateRenovacao(id, updates);
       await loadRenovacoes();
     } catch (err) {
@@ -48,6 +55,9 @@ export function useRenovacao() {
 
   const deleteRenovacao = async (id: string) => {
     try {
+      // Excluir notificações relacionadas antes de excluir a renovação
+      await excluirNotificacoesItem(id, "renovacao");
+
       await renovacaoService.deleteRenovacao(id);
       await loadRenovacoes();
     } catch (err) {

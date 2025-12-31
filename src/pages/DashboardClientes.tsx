@@ -36,7 +36,6 @@ import {
   ChevronDown,
 } from "lucide-react";
 import { normalizarFinanceiros } from "@/lib/financeiro";
-import { normalizarServicos } from "@/lib/servicos";
 import { Separator } from "@/components/ui/separator";
 
 export default function DashboardClientes() {
@@ -45,6 +44,8 @@ export default function DashboardClientes() {
   const { financeiros: financeirosRaw } = useFinanceiro();
   const { servicos: servicosRaw } = useServicos();
   const { certificados } = useCertificados();
+
+  const financeiros = financeirosRaw;
   const { sintegras } = useSintegra();
   const { renovacoes } = useRenovacao();
   const [responsavelSelecionado, setResponsavelSelecionado] =
@@ -87,10 +88,7 @@ export default function DashboardClientes() {
     clienteIdsFiltrados.has(renovacao.clienteId)
   );
 
-  const servicosNormalizados = useMemo(
-    () => normalizarServicos(servicosRaw),
-    [servicosRaw]
-  );
+  const servicosNormalizados = servicosRaw;
 
   const servicosFiltrados = servicosNormalizados.filter((servico) =>
     clienteIdsFiltrados.has(servico.clienteId)
@@ -108,9 +106,16 @@ export default function DashboardClientes() {
     { recebidas: 0, aReceber: 0 }
   );
 
+  // Serviços agora não têm status de pagamento - sempre são considerados "a receber"
+  // O status de pagamento está no financeiro
   const totaisServicos = servicosFiltrados.reduce(
     (acc, s) => {
-      if (s.status === "Recebido") {
+      // Verificar se o serviço foi pago no financeiro
+      const servicoPago = financeiros.some(f =>
+        f.servicoId === s.id && f.status === "Recebido"
+      );
+
+      if (servicoPago) {
         acc.recebidas += s.valorMensalidade;
       } else {
         acc.aReceber += s.valorMensalidade;
@@ -121,7 +126,7 @@ export default function DashboardClientes() {
   );
 
   const servicosEmAberto = servicosFiltrados.filter(
-    (s) => s.status !== "Recebido"
+    (s) => !financeiros.some(f => f.servicoId === s.id && f.status === "Recebido")
   ).length;
 
   const certificadosVencendo = certificadosFiltrados.filter((cert) => {
