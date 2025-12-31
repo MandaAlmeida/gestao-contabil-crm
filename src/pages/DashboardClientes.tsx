@@ -90,9 +90,22 @@ export default function DashboardClientes() {
 
   const servicosNormalizados = servicosRaw;
 
-  const servicosFiltrados = servicosNormalizados.filter((servico) =>
-    clienteIdsFiltrados.has(servico.clienteId)
-  );
+  console.log('🔍 DASHBOARD - Total servicosRaw:', servicosRaw.length);
+  console.log('🔍 DASHBOARD - Responsável selecionado:', responsavelSelecionado);
+
+  // Filtrar serviços da mesma forma que a página de Serviços
+  // Apenas pelo responsável do serviço, não pelos clientes
+  const servicosFiltrados = servicosNormalizados.filter((servico) => {
+    const matchesResponsavel = responsavelSelecionado === "todos" || 
+                                servico.responsavel === responsavelSelecionado;
+    
+    console.log('🔍 Serviço:', servico.clienteNome, '| Responsável:', servico.responsavel, '| matchesResp:', matchesResponsavel, '| INCLUÍDO:', matchesResponsavel);
+    
+    return matchesResponsavel;
+  });
+
+  console.log('✅ DASHBOARD - Total filtrado:', servicosFiltrados.length);
+  console.log('📋 DASHBOARD - Serviços incluídos:', servicosFiltrados.map(s => s.clienteNome));
 
   const totaisMensalidades = financeirosFiltrados.reduce(
     (acc, f) => {
@@ -115,6 +128,8 @@ export default function DashboardClientes() {
         f.servicoId === s.id && f.status === "Recebido"
       );
 
+      console.log('📊 Dashboard Servico:', s.clienteNome, '| valorMensalidade:', s.valorMensalidade, '| Pago:', servicoPago);
+
       if (servicoPago) {
         acc.recebidas += s.valorMensalidade;
       } else {
@@ -124,6 +139,9 @@ export default function DashboardClientes() {
     },
     { recebidas: 0, aReceber: 0 }
   );
+
+  console.log('📈 DASHBOARD - Total servicosFiltrados:', servicosFiltrados.length);
+  console.log('💰 DASHBOARD - Recebidas:', totaisServicos.recebidas, '| A Receber:', totaisServicos.aReceber);
 
   const servicosEmAberto = servicosFiltrados.filter(
     (s) => !financeiros.some(f => f.servicoId === s.id && f.status === "Recebido")
