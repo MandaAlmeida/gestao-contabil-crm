@@ -11,6 +11,8 @@ import {
   Search,
   Edit,
   Trash2,
+  CheckCircle,
+  Clock3,
 } from "lucide-react";
 import {
   Dialog,
@@ -33,7 +35,6 @@ import { NotificationButton } from "@/components/NotificationButton";
 import { NotificationPanel } from "@/components/NotificationPanel";
 import { useServicos } from "@/hooks/useServicos";
 import { formatarDataBR } from "@/lib/utils";
-import { CheckCircle, Clock3, AlertTriangle } from "lucide-react";
 import { usePagination } from "@/hooks/usePagination";
 import {
   Pagination,
@@ -48,12 +49,13 @@ import { useUsuarios } from "@/hooks/useUsuarios";
 
 export default function ServicosPage() {
   const { clientes } = useClientes();
-  const { financeiros } = useFinanceiro();
+  const { financeiros, updateFinanceiro, refresh: refreshFinanceiros } = useFinanceiro();
   const {
     servicos: servicosRaw,
     createServico,
     updateServico,
     deleteServico,
+    refresh: refreshServicos,
   } = useServicos();
   const {
     usuarios

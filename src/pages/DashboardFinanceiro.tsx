@@ -17,6 +17,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useFinanceiro } from "@/hooks/useFinanceiro";
+import { useServicos } from "@/hooks/useServicos";
 import { useDespesas } from "@/hooks/useDespesas";
 import { useClientes } from "@/hooks/useClientes";
 import { NotificationButton } from "@/components/NotificationButton";
@@ -29,7 +30,9 @@ import {
 import { normalizarFinanceiros } from "@/lib/financeiro";
 import {
   calcularTotalEntrada,
+  calcularTotalEntradaServicos,
   calcularTotalSaida,
+  calcularPeriodo,
   gerarDadosGrafico,
   formatarDataGrafico,
   type PeriodoFiltro,
@@ -48,6 +51,7 @@ import {
 
 export default function DashboardFinanceiro() {
   const { financeiros: financeirosRaw } = useFinanceiro();
+  const { servicos: servicosRaw } = useServicos();
   const { despesas } = useDespesas();
   const { clientes } = useClientes();
   const [periodoFiltro, setPeriodoFiltro] = useState<PeriodoFiltro>("mes");
@@ -74,6 +78,26 @@ export default function DashboardFinanceiro() {
 
   // Cálculos para gráficos
   const totalEntrada = useMemo(
+    () => {
+      const entradaFinanceiro = calcularTotalEntrada(
+        financeirosNormalizados,
+        despesas,
+        periodoFiltro,
+        periodoCustomizado
+      );
+      const entradaServicos = calcularTotalEntradaServicos(
+        servicosRaw,
+        financeirosNormalizados,
+        periodoFiltro,
+        periodoCustomizado
+      );
+      return entradaFinanceiro + entradaServicos;
+    },
+    [financeirosNormalizados, servicosRaw, despesas, periodoFiltro, periodoCustomizado]
+  );
+
+  // Cálculos detalhados para mostrar financeiros e serviços separadamente
+  const entradaFinanceiro = useMemo(
     () =>
       calcularTotalEntrada(
         financeirosNormalizados,
@@ -83,6 +107,46 @@ export default function DashboardFinanceiro() {
       ),
     [financeirosNormalizados, despesas, periodoFiltro, periodoCustomizado]
   );
+
+  const entradaServicos = useMemo(
+    () =>
+      calcularTotalEntradaServicos(
+        servicosRaw,
+        financeirosNormalizados,
+        periodoFiltro,
+        periodoCustomizado
+      ),
+    [servicosRaw, financeirosNormalizados, periodoFiltro, periodoCustomizado]
+  );
+
+  // Valores a receber
+  const aReceberFinanceiro = useMemo(() => {
+    const { inicio, fim } = calcularPeriodo(periodoFiltro, periodoCustomizado);
+    return financeirosNormalizados
+      .filter((f) => {
+        if (f.status === "Pago") return false;
+        const dataVencimento = new Date(f.dataVencimento);
+        return dataVencimento >= inicio && dataVencimento <= fim;
+      })
+      .reduce((acc, f) => acc + f.valorMensalidade, 0);
+  }, [financeirosNormalizados, periodoFiltro, periodoCustomizado]);
+
+  const aReceberServicos = useMemo(() => {
+    const { inicio, fim } = calcularPeriodo(periodoFiltro, periodoCustomizado);
+    return servicosRaw
+      .filter((s) => {
+        // Serviço não pago (financeiro vinculado não pago ou não existe)
+        const financeiroRelacionado = financeirosNormalizados.find(
+          (f) => f.servicoId === s.id
+        );
+        if (financeiroRelacionado && financeiroRelacionado.status === "Pago") {
+          return false;
+        }
+        const dataVencimento = new Date(s.dataVencimento);
+        return dataVencimento >= inicio && dataVencimento <= fim;
+      })
+      .reduce((acc, s) => acc + s.valorMensalidade, 0);
+  }, [servicosRaw, financeirosNormalizados, periodoFiltro, periodoCustomizado]);
 
   const despesasFiltradas = useMemo(() => {
     let filtered = despesas;
@@ -336,6 +400,92 @@ export default function DashboardFinanceiro() {
               </p>
             </CardContent>
           </Card>
+        </div>
+
+        {/* Divisão de Recebidos e A Receber */}
+        <div className="mt-8">
+          <h2 className="text-lg font-semibold mb-4">Detalhamento por Tipo</h2>
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+            {/* Financeiros Recebidos */}
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm font-medium">
+                  Financeiros Recebidos
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-green-600">
+                  R${" "}
+                  {entradaFinanceiro.toLocaleString("pt-BR", {
+                    minimumFractionDigits: 2,
+                  })}
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Pagamentos diretos
+                </p>
+              </CardContent>
+            </Card>
+
+            {/* Serviços Recebidos */}
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm font-medium">
+                  Serviços Recebidos
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-green-600">
+                  R${" "}
+                  {entradaServicos.toLocaleString("pt-BR", {
+                    minimumFractionDigits: 2,
+                  })}
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Serviços pagos
+                </p>
+              </CardContent>
+            </Card>
+
+            {/* Financeiros A Receber */}
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm font-medium">
+                  Financeiros A Receber
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-orange-600">
+                  R${" "}
+                  {aReceberFinanceiro.toLocaleString("pt-BR", {
+                    minimumFractionDigits: 2,
+                  })}
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Pagamentos pendentes
+                </p>
+              </CardContent>
+            </Card>
+
+            {/* Serviços A Receber */}
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm font-medium">
+                  Serviços A Receber
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-orange-600">
+                  R${" "}
+                  {aReceberServicos.toLocaleString("pt-BR", {
+                    minimumFractionDigits: 2,
+                  })}
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Serviços pendentes
+                </p>
+              </CardContent>
+            </Card>
+          </div>
         </div>
 
         {/* Gráfico Comparativo Principal */}
