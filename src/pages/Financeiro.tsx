@@ -219,7 +219,6 @@ export default function FinanceiroPage() {
         // Se o serviço foi vinculado e agora foi limpo, deleta o serviço
         if (servicoFoiLimpado) {
           try {
-            console.log("🗑️ Deletando serviço ao limpar campo:", editingItem.servicoId);
             await deleteServico(editingItem.servicoId);
             servicoIdAtualizar = null;
             toast({ title: "Serviço deletado!" });
@@ -248,9 +247,7 @@ export default function FinanceiroPage() {
               ativo: true,
             };
 
-            console.log("🔧 Criando serviço ao editar financeiro:", JSON.stringify(novoServico, null, 2));
             servicoIdAtualizar = await createServico(novoServico);
-            console.log("✅ Serviço criado ao editar com ID:", servicoIdAtualizar);
             toast({ title: "Serviço criado automaticamente!" });
             await refreshServicos();
           } catch (error) {
@@ -300,10 +297,7 @@ export default function FinanceiroPage() {
               ativo: true,
             };
 
-            console.log("🔧 Dados do serviço a ser criado:", JSON.stringify(novoServico, null, 2));
             servicoId = await createServico(novoServico);
-            console.log("✅ Serviço criado com ID:", servicoId);
-            console.log("✅ Dados enviados para Firebase:", novoServico);
             toast({ title: "Serviço criado automaticamente!" });
             
             // Atualizar serviços para refletir o novo serviço
@@ -340,7 +334,7 @@ export default function FinanceiroPage() {
           observacoes: formData.observacoes,
           ativo: true,
         });
-        console.log("✅ Financeiro criado com servicoId:", servicoId);
+
         // Garante que as listas estejam sincronizadas em tela
         await Promise.all([refreshFinanceiros(), refreshServicos()]);
         toast({ title: "Registro financeiro adicionado com sucesso!" });
@@ -596,17 +590,55 @@ export default function FinanceiroPage() {
     setItemsPerPage,
   } = usePagination(itemsOrdenados, 10);
 
-  const totaisMensalidades = filteredItems.reduce(
-    (acc, item) => {
-      if (item.status === "Pago") {
-        acc.recebidas += item.valorMensalidade;
-      } else {
-        acc.aReceber += item.valorMensalidade;
-      }
-      return acc;
-    },
-    { recebidas: 0, aReceber: 0 }
-  );
+  const totaisMensalidades = useMemo(() => {
+    const total = financeirosNormalizados.reduce(
+      (acc, item) => {
+        if (item.status === "Pago") {
+          acc.recebidas += item.valorMensalidade;
+        } else {
+          acc.aReceber += item.valorMensalidade;
+        }
+        return acc;
+      },
+      { recebidas: 0, aReceber: 0 }
+    );
+    console.log("Total financeiros:", total);
+    return total;
+  }, [financeirosNormalizados]);
+
+  // Cálculos detalhados para financeiros e serviços
+  const totaisDetalhados = useMemo(() => {
+    const financeirosRecebidos = financeirosNormalizados
+      .filter((f) => f.status === "Pago")
+      .reduce((acc, f) => acc + f.valorMensalidade, 0);
+
+    const financeirosAReceber = financeirosNormalizados
+      .filter((f) => f.status !== "Pago")
+      .reduce((acc, f) => acc + f.valorMensalidade, 0);
+
+    // Serviços pagos (tem financeiro vinculado e está pago)
+    const servicosRecebidos = financeirosNormalizados
+      .filter((f) => f.servicoId && f.status === "Pago")
+      .reduce((acc, f) => {
+        const servico = servicos.find((s) => s.id === f.servicoId);
+        return servico ? acc + servico.valorMensalidade : acc;
+      }, 0);
+
+    // Serviços a receber (tem financeiro vinculado e não está pago)
+    const servicosAReceber = financeirosNormalizados
+      .filter((f) => f.servicoId && f.status !== "Pago")
+      .reduce((acc, f) => {
+        const servico = servicos.find((s) => s.id === f.servicoId);
+        return servico ? acc + servico.valorMensalidade : acc;
+      }, 0);
+
+    return {
+      financeirosRecebidos,
+      financeirosAReceber,
+      servicosRecebidos,
+      servicosAReceber,
+    };
+  }, [financeirosNormalizados, servicos]);
 
   const STATUS_META: Record<Financeiro["status"], StatusMeta> = {
     Pago: {
@@ -1000,16 +1032,39 @@ export default function FinanceiroPage() {
         <div className="mb-4 rounded-lg bg-primary p-4 text-primary-foreground">
           <p className="text-lg font-semibold">
             Recebidas: R${" "}
-            {totaisMensalidades.recebidas.toLocaleString("pt-BR", {
+            {(totaisMensalidades.recebidas + totaisDetalhados.servicosRecebidos).toLocaleString("pt-BR", {
               minimumFractionDigits: 2,
             })}
           </p>
           <p className="text-sm">
             A receber: R${" "}
-            {totaisMensalidades.aReceber.toLocaleString("pt-BR", {
+            {(totaisMensalidades.aReceber + totaisDetalhados.servicosAReceber).toLocaleString("pt-BR", {
               minimumFractionDigits: 2,
             })}
           </p>
+          {/* Detalhamento por tipo */}
+          <div className="mt-3 pt-3 border-t border-primary-foreground/20 text-xs space-y-1">
+            <p>
+              Financeiros: R${" "}
+              {totaisDetalhados.financeirosRecebidos.toLocaleString("pt-BR", {
+                minimumFractionDigits: 2,
+              })}
+              {" | A receber: R$"}
+              {totaisDetalhados.financeirosAReceber.toLocaleString("pt-BR", {
+                minimumFractionDigits: 2,
+              })}
+            </p>
+            <p>
+              Serviços: R${" "}
+              {totaisDetalhados.servicosRecebidos.toLocaleString("pt-BR", {
+                minimumFractionDigits: 2,
+              })}
+              {" | A receber: R$"}
+              {totaisDetalhados.servicosAReceber.toLocaleString("pt-BR", {
+                minimumFractionDigits: 2,
+              })}
+            </p>
+          </div>
         </div>
 
         <div className="rounded-md border">

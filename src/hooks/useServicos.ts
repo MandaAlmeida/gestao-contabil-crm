@@ -102,9 +102,7 @@ export function useServicos() {
 
   const createServico = async (servico: Omit<Servico, "id" | "createdAt" | "updatedAt">) => {
     try {
-      console.log("🔧 useServicos.createServico: Criando serviço", servico);
       const id = await servicoService.createServico(servico);
-      console.log("✅ useServicos.createServico: Serviço criado com ID:", id);
 
       // Verificar se existe um financeiro para este cliente sem serviço vinculado
       const financeiroSemServico = financeiros.find(f =>
@@ -112,10 +110,8 @@ export function useServicos() {
       );
 
       if (financeiroSemServico) {
-        console.log("🔗 useServicos: Vinculando serviço ao financeiro:", financeiroSemServico.id);
         // Atualizar o registro financeiro com o ID do serviço recém-criado
         await updateFinanceiro(financeiroSemServico.id, { servicoId: id });
-        console.log("✅ useServicos: Financeiro vinculado ao serviço");
       }
 
       // Carrega os serviços novamente para refletir a mudança

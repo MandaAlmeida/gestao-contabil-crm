@@ -441,8 +441,11 @@ service cloud.firestore {
                       request.resource.data.viewedAt is string &&
                       request.resource.data.notificationId.size() > 0;
 
-      // Não permitir atualização ou exclusão (visualizações são imutáveis)
-      allow update, delete: if false;
+      // Permitir exclusão para usuários autenticados (necessário para limpar visualizações ao excluir notificações)
+      allow delete: if isAuthenticated();
+      
+      // Não permitir atualização (visualizações são imutáveis)
+      allow update: if false;
     }
     
     // Negar todas as outras operações por padrão
