@@ -1,27 +1,15 @@
 import { Financeiro } from "@/types/crm";
 
-const normalizarStatusAntigo = (status?: string): Financeiro["status"] => {
-  switch (status) {
-    case "Pago":
-      return "Recebido";
-    case "Pendente":
-      return "A Vencer";
-    case "Atrasado":
-    case "Cancelado":
-      return "Vencido";
-    case "Recebido":
-    case "A Vencer":
-    case "Vencido":
-      return status;
-    default:
-      return "A Vencer";
-  }
-};
-
 const startOfDay = (date: Date) => {
   const normalized = new Date(date);
   normalized.setHours(0, 0, 0, 0);
   return normalized;
+};
+
+const parseDate = (dateString: string) => {
+  // Converte string ISO (YYYY-MM-DD) para data no timezone local
+  const [year, month, day] = dateString.split('-').map(Number);
+  return new Date(year, month - 1, day, 0, 0, 0, 0);
 };
 
 const mesmoMesEAno = (dataA: Date, dataB: Date) =>
@@ -31,18 +19,18 @@ export const calcularStatusFinanceiro = (
   item: Pick<Financeiro, "status" | "dataPagamento" | "dataVencimento">
 ): Financeiro["status"] => {
   if (item.dataPagamento) {
-    return "Recebido";
+    return "Pago";
   }
 
   // Sem data de pagamento, nunca pode ser "Recebido"
   const hoje = startOfDay(new Date());
-  const vencimento = startOfDay(new Date(item.dataVencimento));
+  const vencimento = parseDate(item.dataVencimento);
 
   if (vencimento < hoje) {
     return "Vencido";
   }
 
-  return "A Vencer";
+  return "Pendente";
 };
 
 export const normalizarFinanceiros = (lista: Financeiro[]) => {

@@ -19,27 +19,7 @@ interface UsePushNotificationsReturn {
   refreshToken: () => Promise<void>;
 }
 
-/**
- * Hook para gerenciar notificações push com Firebase Cloud Messaging
- * 
- * @param onNotification - Callback opcional para lidar com notificações recebidas
- * @returns Objeto com estado e funções para gerenciar notificações push
- * 
- * @example
- * ```tsx
- * const { token, permission, requestPermission } = usePushNotifications((payload) => {
- *   console.log('Notificação recebida:', payload);
- * });
- * 
- * // Solicitar permissão ao usuário
- * await requestPermission();
- * 
- * // Salvar o token no backend para enviar notificações
- * if (token) {
- *   await saveTokenToBackend(token);
- * }
- * ```
- */
+
 export function usePushNotifications(
   onNotification?: NotificationCallback
 ): UsePushNotificationsReturn {
@@ -87,8 +67,7 @@ export function usePushNotifications(
         { scope: "/" }
       );
 
-      console.log("[usePushNotifications] Service Worker registrado:", registration);
-      return registration;
+      return registration;  
     } catch (err) {
       console.error("[usePushNotifications] Erro ao registrar Service Worker:", err);
       throw err;
@@ -124,7 +103,6 @@ export function usePushNotifications(
       });
 
       if (currentToken) {
-        console.log("[usePushNotifications] Token FCM obtido:", currentToken);
         setToken(currentToken);
         setError(null);
         return currentToken;
@@ -160,7 +138,6 @@ export function usePushNotifications(
       setPermission(result as NotificationPermission);
 
       if (result === "granted") {
-        console.log("[usePushNotifications] Permissão concedida");
         
         // Obter token FCM
         const fcmToken = await getMessagingToken();
@@ -212,8 +189,6 @@ export function usePushNotifications(
     }
 
     const unsubscribe = onMessage(messaging, (payload) => {
-      console.log("[usePushNotifications] Notificação recebida (foreground):", payload);
-
       // Chamar callback se fornecido
       if (onNotification) {
         onNotification(payload);

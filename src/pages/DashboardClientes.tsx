@@ -36,7 +36,6 @@ import {
   ChevronDown,
 } from "lucide-react";
 import { normalizarFinanceiros } from "@/lib/financeiro";
-import { normalizarServicos } from "@/lib/servicos";
 import { Separator } from "@/components/ui/separator";
 
 export default function DashboardClientes() {
@@ -45,6 +44,8 @@ export default function DashboardClientes() {
   const { financeiros: financeirosRaw } = useFinanceiro();
   const { servicos: servicosRaw } = useServicos();
   const { certificados } = useCertificados();
+
+  const financeiros = financeirosRaw;
   const { sintegras } = useSintegra();
   const { renovacoes } = useRenovacao();
   const [responsavelSelecionado, setResponsavelSelecionado] =
@@ -87,18 +88,21 @@ export default function DashboardClientes() {
     clienteIdsFiltrados.has(renovacao.clienteId)
   );
 
-  const servicosNormalizados = useMemo(
-    () => normalizarServicos(servicosRaw),
-    [servicosRaw]
-  );
+  const servicosNormalizados = servicosRaw;
 
-  const servicosFiltrados = servicosNormalizados.filter((servico) =>
-    clienteIdsFiltrados.has(servico.clienteId)
-  );
+
+  // Filtrar serviços da mesma forma que a página de Serviços
+  // Apenas pelo responsável do serviço, não pelos clientes
+  const servicosFiltrados = servicosNormalizados.filter((servico) => {
+    const matchesResponsavel = responsavelSelecionado === "todos" || 
+                                servico.responsavel === responsavelSelecionado;
+    
+    return matchesResponsavel;
+  });
 
   const totaisMensalidades = financeirosFiltrados.reduce(
     (acc, f) => {
-      if (f.status === "Recebido") {
+      if (f.status === "Pago") {
         acc.recebidas += f.valorMensalidade;
       } else {
         acc.aReceber += f.valorMensalidade;
@@ -108,9 +112,16 @@ export default function DashboardClientes() {
     { recebidas: 0, aReceber: 0 }
   );
 
+  // Serviços agora não têm status de pagamento - sempre são considerados "a receber"
+  // O status de pagamento está no financeiro
   const totaisServicos = servicosFiltrados.reduce(
     (acc, s) => {
-      if (s.status === "Recebido") {
+      // Verificar se o serviço foi pago no financeiro
+      const servicoPago = financeiros.some(f =>
+        f.servicoId === s.id && f.status === "Pago"
+      );
+
+      if (servicoPago) {
         acc.recebidas += s.valorMensalidade;
       } else {
         acc.aReceber += s.valorMensalidade;
@@ -121,7 +132,7 @@ export default function DashboardClientes() {
   );
 
   const servicosEmAberto = servicosFiltrados.filter(
-    (s) => s.status !== "Recebido"
+    (s) => !financeiros.some(f => f.servicoId === s.id && f.status === "Pago")
   ).length;
 
   const certificadosVencendo = certificadosFiltrados.filter((cert) => {
@@ -156,19 +167,20 @@ export default function DashboardClientes() {
     { recebidas: 0, aReceber: 0, emAberto: 0 }
   );
 
-  const financeirosEmAberto = financeirosFiltrados.filter(
-    (f) => f.status !== "Recebido"
+  const financeirosEmAberto = financeirosNormalizados.filter(
+    (f) => f.status !== "Pago"
   ).length;
 
-  const totalRecebidos = financeirosFiltrados.filter(
-    (f) => f.status === "Recebido"
+  const totalRecebidos = financeirosNormalizados.filter(
+    (f) => f.status === "Pago"
   ).length;
-  const totalAVencer = financeirosFiltrados.filter(
-    (f) => f.status === "A Vencer"
+  const totalAVencer = financeirosNormalizados.filter(
+    (f) => f.status === "Pendente"
   ).length;
-  const totalVencidos = financeirosFiltrados.filter(
+  const totalVencidos = financeirosNormalizados.filter(
     (f) => f.status === "Vencido"
   ).length;
+
 
   return (
     <Layout>
@@ -351,9 +363,14 @@ export default function DashboardClientes() {
               <FileCheck className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{sintegrasPendentes}</div>
+             <div className="text-2xl font-bold">
+               {sintegras.length}
+              </div>
               <p className="text-xs text-muted-foreground">
-                aguardando conclusão
+                Pendentes: {sintegrasPendentes}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Concluidos: {sintegras.length - sintegrasPendentes}
               </p>
             </CardContent>
           </Card>
@@ -496,18 +513,18 @@ export default function DashboardClientes() {
                 <Button
                   variant="outline"
                   className="w-full h-full rounded-none justify-between border-none p-4"
-                  onClick={() => navigate('/financeiro', { state: { statusFilter: 'Recebido', responsavelFilter: responsavelSelecionado } })}
+                  onClick={() => navigate('/financeiro', { state: { statusFilter: 'Pago', responsavelFilter: responsavelSelecionado } })}
                 >
-                  <span className="font-normal">Recebido</span>
+                  <span className="font-normal">Pagos</span>
                   <span className="font-medium">{totalRecebidos}</span>
                 </Button>
                 <Separator />
                 <Button
                   variant="outline"
                   className="w-full h-full rounded-none justify-between border-none p-4"
-                  onClick={() => navigate('/financeiro', { state: { statusFilter: 'A Vencer', responsavelFilter: responsavelSelecionado } })}
+                  onClick={() => navigate('/financeiro', { state: { statusFilter: 'Pendente', responsavelFilter: responsavelSelecionado } })}
                 >
-                  <span className="font-normal">A vencer</span>
+                  <span className="font-normal">Pendentes</span>
                   <span className="font-medium">{totalAVencer}</span>
                 </Button>
                 <Separator />
@@ -516,7 +533,7 @@ export default function DashboardClientes() {
                   className="w-full h-full rounded-none justify-between border-none p-4"
                   onClick={() => navigate('/financeiro', { state: { statusFilter: 'Vencido', responsavelFilter: responsavelSelecionado } })}
                 >
-                  <span className="font-normal">Vencido</span>
+                  <span className="font-normal">Vencidos</span>
                   <span className="font-medium">{totalVencidos}</span>
                 </Button>
               </div>

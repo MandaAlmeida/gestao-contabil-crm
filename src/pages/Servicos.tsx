@@ -3,6 +3,7 @@ import { Layout } from "@/components/Layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useClientes } from "@/hooks/useClientes";
+import { useFinanceiro } from "@/hooks/useFinanceiro";
 import { useConfirmationDialog } from "@/components/ConfirmationDialog";
 import { Servico } from "@/types/crm";
 import {
@@ -30,18 +31,8 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { NotificationButton } from "@/components/NotificationButton";
 import { NotificationPanel } from "@/components/NotificationPanel";
-import {
-  calcularStatusServico,
-  normalizarServicos,
-} from "@/lib/servicos";
-import {
-  useServicos,
-  adicionarMes,
-  removerMes,
-} from "@/hooks/useServicos";
+import { useServicos } from "@/hooks/useServicos";
 import { formatarDataBR } from "@/lib/utils";
-import { StatusButton, type StatusMeta } from "@/components/StatusButton";
-import { PaymentConfirmationDialog } from "@/components/PaymentConfirmationDialog";
 import { CheckCircle, Clock3, AlertTriangle } from "lucide-react";
 import { usePagination } from "@/hooks/usePagination";
 import {
@@ -57,13 +48,12 @@ import { useUsuarios } from "@/hooks/useUsuarios";
 
 export default function ServicosPage() {
   const { clientes } = useClientes();
+  const { financeiros } = useFinanceiro();
   const {
     servicos: servicosRaw,
     createServico,
     updateServico,
     deleteServico,
-    togglePagamento,
-    confirmarPagamento,
   } = useServicos();
   const {
     usuarios
@@ -73,24 +63,16 @@ export default function ServicosPage() {
   const [searchResponsavel, setSearchResponsavel] = useState("todos");
   const [filtroDataInicio, setFiltroDataInicio] = useState("");
   const [filtroDataFim, setFiltroDataFim] = useState("");
-  const [filtroStatus, setFiltroStatus] = useState<
-    Servico["status"] | "todos"
-  >("todos");
   const [ordenacao, setOrdenacao] = useState<{
-    campo: "clienteNome" | "dataVencimento" | "valorMensalidade" | "status";
+    campo: "clienteNome" | "dataVencimento" | "valorMensalidade";
     direcao: "asc" | "desc";
   }>({ campo: "dataVencimento", direcao: "asc" });
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<Servico | null>(null);
-  const [isPagamentoDialogOpen, setIsPagamentoDialogOpen] = useState(false);
-  const [itemParaPagamento, setItemParaPagamento] = useState<Servico | null>(null);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const { toast } = useToast();
 
-  const servicosNormalizados = useMemo(
-    () => normalizarServicos(servicosRaw),
-    [servicosRaw]
-  );
+  const servicosNormalizados = servicosRaw;
 
   // Lista de IDs de clientes que já têm registros de serviços
   const clientesComServico = useMemo(
@@ -138,8 +120,6 @@ export default function ServicosPage() {
     descricao: "",
     dataVencimento: "",
     valorMensalidade: "",
-    dataPagamento: "",
-    meioPagamento: "Pix" as Servico["meioPagamento"],
     observacoes: "",
   });
 
@@ -150,8 +130,6 @@ export default function ServicosPage() {
       descricao: "",
       dataVencimento: "",
       valorMensalidade: "",
-      dataPagamento: "",
-      meioPagamento: "Pix",
       observacoes: "",
     });
     setEditingItem(null);
@@ -176,8 +154,6 @@ export default function ServicosPage() {
       return;
     }
 
-    let dataVencimento = formData.dataVencimento;
-
     const valorMensalidadeNumber = parseFloat(formData.valorMensalidade);
     if (Number.isNaN(valorMensalidadeNumber)) {
       toast({
@@ -186,20 +162,6 @@ export default function ServicosPage() {
       });
       return;
     }
-    const dataPagamento = formData.dataPagamento
-      ? formData.dataPagamento
-      : null;
-
-    // Avanço automático da data de vencimento quando um pagamento é registrado
-    // Apenas se o item não estava como "Recebido" antes (ou seja, está registrando um novo pagamento)
-    if (dataPagamento && (!editingItem || editingItem.status !== "Recebido")) {
-      dataVencimento = adicionarMes(dataVencimento);
-    }
-    const status = calcularStatusServico({
-      status: editingItem?.status ?? "A Vencer",
-      dataPagamento,
-      dataVencimento,
-    });
 
     try {
       if (editingItem) {
@@ -209,11 +171,8 @@ export default function ServicosPage() {
           clienteCNPJ: cliente.cnpj,
           responsavel: responsavel,
           descricao: formData.descricao,
-          dataVencimento,
+          dataVencimento: formData.dataVencimento,
           valorMensalidade: valorMensalidadeNumber,
-          dataPagamento,
-          status,
-          meioPagamento: formData.meioPagamento,
           observacoes: formData.observacoes,
         });
         toast({ title: "Registro atualizado com sucesso!" });
@@ -224,11 +183,10 @@ export default function ServicosPage() {
           clienteCNPJ: cliente.cnpj,
           responsavel: responsavel,
           descricao: formData.descricao,
-          dataVencimento,
+          dataVencimento: formData.dataVencimento,
           valorMensalidade: valorMensalidadeNumber,
-          dataPagamento,
-          status,
-          meioPagamento: formData.meioPagamento,
+          status: "A Vencer" as const,
+          meioPagamento: "Pix" as const,
           observacoes: formData.observacoes,
           ativo: true,
         });
@@ -245,70 +203,6 @@ export default function ServicosPage() {
     }
   };
 
-  const handleTogglePagamento = async (item: Servico) => {
-    if (item.status === "Recebido") {
-      // Quando remove o pagamento, sempre volta exatamente 1 mês da data atual
-      // (já que o pagamento avançou 1 mês quando foi registrado)
-      const vencimentoAnterior = removerMes(item.dataVencimento);
-
-      // Calcula o status baseado na nova data de vencimento, sem considerar o status antigo
-      const statusAjustado = calcularStatusServico({
-        status: "A Vencer", // Força recalcular baseado apenas na data
-        dataPagamento: null,
-        dataVencimento: vencimentoAnterior,
-      });
-
-      try {
-        await updateServico(item.id, {
-          dataPagamento: null,
-          meioPagamento: "Pix", // Reset para valor padrão
-          dataVencimento: vencimentoAnterior,
-          status: statusAjustado,
-        });
-        toast({
-          title: "Pagamento removido.",
-          description:
-            statusAjustado === "A Vencer"
-              ? `${item.clienteNome} voltou a ficar pendente.`
-              : `${item.clienteNome} foi marcado como vencido.`,
-        });
-      } catch (error) {
-        toast({ title: "Erro ao remover pagamento", variant: "destructive" });
-      }
-      return;
-    }
-
-    // Abre modal para confirmar pagamento
-    setItemParaPagamento(item);
-    setIsPagamentoDialogOpen(true);
-  };
-
-  const handleConfirmarPagamento = async (data: {
-    dataPagamento: string;
-    meioPagamento: "Pix" | "Boleto";
-  }) => {
-    if (!itemParaPagamento) return;
-
-    try {
-      await confirmarPagamento(
-        itemParaPagamento,
-        data,
-        (title, description) => {
-          toast({
-            title,
-            description,
-          });
-        },
-        (title) => {
-          toast({ title, variant: "destructive" });
-        }
-      );
-      setIsPagamentoDialogOpen(false);
-      setItemParaPagamento(null);
-    } catch (error) {
-      // Erro já foi tratado no hook
-    }
-  };
 
   const handleEdit = (item: Servico) => {
     setEditingItem(item);
@@ -318,8 +212,6 @@ export default function ServicosPage() {
       descricao: item.descricao || "",
       dataVencimento: item.dataVencimento,
       valorMensalidade: item.valorMensalidade.toString(),
-      dataPagamento: item.dataPagamento ?? "",
-      meioPagamento: item.meioPagamento,
       observacoes: item.observacoes,
     });
     setIsDialogOpen(true);
@@ -334,7 +226,12 @@ export default function ServicosPage() {
           await deleteServico(id);
           toast({ title: "Registro excluído com sucesso!" });
         } catch (error) {
-          toast({ title: "Erro ao excluir registro", variant: "destructive" });
+          console.error(`Erro em handleDelete para serviço ${id}:`, error);
+          toast({ 
+            title: "Erro ao excluir registro", 
+            description: error instanceof Error ? error.message : "Erro desconhecido",
+            variant: "destructive" 
+          });
         }
       },
       {
@@ -361,15 +258,11 @@ export default function ServicosPage() {
       !filtroDataFim || itemData <= new Date(filtroDataFim);
 
     // Filtro por status
-    const matchesStatus =
-      filtroStatus === "todos" || item.status === filtroStatus;
-
     return (
       matchesSearch &&
       matchesResponsavel &&
       matchesDataInicio &&
-      matchesDataFim &&
-      matchesStatus
+      matchesDataFim
     );
   });
 
@@ -392,11 +285,6 @@ export default function ServicosPage() {
           break;
         case "valorMensalidade":
           comparacao = a.valorMensalidade - b.valorMensalidade;
-          break;
-        case "status":
-          comparacao = a.status.localeCompare(b.status, "pt-BR", {
-            sensitivity: "base",
-          });
           break;
       }
       
@@ -421,7 +309,12 @@ export default function ServicosPage() {
 
   const totaisMensalidades = filteredItems.reduce(
     (acc, item) => {
-      if (item.status === "Recebido") {
+      // Verificar se o serviço foi pago no financeiro
+      const servicoPago = financeiros.some(f =>
+        f.servicoId === item.id && f.status === "Pago"
+      );
+
+      if (servicoPago) {
         acc.recebidas += item.valorMensalidade;
       } else {
         acc.aReceber += item.valorMensalidade;
@@ -430,34 +323,6 @@ export default function ServicosPage() {
     },
     { recebidas: 0, aReceber: 0 }
   );
-
-  const STATUS_META: Record<Servico["status"], StatusMeta> = {
-    Recebido: {
-      label: "Pago",
-      className: "bg-success/10 text-success hover:bg-success/20",
-      icon: CheckCircle,
-    },
-    "A Vencer": {
-      label: "Pendente",
-      className: "bg-warning/10 text-warning hover:bg-warning/20",
-      icon: Clock3,
-    },
-    Vencido: {
-      label: "Vencido",
-      className: "bg-destructive/10 text-destructive hover:bg-destructive/20",
-      icon: AlertTriangle,
-    },
-  };
-
-  const getToggleTitle = (item: Servico) => {
-    if (item.status === "Recebido") {
-      return "Remover pagamento e retornar ao ciclo atual";
-    }
-    if (item.status === "Vencido") {
-      return "Registrar pagamento (vencido)";
-    }
-    return "Registrar pagamento";
-  };
 
   return (
     <Layout>
@@ -590,35 +455,6 @@ export default function ServicosPage() {
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="dataPagamento">Data de Pagamento</Label>
-                    <Input
-                      id="dataPagamento"
-                      type="date"
-                      value={formData.dataPagamento}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          dataPagamento: e.target.value,
-                        })
-                      }
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="meioPagamento">Meio de Pagamento</Label>
-                    <Select
-                      value={formData.meioPagamento}
-                      onValueChange={(value: Servico["meioPagamento"]) =>
-                        setFormData({ ...formData, meioPagamento: value })
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Pix">Pix</SelectItem>
-                        <SelectItem value="Boleto">Boleto</SelectItem>
-                      </SelectContent>
-                    </Select>
                   </div>
                 </div>
                 <div className="space-y-2">
@@ -649,21 +485,6 @@ export default function ServicosPage() {
         </div>
 
         {/* Modal de Confirmação de Pagamento */}
-        <PaymentConfirmationDialog
-          open={isPagamentoDialogOpen}
-          onOpenChange={(open) => {
-            setIsPagamentoDialogOpen(open);
-            if (!open) {
-              setItemParaPagamento(null);
-            }
-          }}
-          item={itemParaPagamento}
-          valor={itemParaPagamento?.valorMensalidade || 0}
-          clienteNome={itemParaPagamento?.clienteNome || ""}
-          onConfirm={handleConfirmarPagamento}
-          dataPagamentoInicial={itemParaPagamento?.dataPagamento || undefined}
-          meioPagamentoInicial={itemParaPagamento?.meioPagamento || "Pix"}
-        />
 
         <div className="mb-4 space-y-4">
           <div className="flex gap-4 items-end">
@@ -746,30 +567,6 @@ export default function ServicosPage() {
             </div>
             <div className="space-y-1">
               <Label
-                htmlFor="filtro-status"
-                className="text-xs text-muted-foreground"
-              >
-                Status
-              </Label>
-              <Select
-                value={filtroStatus}
-                onValueChange={(value) =>
-                  setFiltroStatus(value as Servico["status"] | "todos")
-                }
-              >
-                <SelectTrigger className="w-40">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="todos">Todos</SelectItem>
-                  <SelectItem value="Recebido">Recebido</SelectItem>
-                  <SelectItem value="A Vencer">A Vencer</SelectItem>
-                  <SelectItem value="Vencido">Vencido</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1">
-              <Label
                 htmlFor="ordenacao"
                 className="text-xs text-muted-foreground"
               >
@@ -779,7 +576,7 @@ export default function ServicosPage() {
                 value={`${ordenacao.campo}-${ordenacao.direcao}`}
                 onValueChange={(value) => {
                   const [campo, direcao] = value.split("-") as [
-                    "clienteNome" | "dataVencimento" | "valorMensalidade" | "status",
+                    "clienteNome" | "dataVencimento" | "valorMensalidade",
                     "asc" | "desc"
                   ];
                   setOrdenacao({ campo, direcao });
@@ -807,8 +604,6 @@ export default function ServicosPage() {
                   <SelectItem value="valorMensalidade-asc">
                     Valor (Menor)
                   </SelectItem>
-                  <SelectItem value="status-asc">Status (A-Z)</SelectItem>
-                  <SelectItem value="status-desc">Status (Z-A)</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -839,7 +634,6 @@ export default function ServicosPage() {
             )}
             {(filtroDataInicio ||
               filtroDataFim ||
-              filtroStatus !== "todos" ||
               searchResponsavel !== "todos") && (
               <div className="flex items-end">
                 <Button
@@ -848,7 +642,6 @@ export default function ServicosPage() {
                   onClick={() => {
                     setFiltroDataInicio("");
                     setFiltroDataFim("");
-                    setFiltroStatus("todos");
                     setSearchResponsavel("todos");
                   }}
                 >
@@ -884,8 +677,6 @@ export default function ServicosPage() {
                   Vencimento
                 </th>
                 <th className="p-3 text-left text-sm font-medium">Valor</th>
-                <th className="p-3 text-left text-sm font-medium">Status</th>
-                <th className="p-3 text-left text-sm font-medium">Pagamento</th>
                 <th className="p-3 text-left text-sm font-medium">Ações</th>
               </tr>
             </thead>
@@ -900,24 +691,6 @@ export default function ServicosPage() {
                     {item.valorMensalidade.toLocaleString("pt-BR", {
                       minimumFractionDigits: 2,
                     })}
-                  </td>
-                  <td className="p-3">
-                    <StatusButton
-                      status={item.status}
-                      statusMeta={STATUS_META}
-                      onClick={() => handleTogglePagamento(item)}
-                      title={getToggleTitle(item)}
-                    />
-                  </td>
-                  <td className="p-3">
-                    <div className="flex flex-col gap-1">
-                      <span>{item.meioPagamento}</span>
-                      <span className="text-xs text-muted-foreground">
-                        {item.dataPagamento
-                          ? formatarDataBR(item.dataPagamento)
-                          : "Sem registro"}
-                      </span>
-                    </div>
                   </td>
                   <td className="p-3">
                     <div className="flex gap-2">

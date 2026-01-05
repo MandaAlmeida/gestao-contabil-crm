@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
 import * as servicoService from "@/lib/firestore/servicos";
+import { useFinanceiro } from "./useFinanceiro";
+import { excluirNotificacoesItem } from "@/utils/notificacoes";
 import type { Servico } from "@/types/crm";
-import { calcularStatusServico } from "@/lib/servicos";
 
 /**
  * Adiciona um mês a uma data no formato YYYY-MM-DD
@@ -79,6 +80,7 @@ export function useServicos() {
   const [servicos, setServicos] = useState<Servico[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
+  const { financeiros, updateFinanceiro } = useFinanceiro();
 
   const loadServicos = async () => {
     try {
@@ -87,8 +89,8 @@ export function useServicos() {
       const data = await servicoService.getServicos();
       setServicos(data);
     } catch (err) {
+      console.error("🔄 useServicos: Erro ao carregar serviços:", err);
       setError(err instanceof Error ? err : new Error("Erro ao carregar serviços"));
-      console.error("Erro ao carregar serviços:", err);
     } finally {
       setLoading(false);
     }
@@ -101,9 +103,22 @@ export function useServicos() {
   const createServico = async (servico: Omit<Servico, "id" | "createdAt" | "updatedAt">) => {
     try {
       const id = await servicoService.createServico(servico);
+
+      // Verificar se existe registro financeiro para este cliente sem serviço vinculado
+      const financeiroSemServico = financeiros.find(f =>
+        f.clienteId === servico.clienteId && !f.servicoId
+      );
+
+      if (financeiroSemServico) {
+        // Atualizar o registro financeiro com o ID do serviço recém-criado
+        await updateFinanceiro(financeiroSemServico.id, { servicoId: id });
+      } 
+
       await loadServicos();
+
       return id;
     } catch (err) {
+      console.error("Erro em useServicos.createServico:", err);
       setError(err instanceof Error ? err : new Error("Erro ao criar serviço"));
       throw err;
     }
@@ -111,6 +126,12 @@ export function useServicos() {
 
   const updateServico = async (id: string, updates: Partial<Omit<Servico, "id" | "createdAt">>) => {
     try {
+      // Verificar se o status está sendo alterado para "Recebido"
+      if (updates.status === "Recebido") {
+        // Buscar e excluir notificações relacionadas ao serviço
+        await excluirNotificacoesItem(id, "servico");
+      }
+
       await servicoService.updateServico(id, updates);
       await loadServicos();
     } catch (err) {
@@ -121,91 +142,22 @@ export function useServicos() {
 
   const deleteServico = async (id: string) => {
     try {
+      // Excluir notificações relacionadas antes de excluir o serviço
+      await excluirNotificacoesItem(id, "servico");
+
       await servicoService.deleteServico(id);
+      
+      // Pequeno delay para garantir que o Firestore processou a atualização
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
       await loadServicos();
     } catch (err) {
+      console.error("Erro ao deletar serviço:", err);
       setError(err instanceof Error ? err : new Error("Erro ao deletar serviço"));
       throw err;
     }
   };
 
-  const togglePagamento = async (
-    item: Servico,
-    onSuccess?: (message: string, description?: string) => void,
-    onError?: (message: string) => void
-  ) => {
-    if (item.status === "Recebido") {
-      // Quando remove o pagamento, sempre volta exatamente 1 mês da data atual
-      // (já que o pagamento avançou 1 mês quando foi registrado)
-      const vencimentoAnterior = removerMes(item.dataVencimento);
-
-      // Calcula o status baseado na nova data de vencimento, sem considerar o status antigo
-      const statusAjustado = calcularStatusServico({
-        status: "A Vencer", // Força recalcular baseado apenas na data
-        dataPagamento: null,
-        dataVencimento: vencimentoAnterior,
-      });
-
-      try {
-        await updateServico(item.id, {
-          dataPagamento: null,
-          meioPagamento: "Pix", // Reset para valor padrão
-          dataVencimento: vencimentoAnterior,
-          status: statusAjustado,
-        });
-
-        if (onSuccess) {
-          onSuccess(
-            "Pagamento removido.",
-            statusAjustado === "A Vencer"
-              ? `${item.clienteNome} voltou a ficar pendente.`
-              : `${item.clienteNome} foi marcado como vencido.`
-          );
-        }
-      } catch (error) {
-        if (onError) {
-          onError("Erro ao remover pagamento");
-        }
-        throw error;
-      }
-      return { shouldOpenModal: false };
-    }
-
-    return { shouldOpenModal: true };
-  };
-
-  const confirmarPagamento = async (
-    item: Servico,
-    data: {
-      dataPagamento: string;
-      meioPagamento: "Pix" | "Boleto";
-    },
-    onSuccess?: (message: string, description?: string) => void,
-    onError?: (message: string) => void
-  ) => {
-    const novoVencimento = adicionarMes(item.dataVencimento);
-
-    try {
-      await updateServico(item.id, {
-        dataPagamento: data.dataPagamento,
-        dataVencimento: novoVencimento,
-        status: "Recebido",
-        meioPagamento: data.meioPagamento,
-      });
-      
-      if (onSuccess) {
-        onSuccess(
-          "Pagamento registrado!",
-          `${item.clienteNome} foi marcado como pago.`
-        );
-      }
-    } catch (error) {
-      if (onError) {
-        onError("Erro ao registrar pagamento");
-      }
-      throw error;
-    }
-  };
 
   return {
     servicos,
@@ -214,8 +166,6 @@ export function useServicos() {
     createServico,
     updateServico,
     deleteServico,
-    togglePagamento,
-    confirmarPagamento,
     refresh: loadServicos,
   };
 }

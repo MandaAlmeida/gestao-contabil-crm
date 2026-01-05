@@ -93,6 +93,9 @@ service cloud.firestore {
     
     // ==================== FINANCEIRO ====================
     match /financeiro/{financeiroId} {
+      // Campo valorServico: opcional, pode ser string ou null
+      // Usado para armazenar o valor do serviço vinculado ao financeiro
+
       // Permitir leitura para usuários autenticados
       allow read: if isAuthenticated();
       
@@ -107,6 +110,9 @@ service cloud.firestore {
                       request.resource.data.status is string &&
                       request.resource.data.meioPagamento is string &&
                       request.resource.data.observacoes is string &&
+                      (!('valorServico' in request.resource.data) ||
+                       request.resource.data.valorServico is string ||
+                       request.resource.data.valorServico == null) &&
                       request.resource.data.clienteId.size() > 0 &&
                       request.resource.data.status in ['Recebido', 'A Vencer', 'Vencido'] &&
                       request.resource.data.meioPagamento in ['Pix', 'Boleto'] &&
@@ -124,6 +130,9 @@ service cloud.firestore {
                       request.resource.data.status is string &&
                       request.resource.data.meioPagamento is string &&
                       request.resource.data.observacoes is string &&
+                      (!('valorServico' in request.resource.data) ||
+                       request.resource.data.valorServico is string ||
+                       request.resource.data.valorServico == null) &&
                       request.resource.data.clienteId.size() > 0 &&
                       request.resource.data.status in ['Recebido', 'A Vencer', 'Vencido'] &&
                       request.resource.data.meioPagamento in ['Pix', 'Boleto'] &&

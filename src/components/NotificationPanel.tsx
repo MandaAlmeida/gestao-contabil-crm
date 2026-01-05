@@ -40,7 +40,7 @@ interface NotificationPanelProps {
 
 export function NotificationPanel({ isOpen, onToggle, filterBy = ["all"] }: NotificationPanelProps) {
   const { user } = useAuth();
-  const { notifications, markAsViewed, markAllAsViewed } = useNotificationsData(filterBy);
+  const { notifications, markAsViewed, markAllAsViewed, markingAsViewed } = useNotificationsData(filterBy);
   const navigate = useNavigate();
 
   const navigateToItem = (notification: NotificationItem) => {
@@ -176,8 +176,10 @@ export function NotificationPanel({ isOpen, onToggle, filterBy = ["all"] }: Noti
                                 variant="outline"
                                 className={`text-xs ${getPriorityColor(notification.priority)}`}
                               >
-                                {notification.daysRemaining <= 0
+                                {notification.daysRemaining < 0
                                   ? "Vencido"
+                                  : notification.daysRemaining === 0
+                                  ? "Hoje"
                                   : `${notification.daysRemaining}d`}
                               </Badge>
                             </div>
@@ -190,11 +192,24 @@ export function NotificationPanel({ isOpen, onToggle, filterBy = ["all"] }: Noti
                             <Button
                               variant="ghost"
                               size="sm"
-                              onClick={() => markAsViewed(notification.id)}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                markAsViewed(notification.id);
+                              }}
+                              disabled={markingAsViewed.has(notification.id)}
                               className="h-6 px-2 text-xs text-muted-foreground hover:text-foreground"
                             >
+                              {markingAsViewed.has(notification.id) ? (
+                                <>
+                                  <RefreshCw className="h-3 w-3 mr-1 animate-spin" />
+                                  Marcando...
+                                </>
+                              ) : (
+                                <>
                               <Eye className="h-3 w-3 mr-1" />
                               Marcar como visto
+                                </>
+                              )}
                             </Button>
                           </div>
                         </div>

@@ -68,11 +68,6 @@ export function useNotificacoesAutomaticas() {
 
         // Verificar se já enviou notificações hoje
         const ultimoEnvio = localStorage.getItem("ultimoEnvioNotificacoes");
-        if (ultimoEnvio === hojeStr) {
-          console.log("[Notificações] Já enviadas hoje");
-          return;
-        }
-
         const notificacoesEnviadas: string[] = [];
 
         // 1. CERTIFICADOS VENCENDO
@@ -111,7 +106,7 @@ export function useNotificacoesAutomaticas() {
         // 2. PAGAMENTOS VENCENDO/VENCIDOS
         if (usuario.notificacoesPagamentos && financeiros.length > 0) {
           financeiros.forEach((pag) => {
-            if (!pag.ativo || pag.status === "Recebido") return;
+            if (!pag.ativo || pag.status === "Pago") return;
 
             const dataVenc = new Date(pag.dataVencimento);
             dataVenc.setHours(0, 0, 0, 0);
@@ -172,7 +167,13 @@ export function useNotificacoesAutomaticas() {
         // 3. SERVIÇOS VENCENDO/VENCIDOS
         if (usuario.notificacoesPagamentos && servicos.length > 0) {
           servicos.forEach((serv) => {
-            if (!serv.ativo || serv.status === "Recebido") return;
+            if (!serv.ativo) return;
+
+            // Verificar se o serviço já foi pago (tem financeiro com status "Recebido")
+            const servicoPago = financeiros.some(fin =>
+              fin.servicoId === serv.id && fin.status === "Pago"
+            );
+            if (servicoPago) return;
 
             const dataVenc = new Date(serv.dataVencimento);
             dataVenc.setHours(0, 0, 0, 0);
@@ -299,9 +300,6 @@ export function useNotificacoesAutomaticas() {
         // Marcar como enviado hoje
         if (notificacoesEnviadas.length > 0) {
           localStorage.setItem("ultimoEnvioNotificacoes", hojeStr);
-          console.log(
-            `[Notificações] ${notificacoesEnviadas.length} notificações enviadas`
-          );
         }
       } catch (error) {
         console.error("[Notificações] Erro ao verificar:", error);

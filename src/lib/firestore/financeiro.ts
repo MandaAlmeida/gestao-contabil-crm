@@ -20,8 +20,8 @@ export async function getFinanceiros(): Promise<Financeiro[]> {
     .map((doc) => ({
       id: doc.id,
       ...doc.data(),
-    }))
-    .filter((financeiro) => financeiro.ativo !== false) as Financeiro[];
+    } as Financeiro))
+    .filter((financeiro) => financeiro.ativo !== false);
 }
 
 export async function getFinanceiro(id: string): Promise<Financeiro | null> {

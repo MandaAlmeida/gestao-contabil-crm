@@ -30,10 +30,12 @@ export interface Financeiro {
   clienteCNPJ: string;
   dataVencimento: string;
   valorMensalidade: number;
-  status: "Recebido" | "A Vencer" | "Vencido";
+  status: "Pago" | "Pendente" | "Vencido";
   dataPagamento?: string | null;
-  meioPagamento: "Pix" | "Boleto";
+  meioPagamento?: "Pix" | "Boleto";
+  servicoId?: string | null; // Link para serviço se for cobrança de serviço
   observacoes: string;
+  valorServico?: string | null;
   ativo: boolean;
   createdAt: string;
   updatedAt: string;
@@ -97,7 +99,6 @@ export interface Servico {
   dataVencimento: string;
   valorMensalidade: number;
   status: "Recebido" | "A Vencer" | "Vencido";
-  dataPagamento?: string | null;
   meioPagamento: "Pix" | "Boleto";
   observacoes: string;
   ativo: boolean;

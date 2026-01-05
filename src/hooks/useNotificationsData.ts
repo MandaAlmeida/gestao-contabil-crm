@@ -17,6 +17,7 @@ import {
   addDoc,
   updateDoc,
   deleteDoc,
+  onSnapshot,
   Timestamp
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
@@ -29,6 +30,7 @@ export function useNotificationsData(filterBy: NotificationType[] = ["all"]): {
   markAsViewed: (notificationId: string) => Promise<void>;
   markAllAsViewed: () => Promise<void>;
   loading: boolean;
+  markingAsViewed: Set<string>;
 } {
   const { user } = useAuth();
   const { certificados } = useCertificados();
@@ -41,6 +43,13 @@ export function useNotificationsData(filterBy: NotificationType[] = ["all"]): {
   const [persistentNotifications, setPersistentNotifications] = useState<PersistentNotification[]>([]);
   const [userViews, setUserViews] = useState<Set<string>>(new Set()); // IDs das notificações visualizadas pelo usuário atual
   const [loading, setLoading] = useState(true);
+  const [markingAsViewed, setMarkingAsViewed] = useState<Set<string>>(new Set()); // IDs sendo marcados como vistos
+
+  // Função auxiliar para parsear data ISO (YYYY-MM-DD) para data no timezone local
+  const parseDate = (dateString: string): Date => {
+    const [year, month, day] = dateString.split('-').map(Number);
+    return new Date(year, month - 1, day, 0, 0, 0, 0);
+  };
 
   // Função para carregar visualizações do usuário atual
   const loadUserViews = async () => {
@@ -80,19 +89,18 @@ export function useNotificationsData(filterBy: NotificationType[] = ["all"]): {
 
       const deletePromises: Promise<void>[] = [];
 
-      // Filtrar no cliente notificações antigas
+      // Filtrar no cliente notificações antigas e de itens inexistentes
       querySnapshot.docs.forEach((doc) => {
         const notification = doc.data() as PersistentNotification;
+        
+        // Verificar se notificação é antiga
         if (notification.createdAt < thirtyDaysAgo.toISOString()) {
           deletePromises.push(deleteDoc(doc.ref));
         }
       });
 
-      await Promise.all(deletePromises);
 
-      if (deletePromises.length > 0) {
-        console.log(`Limpadas ${deletePromises.length} notificações antigas`);
-      }
+      await Promise.all(deletePromises);
     } catch (error) {
       console.error("Erro ao limpar notificações antigas:", error);
     }
@@ -128,11 +136,10 @@ export function useNotificationsData(filterBy: NotificationType[] = ["all"]): {
           deletePromises.push(deleteDoc(docSnap.ref));
         } else {
           // Verificar se ainda atende aos critérios de notificação
-          const dataDespesa = new Date(despesa.data);
-          dataDespesa.setHours(0, 0, 0, 0);
+          const dataDespesa = parseDate(despesa.data);
           const diasDiferenca = Math.ceil((dataDespesa.getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24));
 
-          const shouldNotify = diasDiferenca < 0 || [3, 7, 15, 30].includes(diasDiferenca);
+          const shouldNotify = diasDiferenca < 0 || [1, 3, 7, 15, 30].includes(diasDiferenca);
 
           if (!shouldNotify || despesa.pago || !despesa.ativo) {
             // Não atende mais aos critérios, remover notificação
@@ -143,9 +150,6 @@ export function useNotificationsData(filterBy: NotificationType[] = ["all"]): {
 
       await Promise.all(deletePromises);
 
-      if (deletePromises.length > 0) {
-        console.log(`Limpadas ${deletePromises.length} notificações de despesas irrelevantes`);
-      }
     } catch (error) {
       console.error("Erro ao limpar notificações irrelevantes de despesas:", error);
     }
@@ -195,9 +199,6 @@ export function useNotificationsData(filterBy: NotificationType[] = ["all"]): {
               return newSet;
             });
           }
-          console.log(`Notificação atualizada e desmarcada como vista para item ${notificationData.itemId}: ${existingData.daysRemaining} -> ${notificationData.daysRemaining} dias`);
-        } else {
-          console.log(`Notificação atualizada para item ${notificationData.itemId}: ${existingData.daysRemaining} -> ${notificationData.daysRemaining} dias`);
         }
       } else {
         // Criar nova notificação
@@ -208,7 +209,6 @@ export function useNotificationsData(filterBy: NotificationType[] = ["all"]): {
         };
 
         const docRef = await addDoc(collection(db, "notifications"), newNotification);
-        console.log(`Nova notificação criada para item ${notificationData.itemId} com ID: ${docRef.id}`);
       }
     } catch (error) {
       console.error("Erro ao salvar notificação:", error);
@@ -290,10 +290,6 @@ export function useNotificationsData(filterBy: NotificationType[] = ["all"]): {
       });
 
       await Promise.all(deletePromises);
-
-      if (deletePromises.length > 0) {
-        console.log(`Removidas ${deletePromises.length} notificações duplicadas`);
-      }
     } catch (error) {
       console.error("Erro ao limpar notificações duplicadas:", error);
     }
@@ -314,7 +310,6 @@ export function useNotificationsData(filterBy: NotificationType[] = ["all"]): {
       const deletePromises = querySnapshot.docs.map(doc => deleteDoc(doc.ref));
 
       await Promise.all(deletePromises);
-      console.log(`Removidas ${deletePromises.length} notificações de despesas`);
 
       // Recarregar notificações
       await loadPersistentNotifications();
@@ -327,10 +322,19 @@ export function useNotificationsData(filterBy: NotificationType[] = ["all"]): {
   const generateAndSaveNotifications = async () => {
     if (!user || loading) return;
 
-    // Data atual no horário brasileiro (UTC-3)
-    const hoje = new Date();
-    hoje.setHours(hoje.getHours() - 3); // Ajusta para horário brasileiro
-    hoje.setHours(0, 0, 0, 0);
+    // Calcular "hoje" no fuso horário local
+    const agora = new Date();
+    const hoje = new Date(agora.getFullYear(), agora.getMonth(), agora.getDate());
+    
+    // Função auxiliar para verificar se uma data é hoje
+    const isHoje = (data: Date): boolean => {
+      const mesmaData = data.getFullYear() === hoje.getFullYear() &&
+             data.getMonth() === hoje.getMonth() &&
+             data.getDate() === hoje.getDate();
+      
+      
+      return mesmaData;
+    };
 
     const notificationPromises: Promise<void>[] = [];
 
@@ -338,20 +342,22 @@ export function useNotificationsData(filterBy: NotificationType[] = ["all"]): {
     certificados.forEach((cert) => {
       if (!cert.ativo) return;
 
-      const dataVenc = new Date(cert.dataVencimento);
-      dataVenc.setHours(0, 0, 0, 0);
+      const dataVenc = parseDate(cert.dataVencimento);
       const diasRestantes = Math.ceil((dataVenc.getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24));
-
+      const vendeHoje = isHoje(dataVenc);
+      
       // Sempre notificar certificados vencidos ou próximos do vencimento
-      if (diasRestantes < 0 || [3, 7, 15, 30].includes(diasRestantes)) {
+      if (diasRestantes < 0 || vendeHoje || [1, 3, 7, 15, 30].includes(diasRestantes)) {
         const notificationData = {
           userId: user.uid,
           itemId: `cert-${cert.id}`,
+          pureItemId: cert.id,
           type: "certificado" as NotificationType,
-          title: diasRestantes < 0 ? "Certificado Vencido" : "Certificado a Vencer",
-          message: `Cliente: ${cert.clienteNome} - ${diasRestantes < 0 ? `Vencido há ${Math.abs(diasRestantes)} dias` : `Vence em ${diasRestantes} dia${diasRestantes !== 1 ? 's' : ''}`}`,
-          daysRemaining: diasRestantes,
+          title: diasRestantes < 0 ? "Certificado Vencido" : vendeHoje ? "Certificado Vence Hoje" : "Certificado a Vencer",
+          message: `Cliente: ${cert.clienteNome} - ${diasRestantes < 0 ? `Vencido há ${Math.abs(diasRestantes)} dias` : vendeHoje ? 'Vence hoje' : `Vence em ${diasRestantes} dia${diasRestantes !== 1 ? 's' : ''}`}`,
+          daysRemaining: vendeHoje ? 0 : diasRestantes,
           priority: (diasRestantes < 0 ? "high" : diasRestantes <= 7 ? "high" : "medium") as "high" | "medium",
+          clienteId: cert.clienteId,
           clienteNome: cert.clienteNome
         };
 
@@ -361,22 +367,24 @@ export function useNotificationsData(filterBy: NotificationType[] = ["all"]): {
 
     // Pagamentos vencendo/vencidos
     financeiros.forEach((pag) => {
-      if (!pag.ativo || pag.status === "Recebido") return;
+      if (!pag.ativo || pag.status === "Pago") return;
 
-      const dataVenc = new Date(pag.dataVencimento);
-      dataVenc.setHours(0, 0, 0, 0);
+      const dataVenc = parseDate(pag.dataVencimento);
       const diasDiferenca = Math.ceil((dataVenc.getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24));
+      const vendeHoje = isHoje(dataVenc);
 
-      // Sempre notificar pagamentos vencidos ou próximos do vencimento (apenas 3 dias)
-      if (diasDiferenca < 0 || [3].includes(diasDiferenca)) {
+      // Sempre notificar pagamentos vencidos ou próximos do vencimento
+      if (diasDiferenca < 0 || vendeHoje || [1, 3].includes(diasDiferenca)) {
         const notificationData = {
           userId: user.uid,
           itemId: `fin-${pag.id}`,
+          pureItemId: pag.id,
           type: "pagamento" as NotificationType,
-          title: diasDiferenca < 0 ? "Pagamento Vencido" : "Pagamento a Vencer",
-          message: `R$ ${pag.valorMensalidade.toFixed(2)} - ${diasDiferenca < 0 ? `Vencido há ${Math.abs(diasDiferenca)} dias` : `Vence em ${diasDiferenca} dias`}`,
-          daysRemaining: diasDiferenca,
+          title: diasDiferenca < 0 ? "Pagamento Vencido" : vendeHoje ? "Pagamento Vence Hoje" : "Pagamento a Vencer",
+          message: `R$ ${pag.valorMensalidade.toFixed(2)} - ${diasDiferenca < 0 ? `Vencido há ${Math.abs(diasDiferenca)} dias` : vendeHoje ? 'Vence hoje' : `Vence em ${diasDiferenca} dias`}`,
+          daysRemaining: vendeHoje ? 0 : diasDiferenca,
           priority: (diasDiferenca < 0 ? "high" : diasDiferenca <= 7 ? "high" : "medium") as "high" | "medium",
+          clienteId: pag.clienteId,
           clienteNome: pag.clienteNome
         };
 
@@ -386,22 +394,24 @@ export function useNotificationsData(filterBy: NotificationType[] = ["all"]): {
 
     // Serviços vencendo/vencidos
     servicos.forEach((serv) => {
-      if (!serv.ativo || serv.status === "Recebido") return;
+      if (!serv.ativo) return;
 
-      const dataVenc = new Date(serv.dataVencimento);
-      dataVenc.setHours(0, 0, 0, 0);
+      const dataVenc = parseDate(serv.dataVencimento);
       const diasDiferenca = Math.ceil((dataVenc.getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24));
+      const vendeHoje = isHoje(dataVenc);
 
-      // Sempre notificar serviços vencidos ou próximos do vencimento (apenas 3 dias)
-      if (diasDiferenca < 0 || [3].includes(diasDiferenca)) {
+      // Sempre notificar serviços vencidos ou próximos do vencimento
+      if (diasDiferenca < 0 || vendeHoje || [1, 3].includes(diasDiferenca)) {
         const notificationData = {
           userId: user.uid,
           itemId: `serv-${serv.id}`,
+          pureItemId: serv.id,
           type: "servico" as NotificationType,
-          title: diasDiferenca < 0 ? "Serviço Vencido" : "Serviço a Vencer",
-          message: `R$ ${serv.valorMensalidade.toFixed(2)} - ${diasDiferenca < 0 ? `Vencido há ${Math.abs(diasDiferenca)} dias` : `Vence em ${diasDiferenca} dias`}`,
-          daysRemaining: diasDiferenca,
+          title: diasDiferenca < 0 ? "Serviço Vencido" : vendeHoje ? "Serviço Vence Hoje" : "Serviço a Vencer",
+          message: `R$ ${serv.valorMensalidade.toFixed(2)} - ${diasDiferenca < 0 ? `Vencido há ${Math.abs(diasDiferenca)} dias` : vendeHoje ? 'Vence hoje' : `Vence em ${diasDiferenca} dias`}`,
+          daysRemaining: vendeHoje ? 0 : diasDiferenca,
           priority: (diasDiferenca < 0 ? "high" : diasDiferenca <= 7 ? "high" : "medium") as "high" | "medium",
+          clienteId: serv.clienteId,
           clienteNome: serv.clienteNome
         };
 
@@ -413,20 +423,24 @@ export function useNotificationsData(filterBy: NotificationType[] = ["all"]): {
     renovacoes.forEach((ren) => {
       if (!ren.ativo || !["Pendente", "Avisado", "Em Negociação"].includes(ren.status)) return;
 
-      const dataRen = new Date(ren.dataRenovacao);
-      dataRen.setHours(0, 0, 0, 0);
-      const diasRestantes = Math.ceil((dataRen.getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24));
+     const dataRen = parseDate(ren.dataRenovacao);
+
+      // Comparar apenas dias (diferença em dias inteiros)
+      const diffMs = dataRen.getTime() - hoje.getTime();
+      const diasRestantes = Math.round(diffMs / (1000 * 60 * 60 * 24)); // Usar round em vez de ceil
 
       // Sempre notificar renovações pendentes, especialmente quando já passaram da data
-      if (diasRestantes <= 0 || [3, 7, 15, 30].includes(diasRestantes)) {
+      if (diasRestantes <= 0 || [1, 3, 7, 15, 30].includes(diasRestantes)) {
         const notificationData = {
           userId: user.uid,
           itemId: `ren-${ren.id}`,
+          pureItemId: ren.id,
           type: "renovacao" as NotificationType,
           title: diasRestantes < 0 ? "Renovação Atrasada" : "Renovação Pendente",
           message: `${diasRestantes === 0 ? 'Hoje' : diasRestantes === 1 ? 'Amanhã' : diasRestantes < 0 ? `Atrasada há ${Math.abs(diasRestantes)} dias` : `Em ${diasRestantes} dias`} - Status: ${ren.status}`,
           daysRemaining: diasRestantes,
           priority: (diasRestantes < 0 ? "high" : diasRestantes <= 7 ? "high" : "medium") as "high" | "medium",
+          clienteId: ren.clienteId,
           clienteNome: ren.clienteNome
         };
 
@@ -438,20 +452,22 @@ export function useNotificationsData(filterBy: NotificationType[] = ["all"]): {
     sintegras.forEach((sin) => {
       if (!sin.ativo || sin.status !== "Pendente") return;
 
-      const dataPrazo = new Date(sin.dataPrazo);
-      dataPrazo.setHours(0, 0, 0, 0);
+      const dataPrazo = parseDate(sin.dataPrazo);
       const diasRestantes = Math.ceil((dataPrazo.getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24));
+      const vendeHoje = isHoje(dataPrazo);
 
-      // Sempre notificar sintegra vencida ou próxima do prazo (15, 7 e 3 dias)
-      if (diasRestantes <= 0 || [3, 7, 15].includes(diasRestantes)) {
+      // Sempre notificar sintegra vencida ou próxima do prazo (15, 7, 3 e 1 dias)
+      if (diasRestantes < 0 || vendeHoje || [1, 3, 7, 15].includes(diasRestantes)) {
         const notificationData = {
           userId: user.uid,
           itemId: `sin-${sin.id}`,
+          pureItemId: sin.id,
           type: "sintegra" as NotificationType,
-          title: diasRestantes < 0 ? "Sintegra Vencida" : "Sintegra Pendente",
-          message: `Cliente: ${sin.clienteNome} - ${diasRestantes < 0 ? `Vencida há ${Math.abs(diasRestantes)} dias` : `Prazo em ${diasRestantes} dia${diasRestantes !== 1 ? 's' : ''}`}`,
-          daysRemaining: diasRestantes,
+          title: diasRestantes < 0 ? "Sintegra Vencida" : vendeHoje ? "Sintegra Vence Hoje" : "Sintegra Pendente",
+          message: `Cliente: ${sin.clienteNome} - ${diasRestantes < 0 ? `Vencida há ${Math.abs(diasRestantes)} dias` : vendeHoje ? 'Vence hoje' : `Prazo em ${diasRestantes} dia${diasRestantes !== 1 ? 's' : ''}`}`,
+          daysRemaining: vendeHoje ? 0 : diasRestantes,
           priority: (diasRestantes < 0 ? "high" : diasRestantes <= 7 ? "high" : "medium") as "high" | "medium",
+          clienteId: sin.clienteId,
           clienteNome: sin.clienteNome
         };
 
@@ -463,20 +479,22 @@ export function useNotificationsData(filterBy: NotificationType[] = ["all"]): {
     despesas.forEach((despesa) => {
       if (!despesa.ativo || despesa.pago) return;
 
-      const dataDespesa = new Date(despesa.data);
-      dataDespesa.setHours(0, 0, 0, 0);
+      const dataDespesa = parseDate(despesa.data);
       const diasDiferenca = Math.ceil((dataDespesa.getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24));
+      const vendeHoje = isHoje(dataDespesa);
 
-      // Sempre notificar despesas vencidas ou próximas do vencimento (apenas 3 dias)
-      if (diasDiferenca < 0 || [3].includes(diasDiferenca)) {
+      // Sempre notificar despesas vencidas ou próximas do vencimento
+      if (diasDiferenca < 0 || vendeHoje || [1, 3].includes(diasDiferenca)) {
         const notificationData = {
           userId: user.uid,
           itemId: `despesa-${despesa.id}`,
+          pureItemId: despesa.id,
           type: "despesa" as NotificationType,
-          title: diasDiferenca < 0 ? "Despesa Vencida" : "Despesa a Vencer",
-          message: `R$ ${despesa.valor.toFixed(2)} - ${despesa.descricao} - ${diasDiferenca < 0 ? `Vencida há ${Math.abs(diasDiferenca)} dias` : `Vence em ${diasDiferenca} dias`}`,
-          daysRemaining: diasDiferenca,
+          title: diasDiferenca < 0 ? "Despesa Vencida" : vendeHoje ? "Despesa Vence Hoje" : "Despesa a Vencer",
+          message: `R$ ${despesa.valor.toFixed(2)} - ${despesa.descricao} - ${diasDiferenca < 0 ? `Vencida há ${Math.abs(diasDiferenca)} dias` : vendeHoje ? 'Vence hoje' : `Vence em ${diasDiferenca} dias`}`,
+          daysRemaining: vendeHoje ? 0 : diasDiferenca,
           priority: (diasDiferenca < 0 ? "high" : diasDiferenca <= 7 ? "high" : "medium") as "high" | "medium",
+          clienteId: "", // Despesas não têm cliente específico
           clienteNome: despesa.contabilidade || "Sem contabilidade"
         };
 
@@ -499,10 +517,46 @@ export function useNotificationsData(filterBy: NotificationType[] = ["all"]): {
 
   // Carregar notificações e visualizações do usuário na inicialização
   useEffect(() => {
-    if (user) {
-      loadPersistentNotifications();
-      loadUserViews();
+    if (!user) {
+      setPersistentNotifications([]);
+      setLoading(false);
+      return;
     }
+
+    // Carregar visualizações
+    loadUserViews();
+
+    // Limpar notificações antigas primeiro
+    cleanupOldNotifications();
+
+    // Configurar listener em tempo real para notificações
+    const q = query(
+      collection(db, "notifications"),
+      where("userId", "==", user.uid)
+    );
+
+    const unsubscribe = onSnapshot(q, (querySnapshot) => {
+      const notifications: PersistentNotification[] = [];
+      
+      querySnapshot.forEach((doc) => {
+        notifications.push({
+          id: doc.id,
+          ...doc.data()
+        } as PersistentNotification);
+      });
+
+      setPersistentNotifications(notifications);
+      setLoading(false);
+    }, (error) => {
+      console.error("❌ Erro no listener de notificações:", error);
+      setPersistentNotifications([]);
+      setLoading(false);
+    });
+
+    // Cleanup: remover listener quando o componente desmontar ou o usuário mudar
+    return () => {
+      unsubscribe();
+    };
   }, [user]);
 
   // Gerar notificações quando os dados mudarem
@@ -512,11 +566,12 @@ export function useNotificationsData(filterBy: NotificationType[] = ["all"]): {
     }
   }, [certificados, financeiros, renovacoes, sintegras, servicos, despesas, loading, user]);
 
-  // Filtrar e ordenar notificações para o painel (3, 7, 15, 30 dias e vencidas)
+  // Filtrar e ordenar notificações para o painel (0, 1, 3, 7, 15, 30 dias e vencidas)
   const notifications = useMemo(() => {
     let filtered = persistentNotifications.filter(notification =>
       !userViews.has(notification.id) && // Usar visualizações do usuário atual
-      (notification.daysRemaining === 3 || notification.daysRemaining === 7 ||
+      (notification.daysRemaining === 0 || notification.daysRemaining === 1 ||
+       notification.daysRemaining === 3 || notification.daysRemaining === 7 ||
        notification.daysRemaining === 15 || notification.daysRemaining === 30 ||
        notification.daysRemaining < 0)
     );
@@ -549,11 +604,17 @@ export function useNotificationsData(filterBy: NotificationType[] = ["all"]): {
       priority: notification.priority,
       clienteNome: notification.clienteNome,
     }));
-  }, [persistentNotifications, filterBy]);
+  }, [persistentNotifications, filterBy, userViews]);
 
   // Calcular contador para o botão (notificações filtradas não visualizadas)
   const notificationCount = useMemo(() => {
-    let filtered = persistentNotifications.filter(notification => !userViews.has(notification.id));
+    let filtered = persistentNotifications.filter(notification =>
+      !userViews.has(notification.id) && // Usar visualizações do usuário atual
+      (notification.daysRemaining === 0 || notification.daysRemaining === 1 ||
+       notification.daysRemaining === 3 || notification.daysRemaining === 7 ||
+       notification.daysRemaining === 15 || notification.daysRemaining === 30 ||
+       notification.daysRemaining < 0)
+    );
 
     // Aplicar o mesmo filtro do painel
     filtered = filtered.filter((notification) => {
@@ -571,6 +632,9 @@ export function useNotificationsData(filterBy: NotificationType[] = ["all"]): {
 
   const markAsViewed = async (notificationId: string) => {
     if (!user) return;
+
+    // Adicionar ao estado de "marcando como visto"
+    setMarkingAsViewed(prev => new Set([...prev, notificationId]));
 
     try {
       // Verificar se já existe uma visualização para este usuário e notificação
@@ -594,6 +658,13 @@ export function useNotificationsData(filterBy: NotificationType[] = ["all"]): {
       }
     } catch (error) {
       console.error("Erro ao marcar notificação como vista:", error);
+    } finally {
+      // Remover do estado de "marcando como visto"
+      setMarkingAsViewed(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(notificationId);
+        return newSet;
+      });
     }
   };
 
@@ -641,7 +712,8 @@ export function useNotificationsData(filterBy: NotificationType[] = ["all"]): {
     notificationCount,
     markAsViewed,
     markAllAsViewed,
-    loading
+    loading,
+    markingAsViewed
   };
 }
 
