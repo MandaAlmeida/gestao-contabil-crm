@@ -16,7 +16,7 @@ export const calcularStatusCertificado = (
   const vencimento = parseDate(item.dataVencimento);
 
   if (Number.isNaN(vencimento.getTime())) {
-    return "Vencido";
+    return "Avisado";
   }
 
   const diffEmMs = vencimento.getTime() - hoje.getTime();
@@ -27,10 +27,10 @@ export const calcularStatusCertificado = (
   }
 
   if (diffDias <= DIAS_ALERTA) {
-    return "A Vencer";
+    return "Avisado";
   }
 
-  return "Válido";
+  return "Pendente";
 };
 
 export const normalizarCertificados = (lista: Certificado[]) => {

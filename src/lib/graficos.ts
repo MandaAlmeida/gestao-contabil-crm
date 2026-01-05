@@ -101,7 +101,7 @@ export const calcularTotalEntrada = (
 
   const entradasFinanceiras = financeiros
     .filter((f) => {
-      if (f.status !== "Recebido" || !f.dataPagamento) return false;
+      if (f.status !== "Pago" || !f.dataPagamento) return false;
       const dataPagamento = new Date(f.dataPagamento);
       return dataPagamento >= inicio && dataPagamento <= fim;
     })
@@ -124,7 +124,7 @@ export const calcularTotalEntradaServicos = (
     .filter((s) => {
       // Verificar se o serviço foi pago no financeiro dentro do período
       const financeiroRelacionado = financeiros.find(f =>
-        f.servicoId === s.id && f.status === "Recebido" && f.dataPagamento
+        f.servicoId === s.id && f.status === "Pago" && f.dataPagamento
       );
 
       if (!financeiroRelacionado || !financeiroRelacionado.dataPagamento) return false;
@@ -161,10 +161,10 @@ export const gerarDadosGrafico = (
   const { inicio, fim } = calcularPeriodo(periodo, periodoCustomizado);
   const dados: Map<string, { entrada: number; saida: number }> = new Map();
 
-  // Processar entradas (financeiros recebidos + despesas pagas como negativas)
+  // Processar entradas (financeiros pagos + despesas pagas como negativas)
   financeiros
     .filter((f) => {
-      if (f.status !== "Recebido" || !f.dataPagamento) return false;
+      if (f.status !== "Pago" || !f.dataPagamento) return false;
       const dataPagamento = new Date(f.dataPagamento);
       return dataPagamento >= inicio && dataPagamento <= fim;
     })
@@ -247,7 +247,7 @@ export const gerarDadosGraficoServicos = (
     .filter((s) => {
       // Verificar se o serviço foi pago no financeiro dentro do período
       const financeiroRelacionado = financeiros.find(f =>
-        f.servicoId === s.id && f.status === "Recebido" && f.dataPagamento
+        f.servicoId === s.id && f.status === "Pago" && f.dataPagamento
       );
 
       if (!financeiroRelacionado || !financeiroRelacionado.dataPagamento) return false;
@@ -258,7 +258,7 @@ export const gerarDadosGraficoServicos = (
     .forEach((s) => {
       // Usar a data do financeiro para o gráfico
       const financeiroRelacionado = financeiros.find(f =>
-        f.servicoId === s.id && f.status === "Recebido" && f.dataPagamento
+        f.servicoId === s.id && f.status === "Pago" && f.dataPagamento
       )!;
       const data = financeiroRelacionado.dataPagamento!;
       const chave = data.split("T")[0];

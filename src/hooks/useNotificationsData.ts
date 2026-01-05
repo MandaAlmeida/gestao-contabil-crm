@@ -37,7 +37,6 @@ export function useNotificationsData(filterBy: NotificationType[] = ["all"]): {
   const { financeiros } = useFinanceiro();
   const { renovacoes } = useRenovacao();
   const { sintegras } = useSintegra();
-  const { servicos } = useServicos();
   const { despesas } = useDespesas();
 
   const [persistentNotifications, setPersistentNotifications] = useState<PersistentNotification[]>([]);
@@ -392,33 +391,6 @@ export function useNotificationsData(filterBy: NotificationType[] = ["all"]): {
       }
     });
 
-    // Serviços vencendo/vencidos
-    servicos.forEach((serv) => {
-      if (!serv.ativo) return;
-
-      const dataVenc = parseDate(serv.dataVencimento);
-      const diasDiferenca = Math.ceil((dataVenc.getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24));
-      const vendeHoje = isHoje(dataVenc);
-
-      // Sempre notificar serviços vencidos ou próximos do vencimento
-      if (diasDiferenca < 0 || vendeHoje || [1, 3].includes(diasDiferenca)) {
-        const notificationData = {
-          userId: user.uid,
-          itemId: `serv-${serv.id}`,
-          pureItemId: serv.id,
-          type: "servico" as NotificationType,
-          title: diasDiferenca < 0 ? "Serviço Vencido" : vendeHoje ? "Serviço Vence Hoje" : "Serviço a Vencer",
-          message: `R$ ${serv.valorMensalidade.toFixed(2)} - ${diasDiferenca < 0 ? `Vencido há ${Math.abs(diasDiferenca)} dias` : vendeHoje ? 'Vence hoje' : `Vence em ${diasDiferenca} dias`}`,
-          daysRemaining: vendeHoje ? 0 : diasDiferenca,
-          priority: (diasDiferenca < 0 ? "high" : diasDiferenca <= 7 ? "high" : "medium") as "high" | "medium",
-          clienteId: serv.clienteId,
-          clienteNome: serv.clienteNome
-        };
-
-        notificationPromises.push(saveOrUpdateNotification(notificationData));
-      }
-    });
-
     // Renovações pendentes
     renovacoes.forEach((ren) => {
       if (!ren.ativo || !["Pendente", "Avisado", "Em Negociação"].includes(ren.status)) return;
@@ -564,7 +536,7 @@ export function useNotificationsData(filterBy: NotificationType[] = ["all"]): {
     if (!loading && user) {
       generateAndSaveNotifications();
     }
-  }, [certificados, financeiros, renovacoes, sintegras, servicos, despesas, loading, user]);
+  }, [certificados, financeiros, renovacoes, sintegras, despesas, loading, user]);
 
   // Filtrar e ordenar notificações para o painel (0, 1, 3, 7, 15, 30 dias e vencidas)
   const notifications = useMemo(() => {

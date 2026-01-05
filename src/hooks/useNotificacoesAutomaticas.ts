@@ -164,69 +164,6 @@ export function useNotificacoesAutomaticas() {
           });
         }
 
-        // 3. SERVIÇOS VENCENDO/VENCIDOS
-        if (usuario.notificacoesPagamentos && servicos.length > 0) {
-          servicos.forEach((serv) => {
-            if (!serv.ativo) return;
-
-            // Verificar se o serviço já foi pago (tem financeiro com status "Recebido")
-            const servicoPago = financeiros.some(fin =>
-              fin.servicoId === serv.id && fin.status === "Pago"
-            );
-            if (servicoPago) return;
-
-            const dataVenc = new Date(serv.dataVencimento);
-            dataVenc.setHours(0, 0, 0, 0);
-
-            const diasDiferenca = Math.ceil(
-              (dataVenc.getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24)
-            );
-
-            if (diasDiferenca <= 30) {
-              const key = `serv-${serv.id}-${hojeStr}`;
-              if (!notificacoesEnviadas.includes(key)) {
-                let titulo = "";
-                let mensagem = "";
-
-                if (diasDiferenca < 0) {
-                  titulo = "🔴 Serviço Vencido";
-                  mensagem = `${
-                    serv.clienteNome
-                  }: R$ ${serv.valorMensalidade.toFixed(
-                    2
-                  )} - Vencido há ${Math.abs(diasDiferenca)} dias`;
-                } else if (diasDiferenca === 0) {
-                  titulo = "⚠️ Serviço Vence Hoje";
-                  mensagem = `${
-                    serv.clienteNome
-                  }: R$ ${serv.valorMensalidade.toFixed(2)}`;
-                } else if (diasDiferenca === 1) {
-                  titulo = "⚠️ Serviço Vence Amanhã";
-                  mensagem = `${
-                    serv.clienteNome
-                  }: R$ ${serv.valorMensalidade.toFixed(2)}`;
-                } else {
-                  titulo = "💼 Serviço a Vencer";
-                  mensagem = `${
-                    serv.clienteNome
-                  }: R$ ${serv.valorMensalidade.toFixed(
-                    2
-                  )} - Vence em ${diasDiferenca} dias`;
-                }
-
-                new Notification(titulo, {
-                  body: mensagem,
-                  icon: "/logo.png",
-                  badge: "/favicon.ico",
-                  tag: `serv-${serv.id}`,
-                });
-
-                notificacoesEnviadas.push(key);
-              }
-            }
-          });
-        }
-
         // 4. RENOVAÇÕES PENDENTES
         if (usuario.notificacoesRenovacoes && renovacoes.length > 0) {
           renovacoes.forEach((ren) => {
