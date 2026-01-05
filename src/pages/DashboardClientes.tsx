@@ -90,8 +90,6 @@ export default function DashboardClientes() {
 
   const servicosNormalizados = servicosRaw;
 
-  console.log('🔍 DASHBOARD - Total servicosRaw:', servicosRaw.length);
-  console.log('🔍 DASHBOARD - Responsável selecionado:', responsavelSelecionado);
 
   // Filtrar serviços da mesma forma que a página de Serviços
   // Apenas pelo responsável do serviço, não pelos clientes
@@ -99,17 +97,12 @@ export default function DashboardClientes() {
     const matchesResponsavel = responsavelSelecionado === "todos" || 
                                 servico.responsavel === responsavelSelecionado;
     
-    console.log('🔍 Serviço:', servico.clienteNome, '| Responsável:', servico.responsavel, '| matchesResp:', matchesResponsavel, '| INCLUÍDO:', matchesResponsavel);
-    
     return matchesResponsavel;
   });
 
-  console.log('✅ DASHBOARD - Total filtrado:', servicosFiltrados.length);
-  console.log('📋 DASHBOARD - Serviços incluídos:', servicosFiltrados.map(s => s.clienteNome));
-
   const totaisMensalidades = financeirosFiltrados.reduce(
     (acc, f) => {
-      if (f.status === "Recebido") {
+      if (f.status === "Pago") {
         acc.recebidas += f.valorMensalidade;
       } else {
         acc.aReceber += f.valorMensalidade;
@@ -125,10 +118,8 @@ export default function DashboardClientes() {
     (acc, s) => {
       // Verificar se o serviço foi pago no financeiro
       const servicoPago = financeiros.some(f =>
-        f.servicoId === s.id && f.status === "Recebido"
+        f.servicoId === s.id && f.status === "Pago"
       );
-
-      console.log('📊 Dashboard Servico:', s.clienteNome, '| valorMensalidade:', s.valorMensalidade, '| Pago:', servicoPago);
 
       if (servicoPago) {
         acc.recebidas += s.valorMensalidade;
@@ -140,11 +131,8 @@ export default function DashboardClientes() {
     { recebidas: 0, aReceber: 0 }
   );
 
-  console.log('📈 DASHBOARD - Total servicosFiltrados:', servicosFiltrados.length);
-  console.log('💰 DASHBOARD - Recebidas:', totaisServicos.recebidas, '| A Receber:', totaisServicos.aReceber);
-
   const servicosEmAberto = servicosFiltrados.filter(
-    (s) => !financeiros.some(f => f.servicoId === s.id && f.status === "Recebido")
+    (s) => !financeiros.some(f => f.servicoId === s.id && f.status === "Pago")
   ).length;
 
   const certificadosVencendo = certificadosFiltrados.filter((cert) => {
@@ -179,19 +167,20 @@ export default function DashboardClientes() {
     { recebidas: 0, aReceber: 0, emAberto: 0 }
   );
 
-  const financeirosEmAberto = financeirosFiltrados.filter(
-    (f) => f.status !== "Recebido"
+  const financeirosEmAberto = financeirosNormalizados.filter(
+    (f) => f.status !== "Pago"
   ).length;
 
-  const totalRecebidos = financeirosFiltrados.filter(
-    (f) => f.status === "Recebido"
+  const totalRecebidos = financeirosNormalizados.filter(
+    (f) => f.status === "Pago"
   ).length;
-  const totalAVencer = financeirosFiltrados.filter(
-    (f) => f.status === "A Vencer"
+  const totalAVencer = financeirosNormalizados.filter(
+    (f) => f.status === "Pendente"
   ).length;
-  const totalVencidos = financeirosFiltrados.filter(
+  const totalVencidos = financeirosNormalizados.filter(
     (f) => f.status === "Vencido"
   ).length;
+
 
   return (
     <Layout>
@@ -374,9 +363,14 @@ export default function DashboardClientes() {
               <FileCheck className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{sintegrasPendentes}</div>
+             <div className="text-2xl font-bold">
+               {sintegras.length}
+              </div>
               <p className="text-xs text-muted-foreground">
-                aguardando conclusão
+                Pendentes: {sintegrasPendentes}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Concluidos: {sintegras.length - sintegrasPendentes}
               </p>
             </CardContent>
           </Card>
@@ -519,18 +513,18 @@ export default function DashboardClientes() {
                 <Button
                   variant="outline"
                   className="w-full h-full rounded-none justify-between border-none p-4"
-                  onClick={() => navigate('/financeiro', { state: { statusFilter: 'Recebido', responsavelFilter: responsavelSelecionado } })}
+                  onClick={() => navigate('/financeiro', { state: { statusFilter: 'Pago', responsavelFilter: responsavelSelecionado } })}
                 >
-                  <span className="font-normal">Recebido</span>
+                  <span className="font-normal">Pagos</span>
                   <span className="font-medium">{totalRecebidos}</span>
                 </Button>
                 <Separator />
                 <Button
                   variant="outline"
                   className="w-full h-full rounded-none justify-between border-none p-4"
-                  onClick={() => navigate('/financeiro', { state: { statusFilter: 'A Vencer', responsavelFilter: responsavelSelecionado } })}
+                  onClick={() => navigate('/financeiro', { state: { statusFilter: 'Pendente', responsavelFilter: responsavelSelecionado } })}
                 >
-                  <span className="font-normal">A vencer</span>
+                  <span className="font-normal">Pendentes</span>
                   <span className="font-medium">{totalAVencer}</span>
                 </Button>
                 <Separator />
@@ -539,7 +533,7 @@ export default function DashboardClientes() {
                   className="w-full h-full rounded-none justify-between border-none p-4"
                   onClick={() => navigate('/financeiro', { state: { statusFilter: 'Vencido', responsavelFilter: responsavelSelecionado } })}
                 >
-                  <span className="font-normal">Vencido</span>
+                  <span className="font-normal">Vencidos</span>
                   <span className="font-medium">{totalVencidos}</span>
                 </Button>
               </div>

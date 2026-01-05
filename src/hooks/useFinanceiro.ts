@@ -40,7 +40,7 @@ export function useFinanceiro() {
   const updateFinanceiro = async (id: string, updates: Partial<Omit<Financeiro, "id" | "createdAt">>) => {
     try {
       // Verificar se o status está sendo alterado para "Pago"
-      if (updates.status === "Recebido") {
+      if (updates.status === "Pago") {
         // Buscar e excluir notificações relacionadas ao pagamento
         await excluirNotificacoesItem(id, "pagamento");
       }

@@ -30,7 +30,7 @@ export interface Financeiro {
   clienteCNPJ: string;
   dataVencimento: string;
   valorMensalidade: number;
-  status: "Recebido" | "A Vencer" | "Vencido";
+  status: "Pago" | "Pendente" | "Vencido";
   dataPagamento?: string | null;
   meioPagamento?: "Pix" | "Boleto";
   servicoId?: string | null; // Link para serviço se for cobrança de serviço

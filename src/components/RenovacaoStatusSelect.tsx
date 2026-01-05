@@ -13,16 +13,6 @@ const adicionarAno = (data?: string) => {
   return novaData;
 };
 
-const removerAno = (data: string) => {
-  const baseDate = data ? new Date(data) : new Date();
-  if (Number.isNaN(baseDate.getTime())) {
-    return new Date();
-  }
-  const novaData = new Date(baseDate);
-  novaData.setFullYear(novaData.getFullYear() - 1);
-  return novaData;
-};
-
 const STATUS_OPTIONS = [
   { value: "Pendente", label: "Pendente" },
   { value: "Avisado", label: "Avisado" },

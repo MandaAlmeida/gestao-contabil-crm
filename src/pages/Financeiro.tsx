@@ -192,11 +192,11 @@ export default function FinanceiroPage() {
 
     // Avanço automático da data de vencimento quando um pagamento é registrado
     // Apenas se o item não estava como "Recebido" antes (ou seja, está registrando um novo pagamento)
-    if (dataPagamento && (!editingItem || editingItem.status !== "Recebido")) {
+    if (dataPagamento && (!editingItem || editingItem.status !== "Pago")) {
       dataVencimento = adicionarMes(dataVencimento);
     }
     const status = calcularStatusFinanceiro({
-      status: editingItem?.status ?? "A Vencer",
+      status: editingItem?.status ?? "Pendente",
       dataPagamento,
       dataVencimento,
     });
@@ -361,14 +361,14 @@ export default function FinanceiroPage() {
   };
 
   const handleTogglePagamento = async (item: Financeiro) => {
-    if (item.status === "Recebido") {
+    if (item.status === "Pago") {
       // Quando remove o pagamento, sempre volta exatamente 1 mês da data atual
       // (já que o pagamento avançou 1 mês quando foi registrado)
       const vencimentoAnterior = removerMes(item.dataVencimento);
 
       // Calcula o status baseado na nova data de vencimento, sem considerar o status antigo
       const statusAjustado = calcularStatusFinanceiro({
-        status: "A Vencer", // Força recalcular baseado apenas na data
+        status: "Pendente", // Força recalcular baseado apenas na data
         dataPagamento: null,
         dataVencimento: vencimentoAnterior,
       });
@@ -383,7 +383,7 @@ export default function FinanceiroPage() {
         toast({
           title: "Pagamento removido.",
           description:
-            statusAjustado === "A Vencer"
+            statusAjustado === "Pendente"
               ? `${item.clienteNome} voltou a ficar pendente.`
               : `${item.clienteNome} foi marcado como vencido.`,
         });
@@ -401,7 +401,7 @@ export default function FinanceiroPage() {
       await updateFinanceiro(item.id, {
         dataPagamento: hoje,
         dataVencimento: novoVencimento,
-        status: "Recebido",
+        status: "Pago",
         meioPagamento: "Pix",
       });
 
@@ -529,7 +529,7 @@ export default function FinanceiroPage() {
 
   const totaisMensalidades = filteredItems.reduce(
     (acc, item) => {
-      if (item.status === "Recebido") {
+      if (item.status === "Pago") {
         acc.recebidas += item.valorMensalidade;
       } else {
         acc.aReceber += item.valorMensalidade;
@@ -540,25 +540,25 @@ export default function FinanceiroPage() {
   );
 
   const STATUS_META: Record<Financeiro["status"], StatusMeta> = {
-    Recebido: {
+    Pago: {
       label: "Pago",
-      className: "bg-success/10 text-success hover:bg-success/20",
-      icon: CheckCircle,
+       className: "bg-success/10 text-success hover:bg-success/20",
+      icon: AlertTriangle,
     },
-    "A Vencer": {
+    Pendente: {
       label: "Pendente",
       className: "bg-warning/10 text-warning hover:bg-warning/20",
-      icon: Clock3,
+      icon: CheckCircle,
     },
     Vencido: {
       label: "Vencido",
       className: "bg-destructive/10 text-destructive hover:bg-destructive/20",
-      icon: AlertTriangle,
+      icon: Clock3,
     },
   };
 
   const getToggleTitle = (item: Financeiro) => {
-    if (item.status === "Recebido") {
+    if (item.status === "Pago") {
       return "Remover pagamento e retornar ao ciclo atual";
     }
     if (item.status === "Vencido") {
@@ -828,8 +828,8 @@ export default function FinanceiroPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="todos">Todos</SelectItem>
-                  <SelectItem value="Recebido">Recebido</SelectItem>
-                  <SelectItem value="A Vencer">A Vencer</SelectItem>
+                  <SelectItem value="Pago">Pago</SelectItem>
+                  <SelectItem value="Pendente">Pendente</SelectItem>
                   <SelectItem value="Vencido">Vencido</SelectItem>
                 </SelectContent>
               </Select>

@@ -33,7 +33,7 @@ export function NotificationSystem() {
       // Verificar Financeiros
       const financeirosNormalizados = normalizarFinanceiros(financeirosRaw);
       financeirosNormalizados.forEach((financeiro) => {
-        if (financeiro.status === "Recebido") return;
+        if (financeiro.status === "Pago") return;
 
         const dataVencimento = new Date(financeiro.dataVencimento);
         dataVencimento.setHours(0, 0, 0, 0);

@@ -45,6 +45,12 @@ export function useNotificationsData(filterBy: NotificationType[] = ["all"]): {
   const [loading, setLoading] = useState(true);
   const [markingAsViewed, setMarkingAsViewed] = useState<Set<string>>(new Set()); // IDs sendo marcados como vistos
 
+  // Função auxiliar para parsear data ISO (YYYY-MM-DD) para data no timezone local
+  const parseDate = (dateString: string): Date => {
+    const [year, month, day] = dateString.split('-').map(Number);
+    return new Date(year, month - 1, day, 0, 0, 0, 0);
+  };
+
   // Função para carregar visualizações do usuário atual
   const loadUserViews = async () => {
     if (!user) return;
@@ -130,8 +136,7 @@ export function useNotificationsData(filterBy: NotificationType[] = ["all"]): {
           deletePromises.push(deleteDoc(docSnap.ref));
         } else {
           // Verificar se ainda atende aos critérios de notificação
-          const dataDespesa = new Date(despesa.data);
-          dataDespesa.setHours(0, 0, 0, 0);
+          const dataDespesa = parseDate(despesa.data);
           const diasDiferenca = Math.ceil((dataDespesa.getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24));
 
           const shouldNotify = diasDiferenca < 0 || [1, 3, 7, 15, 30].includes(diasDiferenca);
@@ -317,7 +322,7 @@ export function useNotificationsData(filterBy: NotificationType[] = ["all"]): {
   const generateAndSaveNotifications = async () => {
     if (!user || loading) return;
 
-    // Calcular "hoje" no fuso horário brasileiro (UTC-3)
+    // Calcular "hoje" no fuso horário local
     const agora = new Date();
     const hoje = new Date(agora.getFullYear(), agora.getMonth(), agora.getDate());
     
@@ -337,8 +342,7 @@ export function useNotificationsData(filterBy: NotificationType[] = ["all"]): {
     certificados.forEach((cert) => {
       if (!cert.ativo) return;
 
-      const dataVenc = new Date(cert.dataVencimento + 'T00:00:00.000-03:00');
-      dataVenc.setHours(0, 0, 0, 0);
+      const dataVenc = parseDate(cert.dataVencimento);
       const diasRestantes = Math.ceil((dataVenc.getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24));
       const vendeHoje = isHoje(dataVenc);
       
@@ -363,10 +367,9 @@ export function useNotificationsData(filterBy: NotificationType[] = ["all"]): {
 
     // Pagamentos vencendo/vencidos
     financeiros.forEach((pag) => {
-      if (!pag.ativo || pag.status === "Recebido") return;
+      if (!pag.ativo || pag.status === "Pago") return;
 
-      const dataVenc = new Date(pag.dataVencimento + 'T00:00:00.000-03:00');
-      dataVenc.setHours(0, 0, 0, 0);
+      const dataVenc = parseDate(pag.dataVencimento);
       const diasDiferenca = Math.ceil((dataVenc.getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24));
       const vendeHoje = isHoje(dataVenc);
 
@@ -393,8 +396,7 @@ export function useNotificationsData(filterBy: NotificationType[] = ["all"]): {
     servicos.forEach((serv) => {
       if (!serv.ativo) return;
 
-      const dataVenc = new Date(serv.dataVencimento + 'T00:00:00.000-03:00');
-      dataVenc.setHours(0, 0, 0, 0);
+      const dataVenc = parseDate(serv.dataVencimento);
       const diasDiferenca = Math.ceil((dataVenc.getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24));
       const vendeHoje = isHoje(dataVenc);
 
@@ -421,11 +423,7 @@ export function useNotificationsData(filterBy: NotificationType[] = ["all"]): {
     renovacoes.forEach((ren) => {
       if (!ren.ativo || !["Pendente", "Avisado", "Em Negociação"].includes(ren.status)) return;
 
-     // Se a data estiver salva como YYYY-MM-DD, force interpretação como UTC
-     const dataRen = new Date(ren.dataRenovacao + 'T00:00:00.000-03:00');
-     dataRen.setHours(0, 0, 0, 0); // Zerar horas para comparar apenas dias
-
-
+     const dataRen = parseDate(ren.dataRenovacao);
 
       // Comparar apenas dias (diferença em dias inteiros)
       const diffMs = dataRen.getTime() - hoje.getTime();
@@ -454,13 +452,12 @@ export function useNotificationsData(filterBy: NotificationType[] = ["all"]): {
     sintegras.forEach((sin) => {
       if (!sin.ativo || sin.status !== "Pendente") return;
 
-      const dataPrazo = new Date(sin.dataPrazo + 'T00:00:00.000-03:00');
-      dataPrazo.setHours(0, 0, 0, 0);
+      const dataPrazo = parseDate(sin.dataPrazo);
       const diasRestantes = Math.ceil((dataPrazo.getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24));
       const vendeHoje = isHoje(dataPrazo);
 
       // Sempre notificar sintegra vencida ou próxima do prazo (15, 7, 3 e 1 dias)
-      if (diasRestantes <= 0 || vendeHoje || [1, 3, 7, 15].includes(diasRestantes)) {
+      if (diasRestantes < 0 || vendeHoje || [1, 3, 7, 15].includes(diasRestantes)) {
         const notificationData = {
           userId: user.uid,
           itemId: `sin-${sin.id}`,
@@ -482,8 +479,7 @@ export function useNotificationsData(filterBy: NotificationType[] = ["all"]): {
     despesas.forEach((despesa) => {
       if (!despesa.ativo || despesa.pago) return;
 
-      const dataDespesa = new Date(despesa.data + 'T00:00:00.000-03:00');
-      dataDespesa.setHours(0, 0, 0, 0);
+      const dataDespesa = parseDate(despesa.data);
       const diasDiferenca = Math.ceil((dataDespesa.getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24));
       const vendeHoje = isHoje(dataDespesa);
 

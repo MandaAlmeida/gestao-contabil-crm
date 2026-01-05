@@ -2,12 +2,18 @@ import { Certificado } from "@/types/crm";
 
 const DIAS_ALERTA = 30;
 
+const parseDate = (dateString: string) => {
+  // Converte string ISO (YYYY-MM-DD) para data no timezone local
+  const [year, month, day] = dateString.split('-').map(Number);
+  return new Date(year, month - 1, day, 0, 0, 0, 0);
+};
+
 export const calcularStatusCertificado = (
   item: Pick<Certificado, "dataVencimento">
 ): Certificado["status"] => {
   const hoje = new Date();
-  hoje.setHours(hoje.getHours() - 3); // Horário brasileiro
-  const vencimento = new Date(item.dataVencimento);
+  hoje.setHours(0, 0, 0, 0);
+  const vencimento = parseDate(item.dataVencimento);
 
   if (Number.isNaN(vencimento.getTime())) {
     return "Vencido";

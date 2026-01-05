@@ -242,12 +242,6 @@ export default function ServicosPage() {
     );
   };
 
-  console.log('🔍 PÁGINA SERVIÇOS - Total servicosNormalizados:', servicosNormalizados.length);
-  console.log('🔍 PÁGINA SERVIÇOS - searchResponsavel:', searchResponsavel);
-  console.log('🔍 PÁGINA SERVIÇOS - searchTerm:', searchTerm);
-  console.log('🔍 PÁGINA SERVIÇOS - filtroDataInicio:', filtroDataInicio);
-  console.log('🔍 PÁGINA SERVIÇOS - filtroDataFim:', filtroDataFim);
-
   const filteredItems = servicosNormalizados.filter((item) => {
     const matchesSearch =
       item.clienteNome.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -263,8 +257,6 @@ export default function ServicosPage() {
     const matchesDataFim =
       !filtroDataFim || itemData <= new Date(filtroDataFim);
 
-    console.log('🔍 Serviço:', item.clienteNome, '| Responsável:', item.responsavel, '| matchSearch:', matchesSearch, '| matchResp:', matchesResponsavel, '| matchDataIni:', matchesDataInicio, '| matchDataFim:', matchesDataFim, '| INCLUÍDO:', matchesSearch && matchesResponsavel && matchesDataInicio && matchesDataFim);
-
     // Filtro por status
     return (
       matchesSearch &&
@@ -273,9 +265,6 @@ export default function ServicosPage() {
       matchesDataFim
     );
   });
-
-  console.log('✅ PÁGINA SERVIÇOS - Total filtrado:', filteredItems.length);
-  console.log('📋 PÁGINA SERVIÇOS - Serviços incluídos:', filteredItems.map(s => s.clienteNome));
 
   // Aplicar ordenação
   const itemsOrdenados = useMemo(() => {
@@ -322,10 +311,8 @@ export default function ServicosPage() {
     (acc, item) => {
       // Verificar se o serviço foi pago no financeiro
       const servicoPago = financeiros.some(f =>
-        f.servicoId === item.id && f.status === "Recebido"
+        f.servicoId === item.id && f.status === "Pago"
       );
-
-      console.log('📊 Servico:', item.clienteNome, '| valorMensalidade:', item.valorMensalidade, '| Pago:', servicoPago);
 
       if (servicoPago) {
         acc.recebidas += item.valorMensalidade;
@@ -336,10 +323,6 @@ export default function ServicosPage() {
     },
     { recebidas: 0, aReceber: 0 }
   );
-
-  console.log('📈 PÁGINA SERVICOS - Total filteredItems:', filteredItems.length);
-  console.log('💰 PÁGINA SERVICOS - Recebidas:', totaisMensalidades.recebidas, '| A Receber:', totaisMensalidades.aReceber);
-
 
   return (
     <Layout>

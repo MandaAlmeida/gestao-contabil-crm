@@ -106,7 +106,7 @@ export function useNotificacoesAutomaticas() {
         // 2. PAGAMENTOS VENCENDO/VENCIDOS
         if (usuario.notificacoesPagamentos && financeiros.length > 0) {
           financeiros.forEach((pag) => {
-            if (!pag.ativo || pag.status === "Recebido") return;
+            if (!pag.ativo || pag.status === "Pago") return;
 
             const dataVenc = new Date(pag.dataVencimento);
             dataVenc.setHours(0, 0, 0, 0);
@@ -171,7 +171,7 @@ export function useNotificacoesAutomaticas() {
 
             // Verificar se o serviço já foi pago (tem financeiro com status "Recebido")
             const servicoPago = financeiros.some(fin =>
-              fin.servicoId === serv.id && fin.status === "Recebido"
+              fin.servicoId === serv.id && fin.status === "Pago"
             );
             if (servicoPago) return;
 
