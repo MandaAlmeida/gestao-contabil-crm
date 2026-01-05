@@ -185,7 +185,7 @@ export default function ServicosPage() {
           descricao: formData.descricao,
           dataVencimento: formData.dataVencimento,
           valorMensalidade: valorMensalidadeNumber,
-          status: "A Vencer" as const,
+          status: "Pendente" as const,
           meioPagamento: "Pix" as const,
           observacoes: formData.observacoes,
           ativo: true,
@@ -335,7 +335,6 @@ export default function ServicosPage() {
             </p>
           </div>
           <div className="flex gap-2 items-end">
-          <NotificationButton onClick={() => setNotificationsOpen(true)} filterBy={["servico"]} />
           <Dialog
             open={isDialogOpen}
             onOpenChange={(open) => {

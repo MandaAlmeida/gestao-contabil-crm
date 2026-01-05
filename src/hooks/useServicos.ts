@@ -102,23 +102,28 @@ export function useServicos() {
 
   const createServico = async (servico: Omit<Servico, "id" | "createdAt" | "updatedAt">) => {
     try {
+      console.log("🔧 useServicos.createServico: Criando serviço", servico);
       const id = await servicoService.createServico(servico);
+      console.log("✅ useServicos.createServico: Serviço criado com ID:", id);
 
-      // Verificar se existe registro financeiro para este cliente sem serviço vinculado
+      // Verificar se existe um financeiro para este cliente sem serviço vinculado
       const financeiroSemServico = financeiros.find(f =>
         f.clienteId === servico.clienteId && !f.servicoId
       );
 
       if (financeiroSemServico) {
+        console.log("🔗 useServicos: Vinculando serviço ao financeiro:", financeiroSemServico.id);
         // Atualizar o registro financeiro com o ID do serviço recém-criado
         await updateFinanceiro(financeiroSemServico.id, { servicoId: id });
-      } 
+        console.log("✅ useServicos: Financeiro vinculado ao serviço");
+      }
 
+      // Carrega os serviços novamente para refletir a mudança
       await loadServicos();
 
       return id;
     } catch (err) {
-      console.error("Erro em useServicos.createServico:", err);
+      console.error("❌ useServicos.createServico: Erro", err);
       setError(err instanceof Error ? err : new Error("Erro ao criar serviço"));
       throw err;
     }
@@ -126,8 +131,8 @@ export function useServicos() {
 
   const updateServico = async (id: string, updates: Partial<Omit<Servico, "id" | "createdAt">>) => {
     try {
-      // Verificar se o status está sendo alterado para "Recebido"
-      if (updates.status === "Recebido") {
+      // Verificar se o status está sendo alterado para "Pago"
+      if (updates.status === "Pago") {
         // Buscar e excluir notificações relacionadas ao serviço
         await excluirNotificacoesItem(id, "servico");
       }

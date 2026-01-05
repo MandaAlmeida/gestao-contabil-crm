@@ -22,7 +22,7 @@ export const calcularStatusFinanceiro = (
     return "Pago";
   }
 
-  // Sem data de pagamento, nunca pode ser "Recebido"
+  // Sem data de pagamento, nunca pode ser "Pago"
   const hoje = startOfDay(new Date());
   const vencimento = parseDate(item.dataVencimento);
 

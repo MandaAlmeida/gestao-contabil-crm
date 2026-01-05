@@ -56,12 +56,13 @@ import { NotificationPanel } from "@/components/NotificationPanel";
 export default function FinanceiroPage() {
   const location = useLocation();
   const { clientes } = useClientes();
-  const { servicos, createServico, refresh: refreshServicos } = useServicos();
+  const { servicos, createServico, deleteServico, refresh: refreshServicos } = useServicos();
   const {
     financeiros: financeirosRaw,
     createFinanceiro,
     updateFinanceiro,
     deleteFinanceiro,
+    refresh: refreshFinanceiros,
   } = useFinanceiro();
   const { showConfirmation, ConfirmationDialogComponent } = useConfirmationDialog();
 
@@ -178,10 +179,16 @@ export default function FinanceiroPage() {
 
     let dataVencimento = formData.dataVencimento;
 
-    const valorMensalidadeNumber = parseFloat(formData.valorMensalidade);
-    if (Number.isNaN(valorMensalidadeNumber)) {
+    // Permitir usar o campo "Valor do Serviço" como base quando preenchido
+    const valorServicoNumber = parseFloat(formData.valorServico || "");
+    const valorMensalidadeNumber = parseFloat(formData.valorMensalidade || "");
+    const valorPrincipal = !Number.isNaN(valorServicoNumber)
+      ? valorServicoNumber
+      : valorMensalidadeNumber;
+
+    if (Number.isNaN(valorPrincipal)) {
       toast({
-        title: "Informe um valor de mensalidade válido.",
+        title: "Informe um valor válido (mensalidade ou serviço).",
         variant: "destructive",
       });
       return;
@@ -191,7 +198,7 @@ export default function FinanceiroPage() {
       : null;
 
     // Avanço automático da data de vencimento quando um pagamento é registrado
-    // Apenas se o item não estava como "Recebido" antes (ou seja, está registrando um novo pagamento)
+    // Apenas se o item não estava como "Pago" antes (ou seja, está registrando um novo pagamento)
     if (dataPagamento && (!editingItem || editingItem.status !== "Pago")) {
       dataVencimento = adicionarMes(dataVencimento);
     }
@@ -203,6 +210,58 @@ export default function FinanceiroPage() {
 
     try {
       if (editingItem) {
+        // Verificar se precisa criar serviço ao editar
+        let servicoIdAtualizar = editingItem.servicoId || null;
+        const temValorServico = formData.valorServico && parseFloat(formData.valorServico) > 0;
+        const naoTemServicoVinculado = !editingItem.servicoId;
+        const servicoFoiLimpado = editingItem.servicoId && !temValorServico;
+
+        // Se o serviço foi vinculado e agora foi limpo, deleta o serviço
+        if (servicoFoiLimpado) {
+          try {
+            console.log("🗑️ Deletando serviço ao limpar campo:", editingItem.servicoId);
+            await deleteServico(editingItem.servicoId);
+            servicoIdAtualizar = null;
+            toast({ title: "Serviço deletado!" });
+            await refreshServicos();
+          } catch (error) {
+            console.error("❌ Erro ao deletar serviço:", error);
+            servicoIdAtualizar = null;
+          }
+        }
+
+        if (temValorServico && naoTemServicoVinculado) {
+          // Criar serviço automaticamente ao editar
+          try {
+            const valorServicoNumber = parseFloat(formData.valorServico);
+            const novoServico = {
+              clienteId: formData.clienteId,
+              clienteNome: cliente.nome,
+              clienteCNPJ: cliente.cnpj,
+              responsavel: cliente.responsavel,
+              descricao: `Serviço mensal - ${cliente.nome}`,
+              dataVencimento: dataVencimento,
+              valorMensalidade: valorServicoNumber,
+              status: "Pendente" as const,
+              meioPagamento: "Pix" as const,
+              observacoes: `Serviço criado automaticamente via financeiro - ${new Date().toLocaleDateString('pt-BR')}`,
+              ativo: true,
+            };
+
+            console.log("🔧 Criando serviço ao editar financeiro:", JSON.stringify(novoServico, null, 2));
+            servicoIdAtualizar = await createServico(novoServico);
+            console.log("✅ Serviço criado ao editar com ID:", servicoIdAtualizar);
+            toast({ title: "Serviço criado automaticamente!" });
+            await refreshServicos();
+          } catch (error) {
+            console.error("❌ Erro ao criar serviço na edição:", error);
+            toast({
+              title: "Registro atualizado sem vínculo com serviço",
+              description: "Não foi possível criar o serviço automaticamente.",
+            });
+          }
+        }
+
         await updateFinanceiro(editingItem.id, {
           clienteId: formData.clienteId,
           clienteNome: cliente.nome,
@@ -212,15 +271,17 @@ export default function FinanceiroPage() {
           dataPagamento,
           status,
           meioPagamento: formData.meioPagamento,
-          servicoId: editingItem.servicoId,
+          servicoId: servicoIdAtualizar,
           valorServico: formData.valorServico,
           observacoes: formData.observacoes,
         });
+        await Promise.all([refreshFinanceiros(), refreshServicos()]);
         toast({ title: "Registro atualizado com sucesso!" });
       } else {
         // Verificar se já existe serviço para este cliente
         let servicoRelacionado = servicos.find(s => s.clienteId === formData.clienteId);
-        let valorParaServico = valorMensalidadeNumber;
+        let servicoId: string | null = null;
+        let valorParaServico = valorPrincipal;
 
         if (!servicoRelacionado) {
           // Se não existe serviço, criar automaticamente
@@ -232,31 +293,34 @@ export default function FinanceiroPage() {
               responsavel: cliente.responsavel,
               descricao: `Serviço mensal - ${cliente.nome}`,
               dataVencimento: dataVencimento,
-              valorMensalidade: valorMensalidadeNumber,
-              status: "A Vencer" as const,
+              valorMensalidade: valorPrincipal,
+              status: "Pendente" as const,
               meioPagamento: "Pix" as const,
               observacoes: `Serviço criado automaticamente via financeiro - ${new Date().toLocaleDateString('pt-BR')}`,
               ativo: true,
             };
 
-            const servicoId = await createServico(novoServico);
-            // Forçar atualização dos serviços
-            await refreshServicos();
-            // Buscar o serviço recém-criado
-            servicoRelacionado = servicos.find(s => s.id === servicoId) || { ...novoServico, id: servicoId } as any;
-            valorParaServico = valorMensalidadeNumber;
+            console.log("🔧 Dados do serviço a ser criado:", JSON.stringify(novoServico, null, 2));
+            servicoId = await createServico(novoServico);
+            console.log("✅ Serviço criado com ID:", servicoId);
+            console.log("✅ Dados enviados para Firebase:", novoServico);
             toast({ title: "Serviço criado automaticamente!" });
+            
+            // Atualizar serviços para refletir o novo serviço
+            await refreshServicos();
           } catch (error) {
-            console.error("Erro ao criar serviço:", error);
+            console.error("❌ Erro ao criar serviço:", error);
+            console.error("❌ Stack trace:", (error as any)?.stack);
             toast({
               title: "Registro criado sem vínculo com serviço",
               description: "Não foi possível criar o serviço automaticamente.",
             });
-            servicoRelacionado = null;
-            valorParaServico = valorMensalidadeNumber;
+            servicoId = null;
+            valorParaServico = valorPrincipal;
           }
         } else {
-          // Se existe serviço, usar o valor dele
+          // Se existe serviço, usar o ID e valor dele
+          servicoId = servicoRelacionado.id;
           valorParaServico = servicoRelacionado.valorMensalidade;
           toast({ title: "Serviço vinculado automaticamente!" });
         }
@@ -266,21 +330,26 @@ export default function FinanceiroPage() {
           clienteNome: cliente.nome,
           clienteCNPJ: cliente.cnpj,
           dataVencimento,
+          // Usa o valor principal (mensalidade ou valor do serviço, se informado)
           valorMensalidade: valorParaServico,
           dataPagamento,
           status,
           meioPagamento: formData.meioPagamento,
-          servicoId: servicoRelacionado?.id || null,
+          servicoId: servicoId,
           valorServico: formData.valorServico,
           observacoes: formData.observacoes,
           ativo: true,
         });
+        console.log("✅ Financeiro criado com servicoId:", servicoId);
+        // Garante que as listas estejam sincronizadas em tela
+        await Promise.all([refreshFinanceiros(), refreshServicos()]);
         toast({ title: "Registro financeiro adicionado com sucesso!" });
       }
 
       resetForm();
       setIsDialogOpen(false);
     } catch (error) {
+      console.error("❌ Erro ao salvar registro:", error);
       toast({
         title: "Erro ao salvar registro",
         variant: "destructive",
@@ -542,18 +611,18 @@ export default function FinanceiroPage() {
   const STATUS_META: Record<Financeiro["status"], StatusMeta> = {
     Pago: {
       label: "Pago",
-       className: "bg-success/10 text-success hover:bg-success/20",
-      icon: AlertTriangle,
+      className: "bg-success/10 text-success hover:bg-success/20",
+      icon: CheckCircle,
     },
     Pendente: {
       label: "Pendente",
       className: "bg-warning/10 text-warning hover:bg-warning/20",
-      icon: CheckCircle,
+      icon: Clock3,
     },
     Vencido: {
       label: "Vencido",
       className: "bg-destructive/10 text-destructive hover:bg-destructive/20",
-      icon: Clock3,
+      icon: AlertTriangle,
     },
   };
 

@@ -48,7 +48,7 @@ export interface Certificado {
   clienteCNPJ: string;
   tipoCertificado: "A1" | "A3";
   dataVencimento: string;
-  status: "Pendente" | "Avisado" | "Renovado";
+  status: "Pendente" | "Avisado" | "Vencido" | "Renovado";
   observacoes: string;
   ativo: boolean;
   createdAt: string;
@@ -98,7 +98,7 @@ export interface Servico {
   descricao: string;
   dataVencimento: string;
   valorMensalidade: number;
-  status: "Recebido" | "A Vencer" | "Vencido";
+  status: "Pago" | "Pendente" | "Vencido";
   meioPagamento: "Pix" | "Boleto";
   observacoes: string;
   ativo: boolean;
