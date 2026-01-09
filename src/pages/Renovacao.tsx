@@ -284,6 +284,38 @@ export default function RenovacaoPage() {
     setItemsPerPage,
   } = usePagination(itemsOrdenados, 10);
 
+  // Cálculo de totais por status
+  const totaisPorStatus = useMemo(() => {
+    return filteredItems.reduce(
+      (acc, item) => {
+        if (item.status === "Renovado") {
+          acc.renovado += item.valorRenovacao;
+        } else if (item.status === "Pendente") {
+          acc.pendente += item.valorRenovacao;
+        } else if (item.status === "Em Negociação") {
+          acc.negociacao += item.valorRenovacao;
+        } else if (item.status === "Parcelado") {
+          acc.parcelado += item.valorRenovacao;
+        } else if (item.status === "Avisado") {
+          acc.avisado += item.valorRenovacao;
+        }
+        return acc;
+      },
+      {
+        renovado: 0,
+        pendente: 0,
+        negociacao: 0,
+        parcelado: 0,
+        avisado: 0,
+      }
+    );
+  }, [filteredItems]);
+
+  // Total geral
+  const totalGeral = useMemo(() => {
+    return Object.values(totaisPorStatus).reduce((acc, val) => acc + val, 0);
+  }, [totaisPorStatus]);
+
  // Lista ordenada das opções do select
 const STATUS_OPTIONS = [
   { value: "Pendente", label: "Pendente" },
@@ -683,6 +715,50 @@ const STATUS_OPTIONS = [
                   Limpar Filtros
                 </Button>
               </div>
+            )}
+          </div>
+        </div>
+
+        <div className="mb-4 rounded-lg bg-primary p-4 text-primary-foreground">
+          <p className="text-lg font-semibold">
+            Total de Renovações: R${" "}
+            {totalGeral.toLocaleString("pt-BR", {
+              minimumFractionDigits: 2,
+            })}
+          </p>
+          {/* Detalhamento por status */}
+          <div className="mt-3 pt-3 border-t border-primary-foreground/20 text-xs space-y-1">
+            <p>
+              Renovado: R${" "}
+              {totaisPorStatus.renovado.toLocaleString("pt-BR", {
+                minimumFractionDigits: 2,
+              })}
+            </p>
+            <p>
+              Pendente: R${" "}
+              {totaisPorStatus.pendente.toLocaleString("pt-BR", {
+                minimumFractionDigits: 2,
+              })}
+            </p>
+            <p>
+              Em Negociação: R${" "}
+              {totaisPorStatus.negociacao.toLocaleString("pt-BR", {
+                minimumFractionDigits: 2,
+              })}
+            </p>
+            <p>
+              Parcelados: R${" "}
+              {totaisPorStatus.parcelado.toLocaleString("pt-BR", {
+                minimumFractionDigits: 2,
+              })}
+            </p>
+            {totaisPorStatus.avisado > 0 && (
+              <p>
+                Avisado: R${" "}
+                {totaisPorStatus.avisado.toLocaleString("pt-BR", {
+                  minimumFractionDigits: 2,
+                })}
+              </p>
             )}
           </div>
         </div>
