@@ -7,7 +7,6 @@ import {
   DollarSign,
   FileCheck,
   RefreshCw,
-  FileText,
   Wallet,
   BarChart3,
   LayoutDashboard,
@@ -19,6 +18,8 @@ import {
   Sun,
   Moon,
   Wrench,
+  FileText,
+  StickyNote,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useTheme } from "next-themes";
@@ -176,7 +177,7 @@ export function Layout({ children }: LayoutProps) {
               <RefreshCw className="h-5 w-5 flex-shrink-0" />
               {!collapsed && <span>Renovação</span>}
             </NavLink>
-            <NavLink
+                  <NavLink
               to="/sintegra"
               className={collapsed ? "justify-center" : ""}
               activeClassName="bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground"
@@ -184,6 +185,15 @@ export function Layout({ children }: LayoutProps) {
               <FileText className="h-5 w-5 flex-shrink-0" />
               {!collapsed && <span>Sintegra</span>}
             </NavLink>
+             <NavLink
+               to="/anotacoes"
+               className={collapsed ? "justify-center" : ""}
+               activeClassName="bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground"
+             >
+               <StickyNote className="h-5 w-5 flex-shrink-0" />
+               {!collapsed && <span>Anotações</span>}
+             </NavLink>
+     
             <NavLink
               to="/configuracoes"
               className={collapsed ? "justify-center" : ""}

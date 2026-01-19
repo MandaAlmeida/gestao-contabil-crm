@@ -14,6 +14,7 @@ import Renovacao from "./pages/Renovacao";
 import Sintegra from "./pages/Sintegra";
 import Configuracoes from "./pages/Configuracoes";
 import NotFound from "./pages/NotFound";
+import Anotacoes from "./pages/Anotacoes";
 import Login from "./pages/Login";
 // import Registro from "./pages/Registro";
 import EsqueciSenha from "./pages/EsqueciSenha";
@@ -127,6 +128,14 @@ function AppContent() {
             </ProtectedRoute>
           }
         />
+          <Route
+            path="/anotacoes"
+            element={
+              <ProtectedRoute>
+                <Anotacoes />
+              </ProtectedRoute>
+            }
+          />
         <Route
           path="/sintegra"
           element={

@@ -16,10 +16,6 @@ export function generateFinanceiroExcel(
   data: Financeiro[],
   options: PDFGeneratorOptions
 ): void {
-  // Calcular totais
-  const totalValor = data.reduce((sum, item) => sum + item.valorMensalidade, 0);
-  const totalClientes = new Set(data.map(item => item.clienteNome)).size;
-
   // Preparar dados para Excel
   const excelData = data.map((item) => ({
     'Cliente': item.clienteNome,
@@ -34,44 +30,6 @@ export function generateFinanceiroExcel(
     'Meio Pagamento': item.meioPagamento || '',
     'Observações': item.observacoes || '',
   }));
-
-  // Adicionar linha em branco
-  excelData.push({
-    'Cliente': '',
-    'CNPJ': '',
-    'Data Vencimento': '',
-    'Valor': '',
-    'Status': '',
-    'Data Pagamento': '',
-    'Meio Pagamento': '',
-    'Observações': '',
-  });
-
-  // Adicionar totais
-  excelData.push({
-    'Cliente': 'TOTAL GERAL',
-    'CNPJ': '',
-    'Data Vencimento': '',
-    'Valor': `R$ ${totalValor.toLocaleString('pt-BR', {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    })}`,
-    'Status': '',
-    'Data Pagamento': '',
-    'Meio Pagamento': '',
-    'Observações': '',
-  });
-
-  excelData.push({
-    'Cliente': 'Total de Clientes',
-    'CNPJ': totalClientes.toString(),
-    'Data Vencimento': '',
-    'Valor': '',
-    'Status': '',
-    'Data Pagamento': '',
-    'Meio Pagamento': '',
-    'Observações': '',
-  });
 
   // Criar workbook e worksheet
   const wb = XLSX.utils.book_new();
@@ -168,28 +126,6 @@ export async function generateFinanceiroPDF(
       maximumFractionDigits: 2,
     })}`,
     item.status,
-  ]);
-
-  // Calcular totais
-  const totalValor = data.reduce((sum, item) => sum + item.valorMensalidade, 0);
-  const totalClientes = new Set(data.map(item => item.clienteNome)).size;
-
-  // Adicionar linhas de total na tabela
-  tableData.push([
-    'TOTAL GERAL',
-    '',
-    `R$ ${totalValor.toLocaleString('pt-BR', {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    })}`,
-    '',
-  ]);
-
-  tableData.push([
-    `Total de Clientes: ${totalClientes}`,
-    '',
-    '',
-    '',
   ]);
 
   // Importar autoTable dinamicamente
