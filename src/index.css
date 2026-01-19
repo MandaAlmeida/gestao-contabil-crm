@@ -114,3 +114,25 @@ All colors MUST be HSL.
 [data-radix-select-scroll-down-button] {
   display: none;
 }
+
+.color-circle {
+  -webkit-appearance: none;
+  appearance: none;
+  padding: 0;
+  border-radius: 9999px;
+  overflow: hidden;
+}
+
+.color-circle::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+.color-circle::-webkit-color-swatch {
+  border: none;
+  border-radius: 9999px;
+}
+
+.color-circle::-moz-color-swatch {
+  border: none;
+  border-radius: 9999px;
+}

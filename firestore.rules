@@ -448,6 +448,18 @@ service cloud.firestore {
       allow update: if false;
     }
     
+    // ==================== ANOTACOES ====================
+    match /anotacoes/{anotacaoId} {
+      // Permitir leitura para usuários autenticados
+      allow read: if isAuthenticated();
+      // Permitir criação para usuários autenticados
+      allow create: if isAuthenticated();
+      // Permitir atualização para usuários autenticados
+      allow update: if isAuthenticated();
+      // Permitir exclusão para usuários autenticados
+      allow delete: if isAuthenticated();
+    }
+    
     // Negar todas as outras operações por padrão
     match /{document=**} {
       allow read, write: if false;
