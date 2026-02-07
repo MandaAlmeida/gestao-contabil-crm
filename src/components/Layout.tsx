@@ -39,15 +39,11 @@ export function Layout({ children }: LayoutProps) {
   });
 
   const { resolvedTheme, setTheme } = useTheme();
-  // con st [mounted, setMounted] = useState(false);
   const { logout } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
   const { showConfirmation, ConfirmationDialogComponent } = useConfirmationDialog();
 
-  // useEffect(() => {
-  //   setMounted(true);
-  // }, []);
 
   useEffect(() => {
     localStorage.setItem("sidebar-collapsed", JSON.stringify(collapsed));
@@ -207,13 +203,6 @@ export function Layout({ children }: LayoutProps) {
           {/* Footer Navigation */}
           <div className="border-t border-border p-4 space-y-1">
             <ThemeToggle collapsed={collapsed} />
-            {/* <Button
-              variant="ghost"
-              className="flex items-center gap-3 rounded-lg px-3 py-2 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground w-full justify-start"
-            >
-              <HelpCircle className="h-5 w-5 flex-shrink-0" />
-              {!collapsed && <span>Ajuda</span>}
-            </Button> */}
             <Button
               variant="ghost"
               onClick={handleLogout}

@@ -17,19 +17,29 @@ export function generateFinanceiroExcel(
   options: PDFGeneratorOptions
 ): void {
   // Preparar dados para Excel
-  const excelData = data.map((item) => ({
-    'Cliente': item.clienteNome,
-    'CNPJ': item.clienteCNPJ,
-    'Data Vencimento': item.dataVencimento,
-    'Valor': `R$ ${item.valorMensalidade.toLocaleString('pt-BR', {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    })}`,
-    'Status': item.status,
-    'Data Pagamento': item.dataPagamento || '',
-    'Meio Pagamento': item.meioPagamento || '',
-    'Observações': item.observacoes || '',
-  }));
+  const excelData = data.map((item) => {
+    const ultimoPagamento = item.historicoPagamentos && item.historicoPagamentos.length > 0
+      ? item.historicoPagamentos[item.historicoPagamentos.length - 1]
+      : null;
+    
+    const pagamentosEmDia = item.historicoPagamentos?.filter(p => p.emDia).length || 0;
+    const pagamentosAtrasados = item.historicoPagamentos?.filter(p => !p.emDia).length || 0;
+    
+    return {
+      'Cliente': item.clienteNome,
+      'CNPJ': item.clienteCNPJ,
+      'Data Vencimento': item.dataVencimento,
+      'Valor': `R$ ${item.valorMensalidade.toLocaleString('pt-BR', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      })}`,
+      'Status': item.status,
+      'Pag. Em Dia': pagamentosEmDia,
+      'Pag. Atrasados': pagamentosAtrasados,
+      'Último Pagamento': ultimoPagamento?.dataPagamento || '',
+      'Observações': item.observacoes || '',
+    };
+  });
 
   // Criar workbook e worksheet
   const wb = XLSX.utils.book_new();
@@ -42,8 +52,9 @@ export function generateFinanceiroExcel(
     { wch: 15 }, // Data Vencimento
     { wch: 15 }, // Valor
     { wch: 12 }, // Status
-    { wch: 15 }, // Data Pagamento
-    { wch: 15 }, // Meio Pagamento
+    { wch: 12 }, // Pag. Em Dia
+    { wch: 15 }, // Pag. Atrasados
+    { wch: 16 }, // Último Pagamento
     { wch: 30 }, // Observações
   ];
   ws['!cols'] = colWidths;
@@ -97,7 +108,7 @@ export function generateRenovacaoExcel(
 export async function generateFinanceiroPDF(
   data: Financeiro[],
   options: PDFGeneratorOptions
-): void {
+): Promise<void> {
   const doc = new jsPDF();
 
   // Título
@@ -158,7 +169,7 @@ export async function generateFinanceiroPDF(
 export async function generateRenovacaoPDF(
   data: Renovacao[],
   options: PDFGeneratorOptions
-): void {
+): Promise<void> {
   const doc = new jsPDF();
 
   // Título

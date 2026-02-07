@@ -27,13 +27,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus, Wallet, Edit, Trash2, CheckCircle, Clock3 } from "lucide-react";
+import { Plus, Wallet, Edit, Trash2, CheckCircle, Clock3, AlertCircle, History } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useDespesas } from "@/hooks/useDespesas";
 import { NotificationButton } from "@/components/NotificationButton";
 import { NotificationPanel } from "@/components/NotificationPanel";
 import { useClientes } from "@/hooks/useClientes";
 import { useConfirmationDialog } from "@/components/ConfirmationDialog";
+import { HistoricoPagamentosDialog } from "@/components/HistoricoPagamentosDialog";
 import type { Despesa } from "@/types/despesas";
 import { usePagination } from "@/hooks/usePagination";
 import { PaginationControls } from "@/components/PaginationControls";
@@ -93,25 +94,61 @@ const adicionarMes = (dataString: string): string => {
 };
 
 export default function DespesasPage() {
+  // Estados
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<Despesa | null>(null);
   const [formState, setFormState] = useState<FormState>(DEFAULT_FORM);
   const [isSaving, setIsSaving] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
-  const { toast } = useToast();
-  const { despesas, createDespesa, updateDespesa, deleteDespesa } =
-    useDespesas();
-  const { clientes } = useClientes();
-  const { showConfirmation, ConfirmationDialogComponent } = useConfirmationDialog();
+  const [historicoDialogOpen, setHistoricoDialogOpen] = useState(false);
+  const [selectedItemHistorico, setSelectedItemHistorico] = useState<Despesa | null>(null);
   const [filtroDataInicio, setFiltroDataInicio] = useState("");
   const [filtroDataFim, setFiltroDataFim] = useState("");
   const [filtroStatus, setFiltroStatus] = useState<
-    "todos" | "pago" | "pendente"
+    "todos" | "pago" | "pendente" | "vencida"
   >("todos");
   const [ordenacao, setOrdenacao] = useState<{
     campo: "descricao" | "data" | "valor" | "status";
     direcao: "asc" | "desc";
   }>({ campo: "data", direcao: "desc" });
+
+  // Hooks customizados
+  const { toast } = useToast();
+  const { despesas, createDespesa, updateDespesa, deleteDespesa } = useDespesas();
+  const { clientes } = useClientes();
+  const { showConfirmation, ConfirmationDialogComponent } = useConfirmationDialog();
+
+  // Função auxiliar para determinar o status real da despesa baseado no histórico
+  const obterStatusDespesa = (despesa: Despesa): "pago" | "vencida" | "pendente" => {
+    // Obter mês e ano da data de vencimento atual
+    const dataVencimento = new Date(despesa.data);
+    const mesVencimento = dataVencimento.getMonth();
+    const anoVencimento = dataVencimento.getFullYear();
+
+    // Verificar se há pagamento no histórico para o mesmo mês/ano
+    const pagamentoNoMes = despesa.historicoPagamentos?.find(p => {
+      const dataVencimentoPagamento = new Date(p.dataVencimento);
+      return (
+        dataVencimentoPagamento.getMonth() === mesVencimento &&
+        dataVencimentoPagamento.getFullYear() === anoVencimento
+      );
+    });
+
+    if (pagamentoNoMes) {
+      return "pago";
+    }
+
+    // Se não há pagamento, verificar se está vencida
+    const hoje = new Date();
+    hoje.setHours(0, 0, 0, 0);
+    dataVencimento.setHours(0, 0, 0, 0);
+
+    if (dataVencimento < hoje) {
+      return "vencida";
+    }
+
+    return "pendente";
+  };
 
   const responsaveisDisponiveis = useMemo(
     () =>
@@ -130,11 +167,13 @@ export default function DespesasPage() {
       const matchesDataFim =
         !filtroDataFim || despesaData <= new Date(filtroDataFim);
 
+      // Obter status real baseado no histórico
+      const status = obterStatusDespesa(despesa);
+
       // Filtro por status
       const matchesStatus =
         filtroStatus === "todos" ||
-        (filtroStatus === "pago" && despesa.pago) ||
-        (filtroStatus === "pendente" && !despesa.pago);
+        filtroStatus === status;
 
       return matchesDataInicio && matchesDataFim && matchesStatus;
     });
@@ -162,11 +201,17 @@ export default function DespesasPage() {
           comparacao = a.valor - b.valor;
           break;
         case "status":
-          const statusA = a.pago ? "pago" : "pendente";
-          const statusB = b.pago ? "pago" : "pendente";
-          comparacao = statusA.localeCompare(statusB, "pt-BR", {
-            sensitivity: "base",
-          });
+          const statusA = obterStatusDespesa(a);
+          const statusB = obterStatusDespesa(b);
+          
+          // Ordem: vencida < pendente < pago
+          const statusOrder: Record<string, number> = {
+            vencida: 0,
+            pendente: 1,
+            pago: 2,
+          };
+          
+          comparacao = statusOrder[statusA] - statusOrder[statusB];
           break;
       }
 
@@ -263,8 +308,8 @@ export default function DespesasPage() {
   };
 
   const STATUS_META: Record<
-    "pago" | "pendente",
-    { label: string; className: string; icon: typeof CheckCircle | typeof Clock3 }
+    "pago" | "pendente" | "vencida",
+    { label: string; className: string; icon: typeof CheckCircle | typeof Clock3 | typeof AlertCircle }
   > = {
     pago: {
       label: "Pago",
@@ -275,6 +320,11 @@ export default function DespesasPage() {
       label: "Pendente",
       className: "bg-warning/10 text-warning hover:bg-warning/20",
       icon: Clock3,
+    },
+    vencida: {
+      label: "Vencida",
+      className: "bg-destructive/10 text-destructive hover:bg-destructive/20",
+      icon: AlertCircle,
     },
   };
 
@@ -311,74 +361,212 @@ export default function DespesasPage() {
   };
 
   const handleTogglePago = async (despesa: Despesa) => {
+    const hoje = new Date();
+    hoje.setHours(0, 0, 0, 0);
+    const dataHojeStr = hoje.toISOString().split('T')[0];
+
+    // Verificar status atual baseado no histórico
+    const statusAtual = obterStatusDespesa(despesa);
+
+    // Obter mês e ano da data de vencimento atual
+    const dataVencimento = new Date(despesa.data);
+    const mesVencimento = dataVencimento.getMonth();
+    const anoVencimento = dataVencimento.getFullYear();
+
     try {
-      const novoStatusPago = !despesa.pago;
-      let novaData = despesa.data;
-      let novaDataPagamento = despesa.dataPagamento;
+      if (statusAtual === "pago") {
+        // Despesa está paga, desmarcando
+        // Encontrar o pagamento do mês/ano atual
+        const pagamentoAtual = despesa.historicoPagamentos?.find(p => {
+          const dataVencimentoPagamento = new Date(p.dataVencimento);
+          return (
+            dataVencimentoPagamento.getMonth() === mesVencimento &&
+            dataVencimentoPagamento.getFullYear() === anoVencimento
+          );
+        });
 
-      if (despesa.fixo) {
-        if (novoStatusPago && !despesa.pago) {
-          // Salva a data de vencimento anterior como dataPagamento (para gráficos)
-          novaDataPagamento = despesa.data;
-          // Avanço automático da data para despesas fixas quando marcadas como pagas
-          novaData = adicionarMes(despesa.data);
-        } else if (!novoStatusPago && despesa.pago) {
-          // Para despesas fixas, quando volta manualmente para pendente
-          const hoje = new Date();
-          const mesAtual = hoje.getMonth();
-          const anoAtual = hoje.getFullYear();
+        const pagamentoFoiHoje = pagamentoAtual?.dataPagamento === dataHojeStr;
 
-          // Se tem dataPagamento e está no mesmo mês, volta para a data anterior
-          if (despesa.dataPagamento) {
-            const dataPagamento = new Date(despesa.dataPagamento);
-            const mesPagamento = dataPagamento.getMonth();
-            const anoPagamento = dataPagamento.getFullYear();
+        if (pagamentoFoiHoje || !despesa.fixo) {
+          // Se foi pago hoje OU é despesa não fixa, apenas remove do histórico sem voltar o vencimento
+          const historicoAtualizado = (despesa.historicoPagamentos || []).filter(p => {
+            const dataVencimentoPagamento = new Date(p.dataVencimento);
+            return !(
+              dataVencimentoPagamento.getMonth() === mesVencimento &&
+              dataVencimentoPagamento.getFullYear() === anoVencimento
+            );
+          });
 
-            if (mesPagamento === mesAtual && anoPagamento === anoAtual) {
-              // Está no mesmo mês, volta para a data anterior (mês passado)
-              novaData = removerMes(despesa.data);
-            } else {
-              // Está em mês diferente, mantém a data atual
-              novaData = despesa.data;
-            }
-          } else {
-            // Não tem dataPagamento, mantém a data atual
-            novaData = despesa.data;
-          }
+          await updateDespesa(despesa.id, {
+            historicoPagamentos: historicoAtualizado,
+            pago: false,
+            dataPagamento: null,
+          });
 
-          novaDataPagamento = null;
+          toast({
+            title: "Pagamento desfeito.",
+            description: `${despesa.descricao} voltou ao status anterior.`,
+          });
+          return;
         }
-      } else {
-        // Para despesas não fixas, define/remove data de pagamento
-        if (novoStatusPago && !despesa.pago) {
-          novaDataPagamento = new Date().toISOString().split('T')[0];
-        } else if (!novoStatusPago && despesa.pago) {
-          novaDataPagamento = null;
-        }
+
+        // Se não foi pago hoje E é despesa fixa, remove do histórico E volta o vencimento
+        const historicoAtualizado = (despesa.historicoPagamentos || []).filter(p => {
+          const dataVencimentoPagamento = new Date(p.dataVencimento);
+          return !(
+            dataVencimentoPagamento.getMonth() === mesVencimento &&
+            dataVencimentoPagamento.getFullYear() === anoVencimento
+          );
+        });
+
+        const vencimentoAnterior = removerMes(despesa.data);
+
+        await updateDespesa(despesa.id, {
+          historicoPagamentos: historicoAtualizado,
+          data: vencimentoAnterior,
+          pago: false,
+          dataPagamento: null,
+        });
+
+        toast({
+          title: "Pagamento removido.",
+          description: `${despesa.descricao} voltou a ficar pendente.`,
+        });
+        return;
       }
 
+      // Marcando como pago - adiciona ao histórico
+      const vencimento = new Date(despesa.data + "T00:00:00");
+      const pagamento = new Date(dataHojeStr + "T00:00:00");
+      vencimento.setHours(0, 0, 0, 0);
+      pagamento.setHours(0, 0, 0, 0);
+
+      const emDia = pagamento <= vencimento;
+      const novaData = despesa.fixo ? adicionarMes(despesa.data) : despesa.data;
+
+      const novoPagamento = {
+        id: `${despesa.id}-${despesa.data}-${Date.now()}`,
+        dataVencimento: despesa.data,
+        dataPagamento: dataHojeStr,
+        emDia,
+        meioPagamento: "Pix" as const,
+      };
+
+      const historicoAtualizado = [
+        ...(despesa.historicoPagamentos || []),
+        novoPagamento,
+      ];
+
       await updateDespesa(despesa.id, {
-        pago: novoStatusPago,
+        historicoPagamentos: historicoAtualizado,
         data: novaData,
-        dataPagamento: novaDataPagamento,
+        pago: true,
+        dataPagamento: dataHojeStr,
       });
 
       toast({
-        title: novoStatusPago
-          ? "Despesa marcada como paga"
-          : "Despesa marcada como pendente",
-        description:
-          despesa.fixo && novoStatusPago
-            ? `Data avançada para ${formatarDataBR(novaData)}`
-            : despesa.fixo && !novoStatusPago && novaData !== despesa.data
-            ? `Data voltou para ${formatarDataBR(novaData)}`
-            : undefined,
+        title: emDia ? "Pagamento em dia registrado!" : "Pagamento atrasado registrado!",
+        description: despesa.fixo
+          ? `Data avançada para ${formatarDataBR(novaData)}`
+          : emDia
+          ? `${despesa.descricao} foi marcado como pago em dia.`
+          : `${despesa.descricao} foi marcado como pago com atraso.`,
       });
     } catch (error) {
       toast({
         title: "Erro ao atualizar despesa",
         variant: "destructive",
       });
+    }
+  };
+
+  const handleDeleteHistorico = async (despesaItem: Despesa, historicoId: string) => {
+    // Encontra o pagamento mais recente
+    const pagamentoMaisRecente = (despesaItem.historicoPagamentos || []).reduce((ultimo, atual) => {
+      const dataUltimo = new Date(ultimo.dataVencimento);
+      const dataAtual = new Date(atual.dataVencimento);
+      return dataAtual > dataUltimo ? atual : ultimo;
+    });
+
+    // Só permite deletar o pagamento mais recente
+    if (historicoId !== pagamentoMaisRecente.id) {
+      toast({
+        title: "Não é possível apagar este pagamento",
+        description: "Você deve apagar os pagamentos mais recentes primeiro.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const historicoAtualizado = (despesaItem.historicoPagamentos || []).filter(
+      h => h.id !== historicoId
+    );
+
+    // Pega a data de vencimento do pagamento que está sendo apagado
+    const pagamentoApagado = despesaItem.historicoPagamentos?.find(h => h.id === historicoId);
+    const dataVencimentoAnterior = pagamentoApagado?.dataVencimento || despesaItem.data;
+
+    try {
+      await updateDespesa(despesaItem.id, {
+        historicoPagamentos: historicoAtualizado,
+        data: dataVencimentoAnterior,
+        pago: false,
+        dataPagamento: null,
+      });
+
+      toast({
+        title: "Pagamento removido do histórico.",
+        description: `Data de vencimento voltou para ${formatarDataBR(dataVencimentoAnterior)}.`,
+      });
+
+      // Fechar o dialog após deletar
+      setHistoricoDialogOpen(false);
+      setSelectedItemHistorico(null);
+    } catch (error) {
+      toast({ title: "Erro ao remover do histórico", variant: "destructive" });
+    }
+  };
+
+  const handleEditHistorico = async (
+    despesaItem: Despesa,
+    historicoId: string,
+    novaData: string,
+    novoMeio: "Pix" | "Boleto"
+  ) => {
+    const historicoAtualizado = (despesaItem.historicoPagamentos || []).map(h => {
+      if (h.id === historicoId) {
+        const vencimento = new Date(h.dataVencimento + "T00:00:00");
+        const dataPagamento = new Date(novaData + "T00:00:00");
+        vencimento.setHours(0, 0, 0, 0);
+        dataPagamento.setHours(0, 0, 0, 0);
+        const emDia = dataPagamento <= vencimento;
+
+        return {
+          ...h,
+          dataPagamento: novaData,
+          meioPagamento: novoMeio,
+          emDia,
+        };
+      }
+      return h;
+    });
+
+    try {
+      await updateDespesa(despesaItem.id, {
+        historicoPagamentos: historicoAtualizado,
+      });
+
+      toast({
+        title: "Histórico atualizado.",
+      });
+
+      // Atualizar o item selecionado
+      const despesaAtualizada = despesas.find(d => d.id === despesaItem.id);
+      if (despesaAtualizada) {
+        setSelectedItemHistorico(despesaAtualizada);
+      }
+    } catch (error) {
+      toast({ title: "Erro ao atualizar histórico", variant: "destructive" });
     }
   };
 
@@ -644,7 +832,7 @@ export default function DespesasPage() {
               <Select
                 value={filtroStatus}
                 onValueChange={(value) =>
-                  setFiltroStatus(value as "todos" | "pago" | "pendente")
+                  setFiltroStatus(value as "todos" | "pago" | "pendente" | "vencida")
                 }
               >
                 <SelectTrigger className="w-40">
@@ -654,6 +842,7 @@ export default function DespesasPage() {
                   <SelectItem value="todos">Todos</SelectItem>
                   <SelectItem value="pago">Pago</SelectItem>
                   <SelectItem value="pendente">Pendente</SelectItem>
+                  <SelectItem value="vencida">Vencida</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -784,7 +973,7 @@ export default function DespesasPage() {
                     </TableCell>
                     <TableCell>
                       {(() => {
-                        const status = despesa.pago ? "pago" : "pendente";
+                        const status = obterStatusDespesa(despesa);
                         const meta = STATUS_META[status];
                         const Icon = meta.icon;
                         return (
@@ -792,7 +981,7 @@ export default function DespesasPage() {
                             type="button"
                             onClick={() => handleTogglePago(despesa)}
                             title={
-                              despesa.pago
+                              status === "pago"
                                 ? "Marcar como pendente"
                                 : "Marcar como pago"
                             }
@@ -810,6 +999,17 @@ export default function DespesasPage() {
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setSelectedItemHistorico(despesa);
+                            setHistoricoDialogOpen(true);
+                          }}
+                          title="Ver histórico de pagamentos"
+                        >
+                          <History className="h-4 w-4" />
+                        </Button>
                         <Button
                           variant="ghost"
                           size="sm"
@@ -853,6 +1053,13 @@ export default function DespesasPage() {
           filterBy={["despesa"]}
         />
       </div>
+      <HistoricoPagamentosDialog
+        isOpen={historicoDialogOpen}
+        onOpenChange={setHistoricoDialogOpen}
+        item={selectedItemHistorico}
+        onDeleteHistorico={handleDeleteHistorico}
+        onEditHistorico={handleEditHistorico}
+      />
       {ConfirmationDialogComponent}
     </Layout>
   );

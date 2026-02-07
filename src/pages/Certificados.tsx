@@ -10,7 +10,6 @@ import { NotificationPanel } from "@/components/NotificationPanel";
 import {Certificado } from "@/types/crm";
 import {
   Plus,
-  Search,
   Edit,
   Trash2,
   UserPlus,
@@ -40,6 +39,7 @@ import { formatarDataBR } from "@/lib/utils";
 import { usePagination } from "@/hooks/usePagination";
 import { PaginationControls } from "@/components/PaginationControls";
 import { StatusSelect } from "@/components/StatusSelect";
+import { FiltersBar } from "@/components/FiltersBar";
 
 const adicionarAno = (data?: string) => {
   const baseDate = data ? new Date(data) : new Date();
@@ -564,194 +564,66 @@ export default function Certificados() {
           </div>
         </div>
 
-        <div className="mb-4 space-y-4">
-          <div className="flex gap-4 items-end">
-            <div className="flex-1 space-y-1">
-              <Label
-                htmlFor="filtro-busca"
-                className="text-xs text-muted-foreground"
-              >
-                Buscar
-              </Label>
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  id="filtro-busca"
-                  placeholder="Buscar por cliente..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-9"
-                />
-              </div>
-            </div>
-            <div className="w-64 space-y-1">
-              <Label
-                htmlFor="filtro-responsavel"
-                className="text-xs text-muted-foreground"
-              >
-                Responsável
-              </Label>
-              <Select
-                value={searchResponsavel}
-                onValueChange={setSearchResponsavel}
-              >
-                <SelectTrigger id="filtro-responsavel">
-                  <SelectValue placeholder="Selecione o responsável" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="todos">Todos os responsáveis</SelectItem>
-                  {responsaveisDisponiveis.map((responsavel) => (
-                    <SelectItem key={responsavel} value={responsavel}>
-                      {responsavel}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <div className="flex gap-4">
-            <div className="space-y-1">
-              <Label
-                htmlFor="filtro-data-inicio"
-                className="text-xs text-muted-foreground"
-              >
-                Data Início
-              </Label>
-              <Input
-                id="filtro-data-inicio"
-                type="date"
-                value={filtroDataInicio}
-                onChange={(e) => setFiltroDataInicio(e.target.value)}
-                className="w-40"
-              />
-            </div>
-            <div className="space-y-1">
-              <Label
-                htmlFor="filtro-data-fim"
-                className="text-xs text-muted-foreground"
-              >
-                Data Fim
-              </Label>
-              <Input
-                id="filtro-data-fim"
-                type="date"
-                value={filtroDataFim}
-                onChange={(e) => setFiltroDataFim(e.target.value)}
-                className="w-40"
-              />
-            </div>
-            <div className="space-y-1">
-              <Label
-                htmlFor="filtro-status"
-                className="text-xs text-muted-foreground"
-              >
-                Status
-              </Label>
-              <Select
-                value={filtroStatus}
-                onValueChange={(value) =>
-                  setFiltroStatus(value as Certificado["status"] | "todos")
-                }
-              >
-                <SelectTrigger className="w-40">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="todos">Todos</SelectItem>
-                  <SelectItem value="Pendente">Pendente</SelectItem>
-                  <SelectItem value="Avisado">Avisado</SelectItem>
-                  <SelectItem value="Renovado">Renovado</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1">
-              <Label
-                htmlFor="ordenacao"
-                className="text-xs text-muted-foreground"
-              >
-                Ordenar por
-              </Label>
-              <Select
-                value={`${ordenacao.campo}-${ordenacao.direcao}`}
-                onValueChange={(value) => {
-                  const [campo, direcao] = value.split("-") as [
-                    "clienteNome" | "dataVencimento" | "tipoCertificado" | "status",
-                    "asc" | "desc"
-                  ];
-                  setOrdenacao({ campo, direcao });
-                }}
-              >
-                <SelectTrigger id="ordenacao" className="w-48">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="clienteNome-asc">Cliente (A-Z)</SelectItem>
-                  <SelectItem value="clienteNome-desc">
-                    Cliente (Z-A)
-                  </SelectItem>
-                  <SelectItem value="dataVencimento-asc">
-                    Vencimento (Mais recente)
-                  </SelectItem>
-                  <SelectItem value="dataVencimento-desc">
-                    Vencimento (Mais antigo)
-                  </SelectItem>
-                  <SelectItem value="tipoCertificado-asc">
-                    Tipo (A-Z)
-                  </SelectItem>
-                  <SelectItem value="tipoCertificado-desc">
-                    Tipo (Z-A)
-                  </SelectItem>
-                  <SelectItem value="status-asc">Status (A-Z)</SelectItem>
-                  <SelectItem value="status-desc">Status (Z-A)</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            {totalItems > 11 && (
-              <div className="space-y-1">
-                <Label
-                  htmlFor="items-per-page"
-                  className="text-xs text-muted-foreground"
-                >
-                  Itens por página
-                </Label>
-                <Select
-                  value={itemsPerPage.toString()}
-                  onValueChange={(value) => setItemsPerPage(Number(value))}
-                >
-                  <SelectTrigger id="items-per-page" className="w-24">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="5">5</SelectItem>
-                    <SelectItem value="10">10</SelectItem>
-                    <SelectItem value="20">20</SelectItem>
-                    <SelectItem value="50">50</SelectItem>
-                    <SelectItem value="100">100</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-            {(filtroDataInicio ||
+        <FiltersBar
+          searchTerm={searchTerm}
+          onSearchTermChange={setSearchTerm}
+          searchPlaceholder="Buscar por cliente..."
+          responsavelOptions={responsaveisDisponiveis}
+          responsavelValue={searchResponsavel}
+          onResponsavelChange={setSearchResponsavel}
+          dateStartLabel="Data Início"
+          dateEndLabel="Data Fim"
+          dateStartValue={filtroDataInicio}
+          dateEndValue={filtroDataFim}
+          onDateStartChange={setFiltroDataInicio}
+          onDateEndChange={setFiltroDataFim}
+          showStatus
+          statusValue={filtroStatus}
+          statusOptions={[
+            { value: "todos", label: "Todos" },
+            { value: "Pendente", label: "Pendente" },
+            { value: "Avisado", label: "Avisado" },
+            { value: "Renovado", label: "Renovado" },
+          ]}
+          onStatusChange={(value) =>
+            setFiltroStatus(value as Certificado["status"] | "todos")
+          }
+          orderValue={`${ordenacao.campo}-${ordenacao.direcao}`}
+          orderOptions={[
+            { value: "clienteNome-asc", label: "Cliente (A-Z)" },
+            { value: "clienteNome-desc", label: "Cliente (Z-A)" },
+            { value: "dataVencimento-asc", label: "Vencimento (Mais recente)" },
+            { value: "dataVencimento-desc", label: "Vencimento (Mais antigo)" },
+            { value: "tipoCertificado-asc", label: "Tipo (A-Z)" },
+            { value: "tipoCertificado-desc", label: "Tipo (Z-A)" },
+            { value: "status-asc", label: "Status (A-Z)" },
+            { value: "status-desc", label: "Status (Z-A)" },
+          ]}
+          onOrderChange={(value) => {
+            const [campo, direcao] = value.split("-") as [
+              "clienteNome" | "dataVencimento" | "tipoCertificado" | "status",
+              "asc" | "desc"
+            ];
+            setOrdenacao({ campo, direcao });
+          }}
+          totalItems={totalItems}
+          itemsPerPage={itemsPerPage}
+          onItemsPerPageChange={(value) => setItemsPerPage(Number(value))}
+          showClear={
+            !!(
+              filtroDataInicio ||
               filtroDataFim ||
               filtroStatus !== "todos" ||
-              searchResponsavel !== "todos") && (
-              <div className="flex items-end">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    setFiltroDataInicio("");
-                    setFiltroDataFim("");
-                    setFiltroStatus("todos");
-                    setSearchResponsavel("todos");
-                  }}
-                >
-                  Limpar Filtros
-                </Button>
-              </div>
-            )}
-          </div>
-        </div>
+              searchResponsavel !== "todos"
+            )
+          }
+          onClear={() => {
+            setFiltroDataInicio("");
+            setFiltroDataFim("");
+            setFiltroStatus("todos");
+            setSearchResponsavel("todos");
+          }}
+        />
 
         <div className="rounded-md border">
           <table className="w-full">

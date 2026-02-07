@@ -8,7 +8,6 @@ import { useConfirmationDialog } from "@/components/ConfirmationDialog";
 import { Servico } from "@/types/crm";
 import {
   Plus,
-  Search,
   Edit,
   Trash2,
   CheckCircle,
@@ -46,6 +45,7 @@ import {
   PaginationEllipsis,
 } from "@/components/ui/pagination";
 import { useUsuarios } from "@/hooks/useUsuarios";
+import { FiltersBar } from "@/components/FiltersBar";
 
 export default function ServicosPage() {
   const { clientes } = useClientes();
@@ -487,171 +487,46 @@ export default function ServicosPage() {
 
         {/* Modal de Confirmação de Pagamento */}
 
-        <div className="mb-4 space-y-4">
-          <div className="flex gap-4 items-end">
-            <div className="flex-1 space-y-1">
-              <Label
-                htmlFor="filtro-busca"
-                className="text-xs text-muted-foreground"
-              >
-                Buscar
-              </Label>
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  id="filtro-busca"
-                  placeholder="Buscar por cliente..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-9"
-                />
-              </div>
-            </div>
-            <div className="w-64 space-y-1">
-              <Label
-                htmlFor="filtro-responsavel"
-                className="text-xs text-muted-foreground"
-              >
-                Responsável
-              </Label>
-              <Select
-                value={searchResponsavel}
-                onValueChange={setSearchResponsavel}
-              >
-                <SelectTrigger id="filtro-responsavel">
-                  <SelectValue placeholder="Selecione o responsável" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="todos">Todos os responsáveis</SelectItem>
-                  {responsaveisDisponiveis.map((responsavel, index) => (
-                    <SelectItem
-                      key={`responsavel-${index}-${responsavel}`}
-                      value={responsavel}
-                    >
-                      {responsavel}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <div className="flex gap-4">
-            <div className="space-y-1">
-              <Label
-                htmlFor="filtro-data-inicio"
-                className="text-xs text-muted-foreground"
-              >
-                Data Vencimento Início
-              </Label>
-              <Input
-                id="filtro-data-inicio"
-                type="date"
-                value={filtroDataInicio}
-                onChange={(e) => setFiltroDataInicio(e.target.value)}
-                className="w-40"
-              />
-            </div>
-            <div className="space-y-1">
-              <Label
-                htmlFor="filtro-data-fim"
-                className="text-xs text-muted-foreground"
-              >
-                Data Vencimento Fim
-              </Label>
-              <Input
-                id="filtro-data-fim"
-                type="date"
-                value={filtroDataFim}
-                onChange={(e) => setFiltroDataFim(e.target.value)}
-                className="w-40"
-              />
-            </div>
-            <div className="space-y-1">
-              <Label
-                htmlFor="ordenacao"
-                className="text-xs text-muted-foreground"
-              >
-                Ordenar por
-              </Label>
-              <Select
-                value={`${ordenacao.campo}-${ordenacao.direcao}`}
-                onValueChange={(value) => {
-                  const [campo, direcao] = value.split("-") as [
-                    "clienteNome" | "dataVencimento" | "valorMensalidade",
-                    "asc" | "desc"
-                  ];
-                  setOrdenacao({ campo, direcao });
-                }}
-              >
-                <SelectTrigger id="ordenacao" className="w-48">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="clienteNome-asc">
-                    Cliente (A-Z)
-                  </SelectItem>
-                  <SelectItem value="clienteNome-desc">
-                    Cliente (Z-A)
-                  </SelectItem>
-                  <SelectItem value="dataVencimento-asc">
-                    Vencimento (Mais recente)
-                  </SelectItem>
-                  <SelectItem value="dataVencimento-desc">
-                    Vencimento (Mais antigo)
-                  </SelectItem>
-                  <SelectItem value="valorMensalidade-desc">
-                    Valor (Maior)
-                  </SelectItem>
-                  <SelectItem value="valorMensalidade-asc">
-                    Valor (Menor)
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            {totalItems > 11 && (
-              <div className="space-y-1">
-                <Label
-                  htmlFor="items-per-page"
-                  className="text-xs text-muted-foreground"
-                >
-                  Itens por página
-                </Label>
-                <Select
-                  value={itemsPerPage.toString()}
-                  onValueChange={(value) => setItemsPerPage(Number(value))}
-                >
-                  <SelectTrigger id="items-per-page" className="w-24">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="5">5</SelectItem>
-                    <SelectItem value="10">10</SelectItem>
-                    <SelectItem value="20">20</SelectItem>
-                    <SelectItem value="50">50</SelectItem>
-                    <SelectItem value="100">100</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-            {(filtroDataInicio ||
-              filtroDataFim ||
-              searchResponsavel !== "todos") && (
-              <div className="flex items-end">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    setFiltroDataInicio("");
-                    setFiltroDataFim("");
-                    setSearchResponsavel("todos");
-                  }}
-                >
-                  Limpar Filtros
-                </Button>
-              </div>
-            )}
-          </div>
-        </div>
+        <FiltersBar
+          searchTerm={searchTerm}
+          onSearchTermChange={setSearchTerm}
+          searchPlaceholder="Buscar por cliente..."
+          responsavelOptions={responsaveisDisponiveis}
+          responsavelValue={searchResponsavel}
+          onResponsavelChange={setSearchResponsavel}
+          dateStartLabel="Data Vencimento Início"
+          dateEndLabel="Data Vencimento Fim"
+          dateStartValue={filtroDataInicio}
+          dateEndValue={filtroDataFim}
+          onDateStartChange={setFiltroDataInicio}
+          onDateEndChange={setFiltroDataFim}
+          showStatus={false}
+          orderValue={`${ordenacao.campo}-${ordenacao.direcao}`}
+          orderOptions={[
+            { value: "clienteNome-asc", label: "Cliente (A-Z)" },
+            { value: "clienteNome-desc", label: "Cliente (Z-A)" },
+            { value: "dataVencimento-asc", label: "Vencimento (Mais recente)" },
+            { value: "dataVencimento-desc", label: "Vencimento (Mais antigo)" },
+            { value: "valorMensalidade-desc", label: "Valor (Maior)" },
+            { value: "valorMensalidade-asc", label: "Valor (Menor)" },
+          ]}
+          onOrderChange={(value) => {
+            const [campo, direcao] = value.split("-") as [
+              "clienteNome" | "dataVencimento" | "valorMensalidade",
+              "asc" | "desc"
+            ];
+            setOrdenacao({ campo, direcao });
+          }}
+          totalItems={totalItems}
+          itemsPerPage={itemsPerPage}
+          onItemsPerPageChange={(value) => setItemsPerPage(Number(value))}
+          showClear={!!(filtroDataInicio || filtroDataFim || searchResponsavel !== "todos")}
+          onClear={() => {
+            setFiltroDataInicio("");
+            setFiltroDataFim("");
+            setSearchResponsavel("todos");
+          }}
+        />
 
         <div className="mb-4 rounded-lg bg-primary p-4 text-primary-foreground">
           <p className="text-lg font-semibold">

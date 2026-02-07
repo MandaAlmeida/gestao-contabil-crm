@@ -23,6 +23,21 @@ export interface Cliente {
   updatedAt: string;
 }
 
+export interface HistoricoPagamento {
+  id: string; // ID único para permitir edição/exclusão
+  dataVencimento: string;
+  dataPagamento: string;
+  emDia: boolean; // true se pagou antes/no vencimento, false se atrasado
+  meioPagamento: "Pix" | "Boleto";
+}
+
+export interface HistoricoAtividade {
+  id: string; // ID único para permitir edição/exclusão
+  dataPrazo: string; // Data de prazo original
+  dataConclusao: string; // Data que foi concluído
+  noPrazo: boolean; // true se concluiu antes/no prazo, false se atrasado
+}
+
 export interface Financeiro {
   id: string;
   clienteId: string;
@@ -31,7 +46,8 @@ export interface Financeiro {
   dataVencimento: string;
   valorMensalidade: number;
   status: "Pago" | "Pendente" | "Vencido";
-  dataPagamento?: string | null;
+  historicoPagamentos?: HistoricoPagamento[];
+  dataPagamento?: string | null; // Mantido para compatibilidade temporária
   meioPagamento?: "Pix" | "Boleto";
   servicoId?: string | null; // Link para serviço se for cobrança de serviço
   observacoes: string;
@@ -70,6 +86,7 @@ export interface Renovacao {
     | "Renovado"
     | "Cancelado";
   parcela?: "1 Vez" | "2 Vezes" | "3 Vezes" | null;
+  historicoPagamentos?: HistoricoPagamento[];
   observacoes: string;
   ativo: boolean;
   createdAt: string;
@@ -82,8 +99,10 @@ export interface Sintegra {
   clienteNome: string;
   dataPrazo: string;
   acesso: string;
-  status: "Pendente" | "Concluído";
+  status: "Concluído" | "Pendente" | "Vencido";
   observacoes: string;
+  dataPagamento?: string | null; // Mantido para compatibilidade
+  historicoAtividades?: HistoricoAtividade[];
   ativo: boolean;
   createdAt: string;
   updatedAt: string;
@@ -99,6 +118,8 @@ export interface Servico {
   dataVencimento: string;
   valorMensalidade: number;
   status: "Pago" | "Pendente" | "Vencido";
+  dataPagamento?: string | null;
+  historicoPagamentos?: HistoricoPagamento[];
   meioPagamento: "Pix" | "Boleto";
   observacoes: string;
   ativo: boolean;

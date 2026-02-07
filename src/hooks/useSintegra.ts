@@ -2,8 +2,10 @@ import { useState, useEffect } from "react";
 import * as sintegraService from "@/lib/firestore/sintegra";
 import { excluirNotificacoesItem } from "@/utils/notificacoes";
 import type { Sintegra } from "@/types/crm";
+import { normalizarSintegras } from "@/lib/sintegra";
 
 export function useSintegra() {
+  const [sintegrasRaw, setSintegrasRaw] = useState<Sintegra[]>([]);
   const [sintegras, setSintegras] = useState<Sintegra[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
@@ -13,7 +15,9 @@ export function useSintegra() {
       setLoading(true);
       setError(null);
       const data = await sintegraService.getSintegras();
-      setSintegras(data);
+      setSintegrasRaw(data);
+      const normalizados = normalizarSintegras(data);
+      setSintegras(normalizados);
     } catch (err) {
       setError(err instanceof Error ? err : new Error("Erro ao carregar sintegra"));
       console.error("Erro ao carregar sintegra:", err);
@@ -68,12 +72,14 @@ export function useSintegra() {
 
   return {
     sintegras,
+    sintegrasRaw,
     loading,
     error,
     createSintegra,
     updateSintegra,
     deleteSintegra,
     refresh: loadSintegras,
+    refreshSintegras: loadSintegras,
   };
 }
 

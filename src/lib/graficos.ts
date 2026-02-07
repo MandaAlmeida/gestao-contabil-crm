@@ -101,8 +101,16 @@ export const calcularTotalEntrada = (
 
   const entradasFinanceiras = financeiros
     .filter((f) => {
-      if (f.status !== "Pago" || !f.dataPagamento) return false;
-      const dataPagamento = new Date(f.dataPagamento);
+      if (f.status !== "Pago") return false;
+      
+      // Verifica se tem pagamento no histórico para o vencimento atual
+      const pagamentoAtual = f.historicoPagamentos?.find(
+        p => p.dataVencimento === f.dataVencimento
+      );
+      
+      if (!pagamentoAtual) return false;
+      
+      const dataPagamento = new Date(pagamentoAtual.dataPagamento);
       return dataPagamento >= inicio && dataPagamento <= fim;
     })
     .reduce((acc, f) => acc + f.valorMensalidade, 0);
@@ -124,12 +132,18 @@ export const calcularTotalEntradaServicos = (
     .filter((s) => {
       // Verificar se o serviço foi pago no financeiro dentro do período
       const financeiroRelacionado = financeiros.find(f =>
-        f.servicoId === s.id && f.status === "Pago" && f.dataPagamento
+        f.servicoId === s.id && f.status === "Pago"
       );
 
-      if (!financeiroRelacionado || !financeiroRelacionado.dataPagamento) return false;
+      if (!financeiroRelacionado) return false;
+      
+      const pagamentoAtual = financeiroRelacionado.historicoPagamentos?.find(
+        p => p.dataVencimento === financeiroRelacionado.dataVencimento
+      );
+      
+      if (!pagamentoAtual) return false;
 
-      const dataPagamento = new Date(financeiroRelacionado.dataPagamento);
+      const dataPagamento = new Date(pagamentoAtual.dataPagamento);
       return dataPagamento >= inicio && dataPagamento <= fim;
     })
     .reduce((acc, s) => acc + s.valorMensalidade, 0);
@@ -164,12 +178,22 @@ export const gerarDadosGrafico = (
   // Processar entradas (financeiros pagos + despesas pagas como negativas)
   financeiros
     .filter((f) => {
-      if (f.status !== "Pago" || !f.dataPagamento) return false;
-      const dataPagamento = new Date(f.dataPagamento);
+      if (f.status !== "Pago") return false;
+      
+      const pagamentoAtual = f.historicoPagamentos?.find(
+        p => p.dataVencimento === f.dataVencimento
+      );
+      
+      if (!pagamentoAtual) return false;
+      
+      const dataPagamento = new Date(pagamentoAtual.dataPagamento);
       return dataPagamento >= inicio && dataPagamento <= fim;
     })
     .forEach((f) => {
-      const data = f.dataPagamento!;
+      const pagamentoAtual = f.historicoPagamentos!.find(
+        p => p.dataVencimento === f.dataVencimento
+      )!;
+      const data = pagamentoAtual.dataPagamento;
       const chave = data.split("T")[0];
       const atual = dados.get(chave) || { entrada: 0, saida: 0 };
       atual.entrada += f.valorMensalidade;
@@ -247,20 +271,29 @@ export const gerarDadosGraficoServicos = (
     .filter((s) => {
       // Verificar se o serviço foi pago no financeiro dentro do período
       const financeiroRelacionado = financeiros.find(f =>
-        f.servicoId === s.id && f.status === "Pago" && f.dataPagamento
+        f.servicoId === s.id && f.status === "Pago"
       );
 
-      if (!financeiroRelacionado || !financeiroRelacionado.dataPagamento) return false;
+      if (!financeiroRelacionado) return false;
+      
+      const pagamentoAtual = financeiroRelacionado.historicoPagamentos?.find(
+        p => p.dataVencimento === financeiroRelacionado.dataVencimento
+      );
+      
+      if (!pagamentoAtual) return false;
 
-      const dataPagamento = new Date(financeiroRelacionado.dataPagamento);
+      const dataPagamento = new Date(pagamentoAtual.dataPagamento);
       return dataPagamento >= inicio && dataPagamento <= fim;
     })
     .forEach((s) => {
       // Usar a data do financeiro para o gráfico
       const financeiroRelacionado = financeiros.find(f =>
-        f.servicoId === s.id && f.status === "Pago" && f.dataPagamento
+        f.servicoId === s.id && f.status === "Pago"
       )!;
-      const data = financeiroRelacionado.dataPagamento!;
+      const pagamentoAtual = financeiroRelacionado.historicoPagamentos!.find(
+        p => p.dataVencimento === financeiroRelacionado.dataVencimento
+      )!;
+      const data = pagamentoAtual.dataPagamento;
       const chave = data.split("T")[0];
       const atual = dados.get(chave) || { entrada: 0, saida: 0 };
       atual.entrada += s.valorMensalidade;

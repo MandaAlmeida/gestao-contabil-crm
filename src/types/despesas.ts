@@ -1,3 +1,5 @@
+import { HistoricoPagamento } from "./crm";
+
 export interface Despesa {
   id: string;
   descricao: string;
@@ -6,7 +8,9 @@ export interface Despesa {
   data: string;
   fixo: boolean;
   pago: boolean;
+  atrasado?: boolean; // Indica se foi pago fora do mês de vencimento
   dataPagamento?: string | null;
+  historicoPagamentos?: HistoricoPagamento[];
   recebedor?: string | null;
   ativo: boolean;
   createdAt: string;

@@ -9,7 +9,7 @@ import { useUsuarios } from "@/hooks/useUsuarios";
 import { useAuth } from "@/contexts/AuthContext";
 import { createUsuarioIfNotExists } from "@/lib/firestore/usuarios";
 import { Cliente, Contabilidade } from "@/types/crm";
-import { Plus, Search, Edit, Trash2, Building2 } from "lucide-react";
+import { Plus, Edit, Trash2, Building2 } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -38,6 +38,7 @@ import {
   PaginationPrevious,
   PaginationEllipsis,
 } from "@/components/ui/pagination";
+import { FiltersBar } from "@/components/FiltersBar";
 
 export default function Clientes() {
   const {
@@ -601,7 +602,6 @@ export default function Clientes() {
                           const formatado = formatarTelefone(e.target.value);
                           setFormData({ ...formData, contato: formatado });
                         }}
-                        required
                         placeholder="(31) 9 9789-1102"
                       />
                     </div>
@@ -656,7 +656,6 @@ export default function Clientes() {
                             observacoes: observacoesAtualizadas,
                           }));
                         }}
-                        required
                       >
                         <SelectTrigger id="contabilidade">
                           <SelectValue placeholder="Selecione a contabilidade">
@@ -666,11 +665,11 @@ export default function Clientes() {
                         </SelectTrigger>
                         <SelectContent>
                           {contabilidadesLoading ? (
-                            <SelectItem value="" disabled>
+                            <SelectItem value="_loading" disabled>
                               Carregando...
                             </SelectItem>
                           ) : contabilidades.length === 0 ? (
-                            <SelectItem value="" disabled>
+                            <SelectItem value="_empty" disabled>
                               Nenhuma contabilidade cadastrada
                             </SelectItem>
                           ) : (
@@ -718,11 +717,11 @@ export default function Clientes() {
                         </SelectTrigger>
                         <SelectContent>
                           {usuariosLoading ? (
-                            <SelectItem value="" disabled>
+                            <SelectItem value="_loading" disabled>
                               Carregando...
                             </SelectItem>
                           ) : usuarios.length === 0 ? (
-                            <SelectItem value="" disabled>
+                            <SelectItem value="_empty" disabled>
                               Nenhum responsável cadastrado
                             </SelectItem>
                           ) : (
@@ -770,165 +769,48 @@ export default function Clientes() {
             </Dialog>
           </div>
         </div>
-        <div className="mb-4 space-y-4">
-          <div className="flex gap-4 items-end">
-            <div className="flex-1 space-y-1">
-              <Label
-                htmlFor="filtro-busca"
-                className="text-xs text-muted-foreground"
-              >
-                Buscar
-              </Label>
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  id="filtro-busca"
-                  placeholder="Buscar por nome ou CNPJ..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-9"
-                />
-              </div>
-            </div>
-            <div className="w-64 space-y-1">
-              <Label
-                htmlFor="filtro-responsavel"
-                className="text-xs text-muted-foreground"
-              >
-                Responsável
-              </Label>
-              <Select
-                value={searchResponsavel}
-                onValueChange={setSearchResponsavel}
-              >
-                <SelectTrigger id="filtro-responsavel">
-                  <SelectValue placeholder="Selecione o responsável" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="todos">Todos os responsáveis</SelectItem>
-                  {responsaveisDisponiveis.map((responsavel, index) => (
-                    <SelectItem
-                      key={`responsavel-${index}-${responsavel}`}
-                      value={responsavel}
-                    >
-                      {responsavel}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <div className="flex gap-4">
-            <div className="space-y-1">
-              <Label
-                htmlFor="filtro-data-inicio"
-                className="text-xs text-muted-foreground"
-              >
-                Data Cadastro Início
-              </Label>
-              <Input
-                id="filtro-data-inicio"
-                type="date"
-                value={filtroDataInicio}
-                onChange={(e) => setFiltroDataInicio(e.target.value)}
-                className="w-40"
-              />
-            </div>
-            <div className="space-y-1">
-              <Label
-                htmlFor="filtro-data-fim"
-                className="text-xs text-muted-foreground"
-              >
-                Data Cadastro Fim
-              </Label>
-              <Input
-                id="filtro-data-fim"
-                type="date"
-                value={filtroDataFim}
-                onChange={(e) => setFiltroDataFim(e.target.value)}
-                className="w-40"
-              />
-            </div>
-            <div className="space-y-1">
-              <Label
-                htmlFor="ordenacao"
-                className="text-xs text-muted-foreground"
-              >
-                Ordenar por
-              </Label>
-              <Select
-                value={`${ordenacao.campo}-${ordenacao.direcao}`}
-                onValueChange={(value) => {
-                  const [campo, direcao] = value.split("-") as [
-                    "nome" | "cnpj" | "cidade" | "responsavel",
-                    "asc" | "desc"
-                  ];
-                  setOrdenacao({ campo, direcao });
-                }}
-              >
-                <SelectTrigger id="ordenacao" className="w-48">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="nome-asc">Nome (A-Z)</SelectItem>
-                  <SelectItem value="nome-desc">Nome (Z-A)</SelectItem>
-                  <SelectItem value="cnpj-asc">CNPJ (A-Z)</SelectItem>
-                  <SelectItem value="cnpj-desc">CNPJ (Z-A)</SelectItem>
-                  <SelectItem value="cidade-asc">Cidade (A-Z)</SelectItem>
-                  <SelectItem value="cidade-desc">Cidade (Z-A)</SelectItem>
-                  <SelectItem value="responsavel-asc">
-                    Responsável (A-Z)
-                  </SelectItem>
-                  <SelectItem value="responsavel-desc">
-                    Responsável (Z-A)
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            {totalItems > 11 && (
-              <div className="space-y-1">
-                <Label
-                  htmlFor="items-per-page"
-                  className="text-xs text-muted-foreground"
-                >
-                  Itens por página
-                </Label>
-                <Select
-                  value={itemsPerPage.toString()}
-                  onValueChange={(value) => setItemsPerPage(Number(value))}
-                >
-                  <SelectTrigger id="items-per-page" className="w-24">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="5">5</SelectItem>
-                    <SelectItem value="10">10</SelectItem>
-                    <SelectItem value="20">20</SelectItem>
-                    <SelectItem value="50">50</SelectItem>
-                    <SelectItem value="100">100</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-            {(filtroDataInicio ||
-              filtroDataFim ||
-              searchResponsavel !== "todos") && (
-              <div className="flex items-end">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    setFiltroDataInicio("");
-                    setFiltroDataFim("");
-                    setSearchResponsavel("todos");
-                  }}
-                >
-                  Limpar Filtros
-                </Button>
-              </div>
-            )}
-          </div>
-        </div>
+        <FiltersBar
+          searchTerm={searchTerm}
+          onSearchTermChange={setSearchTerm}
+          searchPlaceholder="Buscar por nome ou CNPJ..."
+          responsavelOptions={responsaveisDisponiveis}
+          responsavelValue={searchResponsavel}
+          onResponsavelChange={setSearchResponsavel}
+          dateStartLabel="Data Cadastro Início"
+          dateEndLabel="Data Cadastro Fim"
+          dateStartValue={filtroDataInicio}
+          dateEndValue={filtroDataFim}
+          onDateStartChange={setFiltroDataInicio}
+          onDateEndChange={setFiltroDataFim}
+          showStatus={false}
+          orderValue={`${ordenacao.campo}-${ordenacao.direcao}`}
+          orderOptions={[
+            { value: "nome-asc", label: "Nome (A-Z)" },
+            { value: "nome-desc", label: "Nome (Z-A)" },
+            { value: "cnpj-asc", label: "CNPJ (A-Z)" },
+            { value: "cnpj-desc", label: "CNPJ (Z-A)" },
+            { value: "cidade-asc", label: "Cidade (A-Z)" },
+            { value: "cidade-desc", label: "Cidade (Z-A)" },
+            { value: "responsavel-asc", label: "Responsável (A-Z)" },
+            { value: "responsavel-desc", label: "Responsável (Z-A)" },
+          ]}
+          onOrderChange={(value) => {
+            const [campo, direcao] = value.split("-") as [
+              "nome" | "cnpj" | "cidade" | "responsavel",
+              "asc" | "desc"
+            ];
+            setOrdenacao({ campo, direcao });
+          }}
+          totalItems={totalItems}
+          itemsPerPage={itemsPerPage}
+          onItemsPerPageChange={(value) => setItemsPerPage(Number(value))}
+          showClear={!!(filtroDataInicio || filtroDataFim || searchResponsavel !== "todos")}
+          onClear={() => {
+            setFiltroDataInicio("");
+            setFiltroDataFim("");
+            setSearchResponsavel("todos");
+          }}
+        />
 
         <div className="rounded-md border">
           <table className="w-full">

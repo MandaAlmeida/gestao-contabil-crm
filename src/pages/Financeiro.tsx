@@ -11,9 +11,9 @@ import { excluirNotificacoesItem } from "@/utils/notificacoes";
 import { Financeiro } from "@/types/crm";
 import {
   Plus,
-  Search,
   Edit,
   Trash2,
+  History,
 } from "lucide-react";
 import {
   Dialog,
@@ -39,7 +39,7 @@ import {
 import { formatarDataBR } from "@/lib/utils";
 import { StatusButton, type StatusMeta } from "@/components/StatusButton";
 import { ExportButtons } from "@/components/ExportButtons";
-import { CheckCircle, Clock3, AlertTriangle } from "lucide-react";
+import { CheckCircle, Clock3, AlertTriangle, XCircle } from "lucide-react";
 import { usePagination } from "@/hooks/usePagination";
 import {
   Pagination,
@@ -50,8 +50,10 @@ import {
   PaginationPrevious,
   PaginationEllipsis,
 } from "@/components/ui/pagination";
+import { FiltersBar } from "@/components/FiltersBar";
 import { NotificationButton } from "@/components/NotificationButton";
 import { NotificationPanel } from "@/components/NotificationPanel";
+import { HistoricoPagamentosDialog } from "@/components/HistoricoPagamentosDialog";
 
 export default function FinanceiroPage() {
   const location = useLocation();
@@ -81,6 +83,8 @@ export default function FinanceiroPage() {
   const [editingItem, setEditingItem] = useState<Financeiro | null>(null);
   const { toast } = useToast();
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [historicoDialogOpen, setHistoricoDialogOpen] = useState(false);
+  const [selectedItemHistorico, setSelectedItemHistorico] = useState<Financeiro | null>(null);
 
   // Aplicar filtros do state quando a página é carregada
   useEffect(() => {
@@ -151,7 +155,6 @@ export default function FinanceiroPage() {
     meioPagamento: "Pix" as Financeiro["meioPagamento"],
     valorServico: "",
     observacoes: "",
-    dataPagamento: null,
   });
 
   const resetForm = () => {
@@ -162,7 +165,6 @@ export default function FinanceiroPage() {
       meioPagamento: "Pix",
       valorServico: "",
       observacoes: "",
-      dataPagamento: null,
     });
     setEditingItem(null);
   };
@@ -193,19 +195,12 @@ export default function FinanceiroPage() {
       });
       return;
     }
-    const dataPagamento = formData.dataPagamento
-      ? formData.dataPagamento
-      : null;
 
-    // Avanço automático da data de vencimento quando um pagamento é registrado
-    // Apenas se o item não estava como "Pago" antes (ou seja, está registrando um novo pagamento)
-    if (dataPagamento && (!editingItem || editingItem.status !== "Pago")) {
-      dataVencimento = adicionarMes(dataVencimento);
-    }
     const status = calcularStatusFinanceiro({
       status: editingItem?.status ?? "Pendente",
-      dataPagamento,
+      dataPagamento: null,
       dataVencimento,
+      historicoPagamentos: editingItem?.historicoPagamentos || [],
     });
 
     try {
@@ -265,7 +260,6 @@ export default function FinanceiroPage() {
           clienteCNPJ: cliente.cnpj,
           dataVencimento,
           valorMensalidade: valorMensalidadeNumber,
-          dataPagamento,
           status,
           meioPagamento: formData.meioPagamento,
           servicoId: servicoIdAtualizar,
@@ -279,8 +273,9 @@ export default function FinanceiroPage() {
         let servicoRelacionado = servicos.find(s => s.clienteId === formData.clienteId);
         let servicoId: string | null = null;
         let valorParaServico = valorPrincipal;
+        const temValorServico = formData.valorServico && parseFloat(formData.valorServico) > 0;
 
-        if (!servicoRelacionado) {
+        if (!servicoRelacionado && temValorServico) {
           // Se não existe serviço, criar automaticamente
           try {
             const novoServico = {
@@ -312,7 +307,7 @@ export default function FinanceiroPage() {
             servicoId = null;
             valorParaServico = valorPrincipal;
           }
-        } else {
+        } else if (servicoRelacionado) {
           // Se existe serviço, usar o ID e valor dele
           servicoId = servicoRelacionado.id;
           valorParaServico = servicoRelacionado.valorMensalidade;
@@ -326,13 +321,13 @@ export default function FinanceiroPage() {
           dataVencimento,
           // Usa o valor principal (mensalidade ou valor do serviço, se informado)
           valorMensalidade: valorParaServico,
-          dataPagamento,
           status,
           meioPagamento: formData.meioPagamento,
           servicoId: servicoId,
           valorServico: formData.valorServico,
           observacoes: formData.observacoes,
           ativo: true,
+          historicoPagamentos: [],
         });
 
         // Garante que as listas estejam sincronizadas em tela
@@ -424,22 +419,63 @@ export default function FinanceiroPage() {
   };
 
   const handleTogglePagamento = async (item: Financeiro) => {
+    const hoje = new Date();
+    hoje.setHours(0, 0, 0, 0);
+    const dataHojeStr = hoje.toISOString().split('T')[0];
+    
     if (item.status === "Pago") {
-      // Quando remove o pagamento, sempre volta exatamente 1 mês da data atual
-      // (já que o pagamento avançou 1 mês quando foi registrado)
+      // Verifica se o pagamento foi feito hoje
+      const pagamentoAtual = item.historicoPagamentos?.find(
+        p => p.dataVencimento === item.dataVencimento
+      );
+      
+      const pagamentoFoiHoje = pagamentoAtual?.dataPagamento === dataHojeStr;
+      
+      if (pagamentoFoiHoje) {
+        // Se foi pago hoje, apenas remove do histórico sem voltar o vencimento
+        const historicoAtualizado = (item.historicoPagamentos || []).filter(
+          p => p.dataVencimento !== item.dataVencimento
+        );
+        
+        const statusAjustado = calcularStatusFinanceiro({
+          status: "Pendente",
+          dataPagamento: null,
+          dataVencimento: item.dataVencimento,
+          historicoPagamentos: historicoAtualizado,
+        });
+
+        try {
+          await updateFinanceiro(item.id, {
+            historicoPagamentos: historicoAtualizado,
+            status: statusAjustado,
+          });
+          toast({
+            title: "Pagamento desfeito.",
+            description: `${item.clienteNome} voltou ao status anterior.`,
+          });
+        } catch (error) {
+          toast({ title: "Erro ao desfazer pagamento", variant: "destructive" });
+        }
+        return;
+      }
+      
+      // Se não foi pago hoje, remove do histórico E volta o vencimento
+      const historicoAtualizado = (item.historicoPagamentos || []).filter(
+        p => p.dataVencimento !== item.dataVencimento
+      );
+      
       const vencimentoAnterior = removerMes(item.dataVencimento);
 
-      // Calcula o status baseado na nova data de vencimento, sem considerar o status antigo
       const statusAjustado = calcularStatusFinanceiro({
-        status: "Pendente", // Força recalcular baseado apenas na data
+        status: "Pendente",
         dataPagamento: null,
         dataVencimento: vencimentoAnterior,
+        historicoPagamentos: historicoAtualizado,
       });
 
       try {
         await updateFinanceiro(item.id, {
-          dataPagamento: null,
-          meioPagamento: "Pix", // Reset para valor padrão
+          historicoPagamentos: historicoAtualizado,
           dataVencimento: vencimentoAnterior,
           status: statusAjustado,
         });
@@ -456,27 +492,145 @@ export default function FinanceiroPage() {
       return;
     }
 
-    // Marca como pago diretamente
-    const hoje = new Date().toISOString().split('T')[0]; // Data de hoje no formato YYYY-MM-DD
+    // Registra o pagamento no histórico
+    const dataPagamentoStr = dataHojeStr;
+    const vencimento = new Date(item.dataVencimento + "T00:00:00");
+    const pagamento = new Date(dataHojeStr + "T00:00:00");
+    
+    const emDia = pagamento <= vencimento;
     const novoVencimento = adicionarMes(item.dataVencimento);
+    
+    const novoPagamento = {
+      id: `${item.id}-${item.dataVencimento}-${Date.now()}`,
+      dataVencimento: item.dataVencimento,
+      dataPagamento: dataPagamentoStr,
+      emDia,
+      meioPagamento: "Pix" as const,
+    };
+    
+    const historicoAtualizado = [
+      ...(item.historicoPagamentos || []),
+      novoPagamento
+    ];
 
     try {
       await updateFinanceiro(item.id, {
-        dataPagamento: hoje,
+        historicoPagamentos: historicoAtualizado,
         dataVencimento: novoVencimento,
         status: "Pago",
-        meioPagamento: "Pix",
       });
 
       // Excluir notificações relacionadas ao pagamento
       await excluirNotificacoesItem(item.id, "pagamento");
 
       toast({
-        title: "Pagamento registrado!",
-        description: `${item.clienteNome} foi marcado como pago.`,
+        title: emDia ? "Pagamento em dia registrado!" : "Pagamento atrasado registrado!",
+        description: emDia 
+          ? `${item.clienteNome} foi marcado como pago em dia.`
+          : `${item.clienteNome} foi marcado como pago com atraso.`,
       });
     } catch (error) {
       toast({ title: "Erro ao registrar pagamento", variant: "destructive" });
+    }
+  };
+
+  const handleDeleteHistorico = async (financeiroItem: Financeiro, historicoId: string) => {
+    // Encontra o pagamento mais recente
+    const pagamentoMaisRecente = (financeiroItem.historicoPagamentos || []).reduce((ultimo, atual) => {
+      const dataUltimo = new Date(ultimo.dataVencimento);
+      const dataAtual = new Date(atual.dataVencimento);
+      return dataAtual > dataUltimo ? atual : ultimo;
+    });
+    
+    // Só permite deletar o pagamento mais recente
+    if (historicoId !== pagamentoMaisRecente.id) {
+      toast({ 
+        title: "Não é possível apagar este pagamento", 
+        description: "Você deve apagar os pagamentos mais recentes primeiro.",
+        variant: "destructive" 
+      });
+      return;
+    }
+    
+    const historicoAtualizado = (financeiroItem.historicoPagamentos || []).filter(
+      h => h.id !== historicoId
+    );
+    
+    // Pega a data de vencimento do pagamento que está sendo apagado
+    const pagamentoApagado = financeiroItem.historicoPagamentos?.find(h => h.id === historicoId);
+    const dataVencimentoAnterior = pagamentoApagado?.dataVencimento || financeiroItem.dataVencimento;
+
+    const statusAjustado = calcularStatusFinanceiro({
+      status: "Pendente",
+      dataPagamento: null,
+      dataVencimento: dataVencimentoAnterior,
+      historicoPagamentos: historicoAtualizado,
+    });
+
+    try {
+      await updateFinanceiro(financeiroItem.id, {
+        historicoPagamentos: historicoAtualizado,
+        dataVencimento: dataVencimentoAnterior, // Volta para a data de vencimento do pagamento apagado
+        status: statusAjustado,
+      });
+      
+      await refreshFinanceiros();
+      
+      toast({
+        title: "Pagamento removido do histórico.",
+        description: `Data de vencimento voltou para ${formatarDataBR(dataVencimentoAnterior)}.`,
+      });
+      
+      // Fechar o dialog após deletar
+      setHistoricoDialogOpen(false);
+      setSelectedItemHistorico(null);
+    } catch (error) {
+      toast({ title: "Erro ao remover do histórico", variant: "destructive" });
+    }
+  };
+
+  const handleEditHistorico = async (
+    financeiroItem: Financeiro,
+    historicoId: string,
+    novaData: string,
+    novoMeio: "Pix" | "Boleto"
+  ) => {
+    const historicoAtualizado = (financeiroItem.historicoPagamentos || []).map(h => {
+      if (h.id === historicoId) {
+        const vencimento = new Date(h.dataVencimento + "T00:00:00");
+        const dataPagamento = new Date(novaData + "T00:00:00");
+        vencimento.setHours(0, 0, 0, 0);
+        dataPagamento.setHours(0, 0, 0, 0);
+        const emDia = dataPagamento <= vencimento;
+        
+        return {
+          ...h,
+          dataPagamento: novaData,
+          meioPagamento: novoMeio,
+          emDia,
+        };
+      }
+      return h;
+    });
+
+    try {
+      await updateFinanceiro(financeiroItem.id, {
+        historicoPagamentos: historicoAtualizado,
+      });
+      
+      await refreshFinanceiros();
+      
+      toast({
+        title: "Histórico atualizado.",
+      });
+      
+      // Atualizar o item selecionado
+      const financeiroAtualizado = financeirosRaw.find(f => f.id === financeiroItem.id);
+      if (financeiroAtualizado) {
+        setSelectedItemHistorico(financeiroAtualizado);
+      }
+    } catch (error) {
+      toast({ title: "Erro ao atualizar histórico", variant: "destructive" });
     }
   };
 
@@ -489,7 +643,6 @@ export default function FinanceiroPage() {
       valorMensalidade: item.valorMensalidade.toString(),
       meioPagamento: item.meioPagamento ?? "Pix",
       valorServico: item.valorServico?.toString() ?? "",
-      dataPagamento: item.dataPagamento ?? null,
       observacoes: item.observacoes,
     });
     setIsDialogOpen(true);
@@ -654,7 +807,7 @@ export default function FinanceiroPage() {
     Vencido: {
       label: "Vencido",
       className: "bg-destructive/10 text-destructive hover:bg-destructive/20",
-      icon: AlertTriangle,
+      icon: XCircle,
     },
   };
 
@@ -831,203 +984,66 @@ export default function FinanceiroPage() {
           </div>
         </div>
 
-
-        <div className="mb-4 space-y-4">
-          <div className="flex gap-4 items-end">
-            <div className="flex-1 space-y-1">
-              <Label
-                htmlFor="filtro-busca"
-                className="text-xs text-muted-foreground"
-              >
-                Buscar
-              </Label>
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  id="filtro-busca"
-                  placeholder="Buscar por cliente..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-9"
-                />
-              </div>
-            </div>
-            <div className="w-64 space-y-1">
-              <Label
-                htmlFor="filtro-responsavel"
-                className="text-xs text-muted-foreground"
-              >
-                Responsável
-              </Label>
-              <Select
-                value={searchResponsavel}
-                onValueChange={setSearchResponsavel}
-              >
-                <SelectTrigger id="filtro-responsavel">
-                  <SelectValue placeholder="Selecione o responsável" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="todos">Todos os responsáveis</SelectItem>
-                  {responsaveisDisponiveis.map((responsavel, index) => (
-                    <SelectItem
-                      key={`responsavel-${index}-${responsavel}`}
-                      value={responsavel}
-                    >
-                      {responsavel}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <div className="flex gap-4">
-            <div className="space-y-1">
-              <Label
-                htmlFor="filtro-data-inicio"
-                className="text-xs text-muted-foreground"
-              >
-                Data Vencimento Início
-              </Label>
-              <Input
-                id="filtro-data-inicio"
-                type="date"
-                value={filtroDataInicio}
-                onChange={(e) => setFiltroDataInicio(e.target.value)}
-                className="w-40"
-              />
-            </div>
-            <div className="space-y-1">
-              <Label
-                htmlFor="filtro-data-fim"
-                className="text-xs text-muted-foreground"
-              >
-                Data Vencimento Fim
-              </Label>
-              <Input
-                id="filtro-data-fim"
-                type="date"
-                value={filtroDataFim}
-                onChange={(e) => setFiltroDataFim(e.target.value)}
-                className="w-40"
-              />
-            </div>
-            <div className="space-y-1">
-              <Label
-                htmlFor="filtro-status"
-                className="text-xs text-muted-foreground"
-              >
-                Status
-              </Label>
-              <Select
-                value={filtroStatus}
-                onValueChange={(value) =>
-                  setFiltroStatus(value as Financeiro["status"] | "todos")
-                }
-              >
-                <SelectTrigger className="w-40">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="todos">Todos</SelectItem>
-                  <SelectItem value="Pago">Pago</SelectItem>
-                  <SelectItem value="Pendente">Pendente</SelectItem>
-                  <SelectItem value="Vencido">Vencido</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1">
-              <Label
-                htmlFor="ordenacao"
-                className="text-xs text-muted-foreground"
-              >
-                Ordenar por
-              </Label>
-              <Select
-                value={`${ordenacao.campo}-${ordenacao.direcao}`}
-                onValueChange={(value) => {
-                  const [campo, direcao] = value.split("-") as [
-                    (
-                      | "clienteNome"
-                      | "dataVencimento"
-                      | "valorMensalidade"
-                      | "status"
-                    ),
-                    "asc" | "desc"
-                  ];
-                  setOrdenacao({ campo, direcao });
-                }}
-              >
-                <SelectTrigger id="ordenacao" className="w-48">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="clienteNome-asc">Cliente (A-Z)</SelectItem>
-                  <SelectItem value="clienteNome-desc">
-                    Cliente (Z-A)
-                  </SelectItem>
-                  <SelectItem value="dataVencimento-asc">
-                    Vencimento (Mais recente)
-                  </SelectItem>
-                  <SelectItem value="dataVencimento-desc">
-                    Vencimento (Mais antigo)
-                  </SelectItem>
-                  <SelectItem value="valorMensalidade-desc">
-                    Valor (Maior)
-                  </SelectItem>
-                  <SelectItem value="valorMensalidade-asc">
-                    Valor (Menor)
-                  </SelectItem>
-                  <SelectItem value="status-asc">Status (A-Z)</SelectItem>
-                  <SelectItem value="status-desc">Status (Z-A)</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            {totalItems > 11 && (
-              <div className="space-y-1">
-                <Label
-                  htmlFor="items-per-page"
-                  className="text-xs text-muted-foreground"
-                >
-                  Itens por página
-                </Label>
-                <Select
-                  value={itemsPerPage.toString()}
-                  onValueChange={(value) => setItemsPerPage(Number(value))}
-                >
-                  <SelectTrigger id="items-per-page" className="w-24">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="5">5</SelectItem>
-                    <SelectItem value="10">10</SelectItem>
-                    <SelectItem value="20">20</SelectItem>
-                    <SelectItem value="50">50</SelectItem>
-                    <SelectItem value="100">100</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-            {(filtroDataInicio ||
+        <FiltersBar
+          searchTerm={searchTerm}
+          onSearchTermChange={setSearchTerm}
+          searchPlaceholder="Buscar por cliente..."
+          responsavelOptions={responsaveisDisponiveis}
+          responsavelValue={searchResponsavel}
+          onResponsavelChange={setSearchResponsavel}
+          dateStartLabel="Data Vencimento Início"
+          dateEndLabel="Data Vencimento Fim"
+          dateStartValue={filtroDataInicio}
+          dateEndValue={filtroDataFim}
+          onDateStartChange={setFiltroDataInicio}
+          onDateEndChange={setFiltroDataFim}
+          showStatus
+          statusValue={filtroStatus}
+          statusOptions={[
+            { value: "todos", label: "Todos" },
+            { value: "Pago", label: "Pago" },
+            { value: "Pendente", label: "Pendente" },
+            { value: "Vencido", label: "Vencido" },
+          ]}
+          onStatusChange={(value) =>
+            setFiltroStatus(value as Financeiro["status"] | "todos")
+          }
+          orderValue={`${ordenacao.campo}-${ordenacao.direcao}`}
+          orderOptions={[
+            { value: "clienteNome-asc", label: "Cliente (A-Z)" },
+            { value: "clienteNome-desc", label: "Cliente (Z-A)" },
+            { value: "dataVencimento-asc", label: "Vencimento (Mais recente)" },
+            { value: "dataVencimento-desc", label: "Vencimento (Mais antigo)" },
+            { value: "valorMensalidade-desc", label: "Valor (Maior)" },
+            { value: "valorMensalidade-asc", label: "Valor (Menor)" },
+            { value: "status-asc", label: "Status (A-Z)" },
+            { value: "status-desc", label: "Status (Z-A)" },
+          ]}
+          onOrderChange={(value) => {
+            const [campo, direcao] = value.split("-") as [
+              "clienteNome" | "dataVencimento" | "valorMensalidade" | "status",
+              "asc" | "desc"
+            ];
+            setOrdenacao({ campo, direcao });
+          }}
+          totalItems={totalItems}
+          itemsPerPage={itemsPerPage}
+          onItemsPerPageChange={(value) => setItemsPerPage(Number(value))}
+          showClear={
+            !!(
+              filtroDataInicio ||
               filtroDataFim ||
               filtroStatus !== "todos" ||
-              searchResponsavel !== "todos") && (
-              <div className="flex items-end">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    setFiltroDataInicio("");
-                    setFiltroDataFim("");
-                    setFiltroStatus("todos");
-                    setSearchResponsavel("todos");
-                  }}
-                >
-                  Limpar Filtros
-                </Button>
-              </div>
-            )}
-          </div>
-        </div>
+              searchResponsavel !== "todos"
+            )
+          }
+          onClear={() => {
+            setFiltroDataInicio("");
+            setFiltroDataFim("");
+            setFiltroStatus("todos");
+            setSearchResponsavel("todos");
+          }}
+        />
 
         <div className="mb-4 rounded-lg bg-primary p-4 text-primary-foreground">
           <p className="text-lg font-semibold">
@@ -1126,6 +1142,17 @@ export default function FinanceiroPage() {
                       <Button
                         size="sm"
                         variant="ghost"
+                        onClick={() => {
+                          setSelectedItemHistorico(item);
+                          setHistoricoDialogOpen(true);
+                        }}
+                        title="Ver histórico de pagamentos"
+                      >
+                        <History className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
                         onClick={() => handleEdit(item)}
                       >
                         <Edit className="h-4 w-4" />
@@ -1221,6 +1248,13 @@ export default function FinanceiroPage() {
           onToggle={() => setNotificationsOpen(!notificationsOpen)}
           filterBy={["pagamento"]}
         />
+      <HistoricoPagamentosDialog
+        isOpen={historicoDialogOpen}
+        onOpenChange={setHistoricoDialogOpen}
+        item={selectedItemHistorico}
+        onDeleteHistorico={handleDeleteHistorico}
+        onEditHistorico={handleEditHistorico}
+      />
     </Layout>
   );
 }

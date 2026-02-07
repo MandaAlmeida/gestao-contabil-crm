@@ -6,7 +6,7 @@ import { useClientes } from "@/hooks/useClientes";
 import { useSintegra } from "@/hooks/useSintegra";
 import { useConfirmationDialog } from "@/components/ConfirmationDialog";
 import { Sintegra } from "@/types/crm";
-import { Plus, Search, Edit, Trash2, Clock3, CheckCircle } from "lucide-react";
+import { Plus, Edit, Trash2, Clock3, CheckCircle, XCircle, History } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import {
   Dialog,
@@ -30,6 +30,10 @@ import { NotificationPanel } from "@/components/NotificationPanel";
 import { usePagination } from "@/hooks/usePagination";
 import { PaginationControls } from "@/components/PaginationControls";
 import { cn, formatarDataBR } from "@/lib/utils";
+import { FiltersBar } from "@/components/FiltersBar";
+import { HistoricoAtividadesDialog } from "@/components/HistoricoAtividadesDialog";
+import { calcularStatusSintegra } from "@/lib/sintegra";
+import { excluirNotificacoesItem } from "@/utils/notificacoes";
 
 const adicionarMes = (data: string) => {
   const baseDate = data ? new Date(data) : new Date();
@@ -67,11 +71,16 @@ const STATUS_META: Record<
     className: "bg-success/10 text-success hover:bg-success/20",
     icon: CheckCircle,
   },
+  Vencido: {
+    label: "Vencido",
+    className: "bg-destructive/10 text-destructive hover:bg-destructive/20",
+    icon: XCircle,
+  },
 };
 
 export default function SintegraPage() {
   const { clientes } = useClientes();
-  const { sintegras, createSintegra, updateSintegra, deleteSintegra } =
+  const { sintegras, sintegrasRaw, createSintegra, updateSintegra, deleteSintegra, refreshSintegras } =
     useSintegra();
   const { showConfirmation, ConfirmationDialogComponent } = useConfirmationDialog();
   const [searchTerm, setSearchTerm] = useState("");
@@ -88,6 +97,8 @@ export default function SintegraPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<Sintegra | null>(null);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [historicoDialogOpen, setHistoricoDialogOpen] = useState(false);
+  const [selectedItemHistorico, setSelectedItemHistorico] = useState<Sintegra | null>(null);
   const { toast } = useToast();
 
   // Lista de IDs de clientes que já têm Sintegra cadastrado
@@ -136,18 +147,7 @@ export default function SintegraPage() {
       return;
     }
 
-    let dataPrazo = formData.dataPrazo;
-
-    // Regra de negócio: quando status mudar para Concluído, avançar para próximo período (mês seguinte)
-    if (
-      editingItem &&
-      formData.status === "Concluído" &&
-      editingItem.status !== "Concluído"
-    ) {
-      const currentDate = new Date(formData.dataPrazo);
-      currentDate.setMonth(currentDate.getMonth() + 1);
-      dataPrazo = currentDate.toISOString().split("T")[0];
-    }
+    const dataPrazo = formData.dataPrazo;
 
     try {
       if (editingItem) {
@@ -212,44 +212,226 @@ export default function SintegraPage() {
     );
   };
 
-  const handleToggleStatus = async (item: Sintegra) => {
-    let novoStatus: Sintegra["status"];
-    let novaDataPrazo = item.dataPrazo;
+  const handleToggleAtividade = async (item: Sintegra) => {
+    const hoje = new Date();
+    hoje.setHours(0, 0, 0, 0);
+    const dataHojeStr = hoje.toISOString().split('T')[0];
+    
+    if (item.status === "Concluído") {
+      // Verifica se a atividade foi concluída hoje
+      const atividadeAtual = item.historicoAtividades?.find(
+        a => a.dataPrazo === item.dataPrazo
+      );
+      
+      const atividadeFoiHoje = atividadeAtual?.dataConclusao === dataHojeStr;
+      
+      if (atividadeFoiHoje) {
+        // Se foi concluído hoje, apenas remove do histórico sem voltar o prazo
+        const historicoAtualizado = (item.historicoAtividades || []).filter(
+          a => a.dataPrazo !== item.dataPrazo
+        );
+        
+        const statusAjustado = calcularStatusSintegra({
+          status: "Pendente",
+          dataPagamento: null,
+          dataPrazo: item.dataPrazo,
+          historicoAtividades: historicoAtualizado,
+        });
 
-    if (item.status === "Pendente") {
-      novoStatus = "Concluído";
-      novaDataPrazo = formatarISO(adicionarMes(item.dataPrazo));
-    } else {
-      novoStatus = "Pendente";
-      novaDataPrazo = formatarISO(removerMes(item.dataPrazo));
+        try {
+          await updateSintegra(item.id, {
+            historicoAtividades: historicoAtualizado,
+            status: statusAjustado,
+          });
+          toast({
+            title: "Atividade desfeita.",
+            description: `${item.clienteNome} voltou ao status anterior.`,
+          });
+        } catch (error) {
+          toast({ title: "Erro ao desfazer atividade", variant: "destructive" });
+        }
+        return;
+      }
+      
+      // Se não foi concluído hoje, remove do histórico E volta o prazo
+      const historicoAtualizado = (item.historicoAtividades || []).filter(
+        a => a.dataPrazo !== item.dataPrazo
+      );
+      
+      const prazoAnterior = formatarISO(removerMes(item.dataPrazo));
+
+      const statusAjustado = calcularStatusSintegra({
+        status: "Pendente",
+        dataPagamento: null,
+        dataPrazo: prazoAnterior,
+        historicoAtividades: historicoAtualizado,
+      });
+
+      try {
+        await updateSintegra(item.id, {
+          historicoAtividades: historicoAtualizado,
+          dataPrazo: prazoAnterior,
+          status: statusAjustado,
+        });
+        toast({
+          title: "Atividade removida.",
+          description:
+            statusAjustado === "Pendente"
+              ? `${item.clienteNome} voltou a ficar pendente.`
+              : `${item.clienteNome} foi marcado como vencido.`,
+        });
+      } catch (error) {
+        toast({ title: "Erro ao remover atividade", variant: "destructive" });
+      }
+      return;
     }
+
+    // Registra a atividade no histórico
+    const dataConclusaoStr = dataHojeStr;
+    const prazo = new Date(item.dataPrazo + "T00:00:00");
+    const conclusao = new Date(dataHojeStr + "T00:00:00");
+    
+    const noPrazo = conclusao <= prazo;
+    const novoPrazo = formatarISO(adicionarMes(item.dataPrazo));
+    
+    const novaAtividade = {
+      id: `${item.id}-${item.dataPrazo}-${Date.now()}`,
+      dataPrazo: item.dataPrazo,
+      dataConclusao: dataConclusaoStr,
+      noPrazo,
+    };
+    
+    const historicoAtualizado = [
+      ...(item.historicoAtividades || []),
+      novaAtividade
+    ];
 
     try {
       await updateSintegra(item.id, {
-        status: novoStatus,
-        dataPrazo: novaDataPrazo,
+        historicoAtividades: historicoAtualizado,
+        dataPrazo: novoPrazo,
+        status: "Concluído",
       });
 
+      // Excluir notificações relacionadas à atividade
+      await excluirNotificacoesItem(item.id, "sintegra");
+
       toast({
-        title: "Status atualizado!",
-        description:
-          novoStatus === "Concluído"
-            ? `${item.clienteNome} concluído. Novo prazo: ${formatarDataBR(
-                novaDataPrazo
-              )}.`
-            : `${item.clienteNome} voltou para pendente.`,
+        title: noPrazo ? "Atividade concluída no prazo!" : "Atividade concluída com atraso!",
+        description: noPrazo 
+          ? `${item.clienteNome} foi marcado como concluído no prazo.`
+          : `${item.clienteNome} foi marcado como concluído com atraso.`,
       });
     } catch (error) {
-      toast({ title: "Erro ao atualizar status", variant: "destructive" });
+      toast({ title: "Erro ao registrar atividade", variant: "destructive" });
+    }
+  };
+
+  const handleDeleteHistorico = async (sintegraItem: Sintegra, historicoId: string) => {
+    // Encontra a atividade mais recente
+    const atividadeMaisRecente = (sintegraItem.historicoAtividades || []).reduce((ultima, atual) => {
+      const dataUltima = new Date(ultima.dataPrazo + "T00:00:00");
+      const dataAtual = new Date(atual.dataPrazo + "T00:00:00");
+      return dataAtual > dataUltima ? atual : ultima;
+    });
+    
+    // Só permite deletar a atividade mais recente
+    if (historicoId !== atividadeMaisRecente.id) {
+      toast({ 
+        title: "Não é possível apagar esta atividade", 
+        description: "Você deve apagar as atividades mais recentes primeiro.",
+        variant: "destructive" 
+      });
+      return;
+    }
+    
+    try {
+      const historicoAtualizado = (sintegraItem.historicoAtividades || []).filter(
+        h => h.id !== historicoId
+      );
+      
+      // Pega a data de prazo da atividade que está sendo apagada
+      const atividadeApagada = sintegraItem.historicoAtividades?.find(h => h.id === historicoId);
+      const dataPrazoAnterior = atividadeApagada?.dataPrazo || sintegraItem.dataPrazo;
+
+      const statusAjustado = calcularStatusSintegra({
+        status: "Pendente",
+        dataPagamento: null,
+        dataPrazo: dataPrazoAnterior,
+        historicoAtividades: historicoAtualizado,
+      });
+
+      await updateSintegra(sintegraItem.id, {
+        historicoAtividades: historicoAtualizado,
+        dataPrazo: dataPrazoAnterior,
+        status: statusAjustado,
+      });
+      
+      await refreshSintegras();
+      
+      toast({
+        title: "Atividade removida do histórico.",
+        description: `Data de prazo voltou para ${formatarDataBR(dataPrazoAnterior)}.`,
+      });
+      
+      // Fechar o dialog após deletar
+      setHistoricoDialogOpen(false);
+      setSelectedItemHistorico(null);
+    } catch (error) {
+      toast({ title: "Erro ao remover do histórico", variant: "destructive" });
+    }
+  };
+
+  const handleEditHistorico = async (
+    sintegraItem: Sintegra,
+    historicoId: string,
+    novaData: string
+  ) => {
+    const historicoAtualizado = (sintegraItem.historicoAtividades || []).map(h => {
+      if (h.id === historicoId) {
+        const prazo = new Date(h.dataPrazo + "T00:00:00");
+        const dataConclusao = new Date(novaData + "T00:00:00");
+        prazo.setHours(0, 0, 0, 0);
+        dataConclusao.setHours(0, 0, 0, 0);
+        const noPrazo = dataConclusao <= prazo;
+        
+        return {
+          ...h,
+          dataConclusao: novaData,
+          noPrazo,
+        };
+      }
+      return h;
+    });
+
+    try {
+      await updateSintegra(sintegraItem.id, {
+        historicoAtividades: historicoAtualizado,
+      });
+      
+      await refreshSintegras();
+      
+      toast({
+        title: "Histórico atualizado.",
+      });
+      
+      // Atualizar o item selecionado
+      const sintegraAtualizado = sintegrasRaw.find(s => s.id === sintegraItem.id);
+      if (sintegraAtualizado) {
+        setSelectedItemHistorico(sintegraAtualizado);
+      }
+    } catch (error) {
+      toast({ title: "Erro ao atualizar histórico", variant: "destructive" });
     }
   };
 
   const getToggleTitle = (status: Sintegra["status"]) => {
     switch (status) {
       case "Pendente":
+      case "Vencido":
         return "Marcar como concluído";
       case "Concluído":
-        return "Reabrir como pendente";
+        return "Desfazer conclusão";
       default:
         return "Atualizar status";
     }
@@ -426,6 +608,8 @@ export default function SintegraPage() {
                       <SelectContent>
                         <SelectItem value="Pendente">Pendente</SelectItem>
                         <SelectItem value="Concluído">Concluído</SelectItem>
+                        <SelectItem value="Atrasado">Atrasado</SelectItem>
+                        <SelectItem value="Vencido">Vencido</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -474,190 +658,64 @@ export default function SintegraPage() {
           </div>
         </div>
 
-        <div className="mb-4 space-y-4">
-          <div className="flex gap-4 items-end">
-            <div className="flex-1 space-y-1">
-              <Label
-                htmlFor="filtro-busca"
-                className="text-xs text-muted-foreground"
-              >
-                Buscar
-              </Label>
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  id="filtro-busca"
-                  placeholder="Buscar por cliente..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-9"
-                />
-              </div>
-            </div>
-            <div className="w-64 space-y-1">
-              <Label
-                htmlFor="filtro-responsavel"
-                className="text-xs text-muted-foreground"
-              >
-                Responsável
-              </Label>
-              <Select
-                value={searchResponsavel}
-                onValueChange={setSearchResponsavel}
-              >
-                <SelectTrigger id="filtro-responsavel">
-                  <SelectValue placeholder="Selecione o responsável" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="todos">Todos os responsáveis</SelectItem>
-                  {responsaveisDisponiveis.map((responsavel, index) => (
-                    <SelectItem
-                      key={`responsavel-${index}-${responsavel}`}
-                      value={responsavel}
-                    >
-                      {responsavel}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <div className="flex gap-4">
-            <div className="space-y-1">
-              <Label
-                htmlFor="filtro-data-inicio"
-                className="text-xs text-muted-foreground"
-              >
-                Data Início
-              </Label>
-              <Input
-                id="filtro-data-inicio"
-                type="date"
-                value={filtroDataInicio}
-                onChange={(e) => setFiltroDataInicio(e.target.value)}
-                className="w-40"
-              />
-            </div>
-            <div className="space-y-1">
-              <Label
-                htmlFor="filtro-data-fim"
-                className="text-xs text-muted-foreground"
-              >
-                Data Fim
-              </Label>
-              <Input
-                id="filtro-data-fim"
-                type="date"
-                value={filtroDataFim}
-                onChange={(e) => setFiltroDataFim(e.target.value)}
-                className="w-40"
-              />
-            </div>
-            <div className="space-y-1">
-              <Label
-                htmlFor="filtro-status"
-                className="text-xs text-muted-foreground"
-              >
-                Status
-              </Label>
-              <Select
-                value={filtroStatus}
-                onValueChange={(value) =>
-                  setFiltroStatus(value as Sintegra["status"] | "todos")
-                }
-              >
-                <SelectTrigger className="w-40">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="todos">Todos</SelectItem>
-                  <SelectItem value="Pendente">Pendente</SelectItem>
-                  <SelectItem value="Concluído">Concluído</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1">
-              <Label
-                htmlFor="ordenacao"
-                className="text-xs text-muted-foreground"
-              >
-                Ordenar por
-              </Label>
-              <Select
-                value={`${ordenacao.campo}-${ordenacao.direcao}`}
-                onValueChange={(value) => {
-                  const [campo, direcao] = value.split("-") as [
-                    "clienteNome" | "dataPrazo" | "status",
-                    "asc" | "desc"
-                  ];
-                  setOrdenacao({ campo, direcao });
-                }}
-              >
-                <SelectTrigger id="ordenacao" className="w-48">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="clienteNome-asc">Cliente (A-Z)</SelectItem>
-                  <SelectItem value="clienteNome-desc">
-                    Cliente (Z-A)
-                  </SelectItem>
-                  <SelectItem value="dataPrazo-asc">
-                    Data (Mais recente)
-                  </SelectItem>
-                  <SelectItem value="dataPrazo-desc">
-                    Data (Mais antigo)
-                  </SelectItem>
-                  <SelectItem value="status-asc">Status (A-Z)</SelectItem>
-                  <SelectItem value="status-desc">Status (Z-A)</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            {totalItems > 11 && (
-              <div className="space-y-1">
-                <Label
-                  htmlFor="items-per-page"
-                  className="text-xs text-muted-foreground"
-                >
-                  Itens por página
-                </Label>
-                <Select
-                  value={itemsPerPage.toString()}
-                  onValueChange={(value) => setItemsPerPage(Number(value))}
-                >
-                  <SelectTrigger id="items-per-page" className="w-24">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="5">5</SelectItem>
-                    <SelectItem value="10">10</SelectItem>
-                    <SelectItem value="20">20</SelectItem>
-                    <SelectItem value="50">50</SelectItem>
-                    <SelectItem value="100">100</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-            {(filtroDataInicio ||
+        <FiltersBar
+          searchTerm={searchTerm}
+          onSearchTermChange={setSearchTerm}
+          searchPlaceholder="Buscar por cliente..."
+          responsavelOptions={responsaveisDisponiveis}
+          responsavelValue={searchResponsavel}
+          onResponsavelChange={setSearchResponsavel}
+          dateStartLabel="Data Início"
+          dateEndLabel="Data Fim"
+          dateStartValue={filtroDataInicio}
+          dateEndValue={filtroDataFim}
+          onDateStartChange={setFiltroDataInicio}
+          onDateEndChange={setFiltroDataFim}
+          showStatus
+          statusValue={filtroStatus}
+          statusOptions={[
+            { value: "todos", label: "Todos" },
+            { value: "Pendente", label: "Pendente" },
+            { value: "Concluído", label: "Concluído" },
+            { value: "Vencido", label: "Vencido" },
+          ]}
+          onStatusChange={(value) =>
+            setFiltroStatus(value as Sintegra["status"] | "todos")
+          }
+          orderValue={`${ordenacao.campo}-${ordenacao.direcao}`}
+          orderOptions={[
+            { value: "clienteNome-asc", label: "Cliente (A-Z)" },
+            { value: "clienteNome-desc", label: "Cliente (Z-A)" },
+            { value: "dataPrazo-asc", label: "Data (Mais recente)" },
+            { value: "dataPrazo-desc", label: "Data (Mais antigo)" },
+            { value: "status-asc", label: "Status (A-Z)" },
+            { value: "status-desc", label: "Status (Z-A)" },
+          ]}
+          onOrderChange={(value) => {
+            const [campo, direcao] = value.split("-") as [
+              "clienteNome" | "dataPrazo" | "status",
+              "asc" | "desc"
+            ];
+            setOrdenacao({ campo, direcao });
+          }}
+          totalItems={totalItems}
+          itemsPerPage={itemsPerPage}
+          onItemsPerPageChange={(value) => setItemsPerPage(Number(value))}
+          showClear={
+            !!(
+              filtroDataInicio ||
               filtroDataFim ||
               filtroStatus !== "todos" ||
-              searchResponsavel !== "todos") && (
-              <div className="flex items-end">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    setFiltroDataInicio("");
-                    setFiltroDataFim("");
-                    setFiltroStatus("todos");
-                    setSearchResponsavel("todos");
-                  }}
-                >
-                  Limpar Filtros
-                </Button>
-              </div>
-            )}
-          </div>
-        </div>
+              searchResponsavel !== "todos"
+            )
+          }
+          onClear={() => {
+            setFiltroDataInicio("");
+            setFiltroDataFim("");
+            setFiltroStatus("todos");
+            setSearchResponsavel("todos");
+          }}
+        />
 
         <div className="rounded-md border">
           <table className="w-full">
@@ -685,7 +743,7 @@ export default function SintegraPage() {
                       return (
                         <button
                           type="button"
-                          onClick={() => handleToggleStatus(item)}
+                          onClick={() => handleToggleAtividade(item)}
                           title={getToggleTitle(item.status)}
                           className={cn(
                             "flex items-center gap-2 rounded-full px-3 py-1 text-xs font-medium transition-colors",
@@ -701,6 +759,19 @@ export default function SintegraPage() {
                   </td>
                   <td className="p-3">
                     <div className="flex gap-2">
+                      {item.historicoAtividades && item.historicoAtividades.length > 0 && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => {
+                            setSelectedItemHistorico(item);
+                            setHistoricoDialogOpen(true);
+                          }}
+                          title="Ver histórico de atividades"
+                        >
+                          <History className="h-4 w-4" />
+                        </Button>
+                      )}
                       <Button
                         size="sm"
                         variant="ghost"
@@ -744,6 +815,16 @@ export default function SintegraPage() {
           filterBy={["sintegra"]}
         />
       </div>
+      <HistoricoAtividadesDialog
+        isOpen={historicoDialogOpen}
+        onOpenChange={(open) => {
+          setHistoricoDialogOpen(open);
+          if (!open) setSelectedItemHistorico(null);
+        }}
+        item={selectedItemHistorico}
+        onDeleteHistorico={handleDeleteHistorico}
+        onEditHistorico={handleEditHistorico}
+      />
       {ConfirmationDialogComponent}
     </Layout>
   );

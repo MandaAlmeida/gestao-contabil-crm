@@ -95,6 +95,10 @@ service cloud.firestore {
     match /financeiro/{financeiroId} {
       // Campo valorServico: opcional, pode ser string ou null
       // Usado para armazenar o valor do serviço vinculado ao financeiro
+      // Campo dataPagamento: opcional, pode ser string ou null (DEPRECATED)
+      // Usado para armazenar quando o item foi marcado como pago
+      // Campo historicoPagamentos: opcional, array de objetos com histórico de pagamentos
+      // Cada objeto contém: dataVencimento, dataPagamento, emDia (boolean), meioPagamento
 
       // Permitir leitura para usuários autenticados
       allow read: if isAuthenticated();
@@ -113,6 +117,11 @@ service cloud.firestore {
                       (!('valorServico' in request.resource.data) ||
                        request.resource.data.valorServico is string ||
                        request.resource.data.valorServico == null) &&
+                      (!('dataPagamento' in request.resource.data) ||
+                       request.resource.data.dataPagamento is string ||
+                       request.resource.data.dataPagamento == null) &&
+                      (!('historicoPagamentos' in request.resource.data) ||
+                       request.resource.data.historicoPagamentos is list) &&
                       request.resource.data.clienteId.size() > 0 &&
                       request.resource.data.status in ['Pago', 'Pendente', 'Vencido'] &&
                       request.resource.data.meioPagamento in ['Pix', 'Boleto'] &&
@@ -133,6 +142,11 @@ service cloud.firestore {
                       (!('valorServico' in request.resource.data) ||
                        request.resource.data.valorServico is string ||
                        request.resource.data.valorServico == null) &&
+                      (!('dataPagamento' in request.resource.data) ||
+                       request.resource.data.dataPagamento is string ||
+                       request.resource.data.dataPagamento == null) &&
+                      (!('historicoPagamentos' in request.resource.data) ||
+                       request.resource.data.historicoPagamentos is list) &&
                       request.resource.data.clienteId.size() > 0 &&
                       request.resource.data.status in ['Pago', 'Pendente', 'Vencido'] &&
                       request.resource.data.meioPagamento in ['Pix', 'Boleto'] &&
@@ -182,6 +196,10 @@ service cloud.firestore {
     
     // ==================== SINTEGRA ====================
     match /sintegra/{sintegraId} {
+      // Campo dataPagamento: opcional, pode ser string ou null (DEPRECATED)
+      // Usado para armazenar quando o item foi marcado como concluído
+      // Campo historicoAtividades: opcional, array de objetos com histórico de atividades
+      
       // Permitir leitura para usuários autenticados
       allow read: if isAuthenticated();
       
@@ -195,7 +213,12 @@ service cloud.firestore {
                       request.resource.data.status is string &&
                       request.resource.data.observacoes is string &&
                       request.resource.data.clienteId.size() > 0 &&
-                      request.resource.data.status in ['Pendente', 'Concluído'];
+                      request.resource.data.status in ['Pendente', 'Concluído', 'Vencido'] &&
+                      (!('dataPagamento' in request.resource.data) ||
+                       request.resource.data.dataPagamento is string ||
+                       request.resource.data.dataPagamento == null) &&
+                      (!('historicoAtividades' in request.resource.data) ||
+                       request.resource.data.historicoAtividades is list);
       
       // Permitir atualização para usuários autenticados
       allow update: if isAuthenticated() &&
@@ -208,7 +231,12 @@ service cloud.firestore {
                       request.resource.data.status is string &&
                       request.resource.data.observacoes is string &&
                       request.resource.data.clienteId.size() > 0 &&
-                      request.resource.data.status in ['Pendente', 'Concluído'];
+                      request.resource.data.status in ['Pendente', 'Concluído', 'Vencido'] &&
+                      (!('dataPagamento' in request.resource.data) ||
+                       request.resource.data.dataPagamento is string ||
+                       request.resource.data.dataPagamento == null) &&
+                      (!('historicoAtividades' in request.resource.data) ||
+                       request.resource.data.historicoAtividades is list);
       
       // Permitir exclusão para usuários autenticados
       allow delete: if isAuthenticated();
@@ -216,6 +244,9 @@ service cloud.firestore {
     
     // ==================== DESPESAS ====================
     match /despesas/{despesaId} {
+      // Campo dataPagamento: opcional, pode ser string ou null
+      // Campo atrasado: opcional, indica se foi pago fora do mês de vencimento
+      
       // Permitir leitura para usuários autenticados
       allow read: if isAuthenticated();
       
@@ -229,7 +260,8 @@ service cloud.firestore {
                       request.resource.data.pago is bool &&
                       request.resource.data.descricao.size() > 0 &&
                       request.resource.data.valor >= 0 &&
-                      (!('dataPagamento' in request.resource.data) || request.resource.data.dataPagamento is string || request.resource.data.dataPagamento == null);
+                      (!('dataPagamento' in request.resource.data) || request.resource.data.dataPagamento is string || request.resource.data.dataPagamento == null) &&
+                      (!('atrasado' in request.resource.data) || request.resource.data.atrasado is bool);
       
       // Permitir atualização para usuários autenticados
       allow update: if isAuthenticated() &&
@@ -242,7 +274,8 @@ service cloud.firestore {
                       request.resource.data.pago is bool &&
                       request.resource.data.descricao.size() > 0 &&
                       request.resource.data.valor >= 0 &&
-                      (!('dataPagamento' in request.resource.data) || request.resource.data.dataPagamento is string || request.resource.data.dataPagamento == null);
+                      (!('dataPagamento' in request.resource.data) || request.resource.data.dataPagamento is string || request.resource.data.dataPagamento == null) &&
+                      (!('atrasado' in request.resource.data) || request.resource.data.atrasado is bool);
       
       // Permitir exclusão para usuários autenticados
       allow delete: if isAuthenticated();
@@ -250,6 +283,9 @@ service cloud.firestore {
     
     // ==================== SERVICOS ====================
     match /servicos/{servicoId} {
+      // Campo dataPagamento: opcional, pode ser string ou null
+      // Usado para armazenar quando o item foi marcado como pago
+      
       // Permitir leitura para usuários autenticados
       allow read: if isAuthenticated();
       
@@ -267,6 +303,9 @@ service cloud.firestore {
                       request.resource.data.meioPagamento is string &&
                       request.resource.data.observacoes is string &&
                       request.resource.data.ativo is bool &&
+                      (!('dataPagamento' in request.resource.data) ||
+                       request.resource.data.dataPagamento is string ||
+                       request.resource.data.dataPagamento == null) &&
                       request.resource.data.clienteId.size() > 0 &&
                       request.resource.data.responsavel.size() > 0 &&
                       request.resource.data.status in ['Pago', 'Pendente', 'Vencido'] &&
@@ -288,6 +327,9 @@ service cloud.firestore {
                       request.resource.data.meioPagamento is string &&
                       request.resource.data.observacoes is string &&
                       request.resource.data.ativo is bool &&
+                      (!('dataPagamento' in request.resource.data) ||
+                       request.resource.data.dataPagamento is string ||
+                       request.resource.data.dataPagamento == null) &&
                       request.resource.data.clienteId.size() > 0 &&
                       request.resource.data.responsavel.size() > 0 &&
                       request.resource.data.status in ['Pago', 'Pendente', 'Vencido'] &&

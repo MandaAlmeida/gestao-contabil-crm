@@ -25,6 +25,7 @@ import { PublicRoute } from "@/components/PublicRoute";
 import { NotificationSystem } from "@/components/NotificationSystem";
 import { PushNotificationPrompt } from "@/components/PushNotificationPrompt";
 import { useNotificacoesAutomaticas } from "@/hooks/useNotificacoesAutomaticas";
+import Registro from "./pages/Registro";
 
 const queryClient = new QueryClient();
 
