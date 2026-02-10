@@ -20,6 +20,7 @@ import {
   Wrench,
   FileText,
   StickyNote,
+  Calendar,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useTheme } from "next-themes";
@@ -189,6 +190,14 @@ export function Layout({ children }: LayoutProps) {
                <StickyNote className="h-5 w-5 flex-shrink-0" />
                {!collapsed && <span>Anotações</span>}
              </NavLink>
+            {/* <NavLink
+              to="/calendario"
+              className={collapsed ? "justify-center" : ""}
+              activeClassName="bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground"
+            >
+              <Calendar className="h-5 w-5 flex-shrink-0" />
+              {!collapsed && <span>Calendário</span>}
+            </NavLink> */}
      
             <NavLink
               to="/configuracoes"

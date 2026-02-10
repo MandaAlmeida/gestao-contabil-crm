@@ -3,6 +3,13 @@ import { useLocation } from "react-router-dom";
 import { Layout } from "@/components/Layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { useClientes } from "@/hooks/useClientes";
 import { useFinanceiro } from "@/hooks/useFinanceiro";
 import { useServicos } from "@/hooks/useServicos";
@@ -793,6 +800,126 @@ export default function FinanceiroPage() {
     };
   }, [financeirosNormalizados, servicos]);
 
+  // Valores vencidos
+  const valoresVencidos = useMemo(() => {
+    const hoje = new Date();
+    
+    return financeirosNormalizados
+      .filter((f) => {
+        if (f.status === "Pago") return false;
+        const dataVencimento = new Date(f.dataVencimento);
+        return dataVencimento < hoje;
+      })
+      .reduce((acc, f) => {
+        const valorMensalidade = f.valorMensalidade || 0;
+        const valorServico = f.valorServico ? parseFloat(f.valorServico) : 0;
+        return acc + valorMensalidade + valorServico;
+      }, 0);
+  }, [financeirosNormalizados]);
+
+  const vencidosFinanceiro = useMemo(() => {
+    const hoje = new Date();
+    
+    return financeirosNormalizados
+      .filter((f) => {
+        if (f.status === "Pago") return false;
+        const dataVencimento = new Date(f.dataVencimento);
+        return dataVencimento < hoje;
+      })
+      .reduce((acc, f) => acc + (f.valorMensalidade || 0), 0);
+  }, [financeirosNormalizados]);
+
+  const vencidosServicos = useMemo(() => {
+    const hoje = new Date();
+    
+    return financeirosNormalizados
+      .filter((f) => {
+        if (f.status === "Pago") return false;
+        const dataVencimento = new Date(f.dataVencimento);
+        return dataVencimento < hoje;
+      })
+      .reduce((acc, f) => {
+        const valorServico = f.valorServico ? parseFloat(f.valorServico) : 0;
+        return acc + valorServico;
+      }, 0);
+  }, [financeirosNormalizados]);
+
+  // Pagamentos em atraso (pagos após o vencimento em mês diferente)
+  const pagamentosAtrasados = useMemo(() => {
+    let total = 0;
+    
+    financeirosNormalizados.forEach((f) => {
+      if (f.historicoPagamentos && f.historicoPagamentos.length > 0) {
+        f.historicoPagamentos.forEach((pagamento) => {
+          if (pagamento.emDia === false && pagamento.dataPagamento) {
+            const dataPagamento = new Date(pagamento.dataPagamento);
+            const dataVencimento = new Date(pagamento.dataVencimento);
+            
+            const mesmoMes = dataPagamento.getMonth() === dataVencimento.getMonth() && 
+                            dataPagamento.getFullYear() === dataVencimento.getFullYear();
+            
+            if (!mesmoMes) {
+              const valorMensalidade = f.valorMensalidade || 0;
+              const valorServico = f.valorServico ? parseFloat(f.valorServico) : 0;
+              total += valorMensalidade + valorServico;
+            }
+          }
+        });
+      }
+    });
+    
+    return total;
+  }, [financeirosNormalizados]);
+
+  const atrasadosFinanceiro = useMemo(() => {
+    let total = 0;
+    
+    financeirosNormalizados.forEach((f) => {
+      if (f.historicoPagamentos && f.historicoPagamentos.length > 0) {
+        f.historicoPagamentos.forEach((pagamento) => {
+          if (pagamento.emDia === false && pagamento.dataPagamento) {
+            const dataPagamento = new Date(pagamento.dataPagamento);
+            const dataVencimento = new Date(pagamento.dataVencimento);
+            
+            const mesmoMes = dataPagamento.getMonth() === dataVencimento.getMonth() && 
+                            dataPagamento.getFullYear() === dataVencimento.getFullYear();
+            
+            if (!mesmoMes) {
+              total += f.valorMensalidade || 0;
+            }
+          }
+        });
+      }
+    });
+    
+    return total;
+  }, [financeirosNormalizados]);
+
+  const atrasadosServicos = useMemo(() => {
+    let total = 0;
+    
+    financeirosNormalizados.forEach((f) => {
+      if (f.historicoPagamentos && f.historicoPagamentos.length > 0) {
+        f.historicoPagamentos.forEach((pagamento) => {
+          if (pagamento.emDia === false && pagamento.dataPagamento) {
+            const dataPagamento = new Date(pagamento.dataPagamento);
+            const dataVencimento = new Date(pagamento.dataVencimento);
+            
+            const mesmoMes = dataPagamento.getMonth() === dataVencimento.getMonth() && 
+                            dataPagamento.getFullYear() === dataVencimento.getFullYear();
+            
+            if (!mesmoMes) {
+              const valorServico = f.valorServico ? parseFloat(f.valorServico) : 0;
+              total += valorServico;
+            }
+          }
+        });
+      }
+    });
+    
+    return total;
+  }, [financeirosNormalizados]);
+
   const STATUS_META: Record<Financeiro["status"], StatusMeta> = {
     Pago: {
       label: "Pago",
@@ -1045,41 +1172,83 @@ export default function FinanceiroPage() {
           }}
         />
 
-        <div className="mb-4 rounded-lg bg-primary p-4 text-primary-foreground">
-          <p className="text-lg font-semibold">
-            Recebidas: R${" "}
-            {(totaisMensalidades.recebidas + totaisDetalhados.servicosRecebidos).toLocaleString("pt-BR", {
-              minimumFractionDigits: 2,
-            })}
-          </p>
-          <p className="text-sm">
-            A receber: R${" "}
-            {(totaisMensalidades.aReceber + totaisDetalhados.servicosAReceber).toLocaleString("pt-BR", {
-              minimumFractionDigits: 2,
-            })}
-          </p>
-          {/* Detalhamento por tipo */}
-          <div className="mt-3 pt-3 border-t border-primary-foreground/20 text-xs space-y-1">
-            <p>
-              Financeiros: R${" "}
-              {totaisDetalhados.financeirosRecebidos.toLocaleString("pt-BR", {
-                minimumFractionDigits: 2,
-              })}
-              {" | A receber: R$"}
-              {totaisDetalhados.financeirosAReceber.toLocaleString("pt-BR", {
+        <div className="mb-4 grid gap-4 md:grid-cols-2">
+          {/* Card de Recebidas */}
+          <div className="rounded-lg bg-primary p-4 text-primary-foreground">
+            <p className="text-lg font-semibold">
+              Recebidas: R${" "}
+              {(totaisMensalidades.recebidas + totaisDetalhados.servicosRecebidos).toLocaleString("pt-BR", {
                 minimumFractionDigits: 2,
               })}
             </p>
-            <p>
-              Serviços: R${" "}
-              {totaisDetalhados.servicosRecebidos.toLocaleString("pt-BR", {
-                minimumFractionDigits: 2,
-              })}
-              {" | A receber: R$"}
-              {totaisDetalhados.servicosAReceber.toLocaleString("pt-BR", {
+            <p className="text-sm">
+              A receber: R${" "}
+              {(totaisMensalidades.aReceber + totaisDetalhados.servicosAReceber).toLocaleString("pt-BR", {
                 minimumFractionDigits: 2,
               })}
             </p>
+            {/* Detalhamento por tipo */}
+            <div className="mt-3 pt-3 border-t border-primary-foreground/20 text-xs space-y-1">
+              <p>
+                Financeiros: R${" "}
+                {totaisDetalhados.financeirosRecebidos.toLocaleString("pt-BR", {
+                  minimumFractionDigits: 2,
+                })}
+                {" | A receber: R$"}
+                {totaisDetalhados.financeirosAReceber.toLocaleString("pt-BR", {
+                  minimumFractionDigits: 2,
+                })}
+              </p>
+              <p>
+                Serviços: R${" "}
+                {totaisDetalhados.servicosRecebidos.toLocaleString("pt-BR", {
+                  minimumFractionDigits: 2,
+                })}
+                {" | A receber: R$"}
+                {totaisDetalhados.servicosAReceber.toLocaleString("pt-BR", {
+                  minimumFractionDigits: 2,
+                })}
+              </p>
+            </div>
+          </div>
+
+          {/* Card de Vencidos e Atrasados */}
+          <div className="rounded-lg bg-destructive p-4 text-destructive-foreground">
+            <p className="text-lg font-semibold">
+              Vencidos: R${" "}
+              {valoresVencidos.toLocaleString("pt-BR", {
+                minimumFractionDigits: 2,
+              })}
+            </p>
+            <p className="text-sm">
+              Pagos em atraso: R${" "}
+              {pagamentosAtrasados.toLocaleString("pt-BR", {
+                minimumFractionDigits: 2,
+              })}
+            </p>
+            {/* Detalhamento por tipo */}
+            <div className="mt-3 pt-3 border-t border-destructive-foreground/20 text-xs space-y-1">
+              <p>
+                Financeiros: R${" "}
+                {vencidosFinanceiro.toLocaleString("pt-BR", {
+                  minimumFractionDigits: 2,
+                })}
+                {" | Pagos em atraso: R$"}
+                {atrasadosFinanceiro.toLocaleString("pt-BR", {
+                  minimumFractionDigits: 2,
+                })}
+              </p>
+              <p>
+                Serviços: R${" "}
+                {vencidosServicos.toLocaleString("pt-BR", {
+                  minimumFractionDigits: 2,
+                })}
+                {" | Pagos em atraso: R$"}
+                {atrasadosServicos.toLocaleString("pt-BR", {
+                  minimumFractionDigits: 2,
+                })}
+              </p>
+            </div>
           </div>
         </div>
 

@@ -502,6 +502,30 @@ service cloud.firestore {
       allow delete: if isAuthenticated();
     }
     
+    // ==================== TAREFAS ====================
+    match /tarefas/{tarefaId} {
+      // Permitir leitura para usuários autenticados
+      allow read: if isAuthenticated();
+      
+      // Permitir criação para usuários autenticados com validação
+      allow create: if isAuthenticated() &&
+                      hasValidTimestamps() &&
+                      request.resource.data.titulo is string &&
+                      request.resource.data.descricao is string &&
+                      request.resource.data.data is string &&
+                      request.resource.data.concluida is bool &&
+                      request.resource.data.prioridade is string &&
+                      request.resource.data.titulo.size() > 0;
+      
+      // Permitir atualização para usuários autenticados
+      allow update: if isAuthenticated() &&
+                      request.resource.data.updatedAt is string &&
+                      createdAtUnchanged();
+      
+      // Permitir exclusão para usuários autenticados
+      allow delete: if isAuthenticated();
+    }
+    
     // Negar todas as outras operações por padrão
     match /{document=**} {
       allow read, write: if false;

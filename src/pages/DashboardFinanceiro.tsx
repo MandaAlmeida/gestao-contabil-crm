@@ -76,48 +76,71 @@ export default function DashboardFinanceiro() {
     [financeirosRaw]
   );
 
-  // Cálculos para gráficos
+  // Cálculo de entrada: agora inclui mensalidade + serviços (quando houver)
   const totalEntrada = useMemo(
-    () => {
-      const entradaFinanceiro = calcularTotalEntrada(
-        financeirosNormalizados,
-        despesas,
-        periodoFiltro,
-        periodoCustomizado
-      );
-      const entradaServicos = calcularTotalEntradaServicos(
-        servicosRaw,
-        financeirosNormalizados,
-        periodoFiltro,
-        periodoCustomizado
-      );
-      return entradaFinanceiro + entradaServicos;
-    },
-    [financeirosNormalizados, servicosRaw, despesas, periodoFiltro, periodoCustomizado]
-  );
-
-  // Cálculos detalhados para mostrar financeiros e serviços separadamente
-  const entradaFinanceiro = useMemo(
-    () =>
-      calcularTotalEntrada(
-        financeirosNormalizados,
-        despesas,
-        periodoFiltro,
-        periodoCustomizado
-      ),
+    () => calcularTotalEntrada(
+      financeirosNormalizados,
+      despesas,
+      periodoFiltro,
+      periodoCustomizado
+    ),
     [financeirosNormalizados, despesas, periodoFiltro, periodoCustomizado]
   );
 
-  const entradaServicos = useMemo(
-    () =>
-      calcularTotalEntradaServicos(
-        servicosRaw,
-        financeirosNormalizados,
-        periodoFiltro,
-        periodoCustomizado
-      ),
-    [servicosRaw, financeirosNormalizados, periodoFiltro, periodoCustomizado]
-  );
+  // Separar valores de financeiro (mensalidades) e serviços para exibição
+  const entradaFinanceiro = useMemo(() => {
+    const { inicio, fim } = calcularPeriodo(periodoFiltro, periodoCustomizado);
+    return financeirosNormalizados
+      .filter((f) => {
+        if (f.status !== "Pago") return false;
+        
+        const ultimoPagamento = f.historicoPagamentos && f.historicoPagamentos.length > 0
+          ? [...f.historicoPagamentos].sort((a, b) => 
+              new Date(b.dataPagamento).getTime() - new Date(a.dataPagamento).getTime()
+            )[0]
+          : null;
+        
+        let dataPagamento: Date;
+        
+        if (ultimoPagamento && ultimoPagamento.dataPagamento) {
+          dataPagamento = new Date(ultimoPagamento.dataPagamento);
+        } else if (f.dataPagamento) {
+          dataPagamento = new Date(f.dataPagamento);
+        } else {
+          dataPagamento = new Date(f.dataVencimento);
+        }
+        
+        return dataPagamento >= inicio && dataPagamento <= fim;
+      })
+      .reduce((acc, f) => acc + (f.valorMensalidade || 0), 0);
+  }, [financeirosNormalizados, periodoFiltro, periodoCustomizado]);
+
+  const entradaServicos = useMemo(() => {
+    const { inicio, fim } = calcularPeriodo(periodoFiltro, periodoCustomizado);
+    return financeirosNormalizados
+      .filter((f) => {
+        if (f.status !== "Pago" || !f.valorServico) return false;
+        
+        const ultimoPagamento = f.historicoPagamentos && f.historicoPagamentos.length > 0
+          ? [...f.historicoPagamentos].sort((a, b) => 
+              new Date(b.dataPagamento).getTime() - new Date(a.dataPagamento).getTime()
+            )[0]
+          : null;
+        
+        let dataPagamento: Date;
+        
+        if (ultimoPagamento && ultimoPagamento.dataPagamento) {
+          dataPagamento = new Date(ultimoPagamento.dataPagamento);
+        } else if (f.dataPagamento) {
+          dataPagamento = new Date(f.dataPagamento);
+        } else {
+          dataPagamento = new Date(f.dataVencimento);
+        }
+        
+        return dataPagamento >= inicio && dataPagamento <= fim;
+      })
+      .reduce((acc, f) => acc + (f.valorServico ? parseFloat(f.valorServico) : 0), 0);
+  }, [financeirosNormalizados, periodoFiltro, periodoCustomizado]);
 
   // Valores a receber
   const aReceberFinanceiro = useMemo(() => {
@@ -147,6 +170,91 @@ export default function DashboardFinanceiro() {
       })
       .reduce((acc, s) => acc + s.valorMensalidade, 0);
   }, [servicosRaw, financeirosNormalizados, periodoFiltro, periodoCustomizado]);
+
+  // Valores vencidos (não pagos)
+  const valoresVencidos = useMemo(() => {
+    const hoje = new Date();
+    const { inicio, fim } = calcularPeriodo(periodoFiltro, periodoCustomizado);
+    
+    return financeirosNormalizados
+      .filter((f) => {
+        // Não está pago E venceu
+        if (f.status === "Pago") return false;
+        
+        const dataVencimento = new Date(f.dataVencimento);
+        // Venceu (está no passado) E está no período selecionado
+        return dataVencimento < hoje && dataVencimento >= inicio && dataVencimento <= fim;
+      })
+      .reduce((acc, f) => {
+        const valorMensalidade = f.valorMensalidade || 0;
+        const valorServico = f.valorServico ? parseFloat(f.valorServico) : 0;
+        return acc + valorMensalidade + valorServico;
+      }, 0);
+  }, [financeirosNormalizados, periodoFiltro, periodoCustomizado]);
+
+  // Valores vencidos de financeiros
+  const vencidosFinanceiro = useMemo(() => {
+    const hoje = new Date();
+    const { inicio, fim } = calcularPeriodo(periodoFiltro, periodoCustomizado);
+    
+    return financeirosNormalizados
+      .filter((f) => {
+        if (f.status === "Pago") return false;
+        const dataVencimento = new Date(f.dataVencimento);
+        return dataVencimento < hoje && dataVencimento >= inicio && dataVencimento <= fim;
+      })
+      .reduce((acc, f) => acc + (f.valorMensalidade || 0), 0);
+  }, [financeirosNormalizados, periodoFiltro, periodoCustomizado]);
+
+  // Valores vencidos de serviços
+  const vencidosServicos = useMemo(() => {
+    const hoje = new Date();
+    const { inicio, fim } = calcularPeriodo(periodoFiltro, periodoCustomizado);
+    
+    return financeirosNormalizados
+      .filter((f) => {
+        if (f.status === "Pago") return false;
+        const dataVencimento = new Date(f.dataVencimento);
+        return dataVencimento < hoje && dataVencimento >= inicio && dataVencimento <= fim;
+      })
+      .reduce((acc, f) => {
+        const valorServico = f.valorServico ? parseFloat(f.valorServico) : 0;
+        return acc + valorServico;
+      }, 0);
+  }, [financeirosNormalizados, periodoFiltro, periodoCustomizado]);
+
+  // Pagamentos em atraso (pagos após o vencimento)
+  const pagamentosAtrasados = useMemo(() => {
+    const { inicio, fim } = calcularPeriodo(periodoFiltro, periodoCustomizado);
+    
+    let total = 0;
+    
+    financeirosNormalizados.forEach((f) => {
+      // Verifica todos os pagamentos no histórico
+      if (f.historicoPagamentos && f.historicoPagamentos.length > 0) {
+        f.historicoPagamentos.forEach((pagamento) => {
+          // Verifica se foi pago em atraso E se está no período
+          if (pagamento.emDia === false && pagamento.dataPagamento) {
+            const dataPagamento = new Date(pagamento.dataPagamento);
+            const dataVencimento = new Date(pagamento.dataVencimento);
+            
+            // Verifica se o pagamento foi no mesmo mês do vencimento
+            const mesmoMes = dataPagamento.getMonth() === dataVencimento.getMonth() && 
+                            dataPagamento.getFullYear() === dataVencimento.getFullYear();
+            
+            // Só considera atraso se foi pago em mês diferente do vencimento
+            if (!mesmoMes && dataPagamento >= inicio && dataPagamento <= fim) {
+              const valorMensalidade = f.valorMensalidade || 0;
+              const valorServico = f.valorServico ? parseFloat(f.valorServico) : 0;
+              total += valorMensalidade + valorServico;
+            }
+          }
+        });
+      }
+    });
+    
+    return total;
+  }, [financeirosNormalizados, periodoFiltro, periodoCustomizado]);
 
   const despesasFiltradas = useMemo(() => {
     let filtered = despesas;
@@ -482,6 +590,54 @@ export default function DashboardFinanceiro() {
                 </div>
                 <p className="text-xs text-muted-foreground mt-1">
                   Serviços pendentes
+                </p>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+
+        {/* Vencidos e Atrasados */}
+        <div className="mt-8">
+          <h2 className="text-lg font-semibold mb-4">Pendências e Atrasos</h2>
+          <div className="grid gap-4 md:grid-cols-2">
+            {/* Valores Vencidos */}
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm font-medium flex items-center gap-2">
+                  <TrendingDown className="h-4 w-4 text-red-600" />
+                  Valores Vencidos
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-red-600">
+                  R${" "}
+                  {valoresVencidos.toLocaleString("pt-BR", {
+                    minimumFractionDigits: 2,
+                  })}
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Pagamentos não realizados após vencimento
+                </p>
+              </CardContent>
+            </Card>
+
+            {/* Pagamentos em Atraso */}
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm font-medium flex items-center gap-2">
+                  <DollarSign className="h-4 w-4 text-yellow-600" />
+                  Pagamentos em Atraso
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-yellow-600">
+                  R${" "}
+                  {pagamentosAtrasados.toLocaleString("pt-BR", {
+                    minimumFractionDigits: 2,
+                  })}
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Pagamentos realizados após vencimento
                 </p>
               </CardContent>
             </Card>

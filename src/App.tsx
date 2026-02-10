@@ -15,6 +15,7 @@ import Sintegra from "./pages/Sintegra";
 import Configuracoes from "./pages/Configuracoes";
 import NotFound from "./pages/NotFound";
 import Anotacoes from "./pages/Anotacoes";
+import Calendario from "./pages/Calendario";
 import Login from "./pages/Login";
 // import Registro from "./pages/Registro";
 import EsqueciSenha from "./pages/EsqueciSenha";
@@ -137,6 +138,14 @@ function AppContent() {
               </ProtectedRoute>
             }
           />
+        {/* <Route
+          path="/calendario"
+          element={
+            <ProtectedRoute>
+              <Calendario />
+            </ProtectedRoute>
+          }
+        /> */}
         <Route
           path="/sintegra"
           element={
