@@ -624,7 +624,7 @@ export default function DespesasPage() {
                 Nova Despesa
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-lg">
+            <DialogContent className="max-w-lg" onCloseAutoFocus={e => e.preventDefault()}>
               <DialogHeader>
                 <DialogTitle>
                   {editingItem ? "Editar despesa" : "Adicionar despesa"}

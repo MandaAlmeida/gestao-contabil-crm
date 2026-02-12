@@ -299,7 +299,7 @@ export default function Calendario() {
 
         {/* Dialog para Adicionar/Editar Tarefa */}
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-          <DialogContent className="sm:max-w-[500px]">
+          <DialogContent className="sm:max-w-[500px]" onCloseAutoFocus={e => e.preventDefault()}>
             <form onSubmit={handleSubmit}>
               <DialogHeader>
                 <DialogTitle>

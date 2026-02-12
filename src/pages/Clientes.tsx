@@ -213,29 +213,29 @@ export default function Clientes() {
     );
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+const handleSubmit = async (e: React.FormEvent) => {
+  e.preventDefault();
 
-    try {
-      if (editingCliente) {
-        await updateCliente(editingCliente.id, formData);
-        toast({ title: "Cliente atualizado com sucesso!" });
-      } else {
-        await createCliente({
-          ...formData,
-          ativo: true,
-        });
-        toast({ title: "Cliente adicionado com sucesso!" });
-      }
-      resetForm();
-      setIsDialogOpen(false);
-    } catch (error) {
-      toast({
-        title: "Erro ao salvar cliente",
-        variant: "destructive",
+  try {
+    if (editingCliente) {
+      await updateCliente(editingCliente.id, formData);
+      toast({ title: "Cliente atualizado com sucesso!" });
+    } else {
+      await createCliente({
+        ...formData,
+        ativo: true,
       });
+      toast({ title: "Cliente adicionado com sucesso!" });
     }
-  };
+    resetForm();
+    setIsDialogOpen(false);
+  } catch (error) {
+    toast({
+      title: "Erro ao salvar cliente",
+      variant: "destructive",
+    });
+  }
+};
 
   const handleEdit = (cliente: Cliente) => {
     setEditingCliente(cliente);
@@ -547,7 +547,9 @@ export default function Clientes() {
                   Novo Cliente
                 </Button>
               </DialogTrigger>
-              <DialogContent className="max-w-2xl">
+              <DialogContent className="max-w-2xl"  onCloseAutoFocus={(e) => {
+    e.preventDefault();
+  }}>
                 <DialogHeader>
                   <DialogTitle>
                     {editingCliente ? "Editar" : "Novo"} Cliente
@@ -614,6 +616,14 @@ export default function Clientes() {
                       <Select
                         value={formData.contabilidade}
                         onValueChange={(value) => {
+                          if (value === "_remover") {
+                            setFormData((prev) => ({
+                              ...prev,
+                              contabilidade: "",
+                              observacoes: prev.observacoes // não altera observações ao remover
+                            }));
+                            return;
+                          }
                           // Buscar a contabilidade selecionada para obter o email
                           const contabilidadeSelecionada = contabilidades.find(
                             (c) => c.nome === value
@@ -664,6 +674,12 @@ export default function Clientes() {
                           </SelectValue>
                         </SelectTrigger>
                         <SelectContent>
+                          {/* Opção para remover contabilidade */}
+                          {formData.contabilidade && (
+                            <SelectItem value="_remover">
+                              Remover contabilidade
+                            </SelectItem>
+                          )}
                           {contabilidadesLoading ? (
                             <SelectItem value="_loading" disabled>
                               Carregando...

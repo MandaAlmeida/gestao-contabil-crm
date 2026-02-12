@@ -350,7 +350,7 @@ export default function ServicosPage() {
                 Novo Registro
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-2xl">
+            <DialogContent className="max-w-2xl" onCloseAutoFocus={e => e.preventDefault()}>
               <DialogHeader>
                 <DialogTitle>
                   {editingItem ? "Editar" : "Novo"} Registro de Serviço

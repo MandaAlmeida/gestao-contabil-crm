@@ -676,8 +676,8 @@ export default function FinanceiroPage() {
   };
 
   const filteredItems = financeirosNormalizados.filter((item) => {
-    const cliente = clientes.find((c) => c.id === item.clienteId);
-    const matchesSearch =
+const cliente = clientes.find((c) => c.id === item.clienteId);
+const matchesSearch =
       item.clienteNome.toLowerCase().includes(searchTerm.toLowerCase()) ||
       item.clienteCNPJ.includes(searchTerm);
     const matchesResponsavel =
@@ -969,8 +969,8 @@ export default function FinanceiroPage() {
             open={isDialogOpen}
             onOpenChange={(open) => {
               setIsDialogOpen(open);
-              if (!open) resetForm();
-            }}
+              if (!open) resetForm(); 
+              }}
           >
             <DialogTrigger asChild>
               <Button>
@@ -978,7 +978,7 @@ export default function FinanceiroPage() {
                 Novo Registro
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-2xl">
+            <DialogContent className="max-w-2xl" onCloseAutoFocus={e => e.preventDefault()}>
               <DialogHeader>
                 <DialogTitle>
                   {editingItem ? "Editar" : "Novo"} Registro Financeiro
@@ -1274,12 +1274,12 @@ export default function FinanceiroPage() {
                   <td className="p-3">{item.clienteNome}</td>
                   <td className="p-3">{item.clienteCNPJ}</td>
                   <td className="p-3">{formatarDataBR(item.dataVencimento)}</td>
-                  <td className="p-3">
-                    R${" "}
+                  <td className="p-3">           
+                    R${" "}                    
                     {item.valorMensalidade.toLocaleString("pt-BR", {
                       minimumFractionDigits: 2,
-                    })}
-                  </td>
+                    })}                  
+                    </td>
                   <td className="p-3">
                     <span className="text-sm text-muted-foreground">
                       {item.servicoId

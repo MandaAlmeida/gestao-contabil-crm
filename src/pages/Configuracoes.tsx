@@ -682,7 +682,7 @@ export default function Configuracoes() {
 
       {/* Dialog para alterar senha */}
       <Dialog open={showPasswordDialog} onOpenChange={setShowPasswordDialog}>
-        <DialogContent className="sm:max-w-[450px]">
+        <DialogContent className="sm:max-w-[450px]" onCloseAutoFocus={e => e.preventDefault()}>
           <DialogHeader>
             <div className="flex items-center gap-2 mb-1">
               <div className="p-1.5 rounded-md bg-red-500/10">
@@ -770,7 +770,7 @@ export default function Configuracoes() {
 
       {/* Dialog para alterar email */}
       <Dialog open={showEmailDialog} onOpenChange={setShowEmailDialog}>
-        <DialogContent className="sm:max-w-[450px]">
+        <DialogContent className="sm:max-w-[450px]" onCloseAutoFocus={e => e.preventDefault()}>
           <DialogHeader>
             <div className="flex items-center gap-2 mb-1">
               <div className="p-1.5 rounded-md bg-blue-500/10">

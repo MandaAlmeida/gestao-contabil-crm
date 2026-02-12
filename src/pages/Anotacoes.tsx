@@ -144,7 +144,7 @@ export default function Anotacoes() {
                 Nova anotação
               </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-3xl" aria-describedby="descricao-anotacao">
+          <DialogContent className="max-w-3xl" aria-describedby="descricao-anotacao" onCloseAutoFocus={e => e.preventDefault()}>
             <DialogHeader>
               <DialogTitle>Criar anotação</DialogTitle>
             </DialogHeader>
@@ -250,7 +250,7 @@ export default function Anotacoes() {
 
         {/* Modal de visualização/edição da anotação */}
         <Dialog open={!!anotacaoAberta} onOpenChange={open => { if (!open) setAnotacaoAberta(null); }}>
-          <DialogContent className="max-w-2xl">
+          <DialogContent className="max-w-2xl" onCloseAutoFocus={e => e.preventDefault()}>
             {anotacaoAberta && !editando && (
               <>
                 <DialogHeader>

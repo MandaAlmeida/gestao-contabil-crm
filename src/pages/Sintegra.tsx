@@ -534,7 +534,7 @@ export default function SintegraPage() {
                 Novo Sintegra
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-2xl">
+            <DialogContent className="max-w-2xl" onCloseAutoFocus={e => e.preventDefault()}>
               <DialogHeader>
                 <DialogTitle>
                   {editingItem ? "Editar" : "Novo"} Sintegra

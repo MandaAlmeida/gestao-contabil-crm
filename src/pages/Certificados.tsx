@@ -367,7 +367,7 @@ export default function Certificados() {
                 Novo Certificado
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-2xl">
+            <DialogContent className="max-w-2xl" onCloseAutoFocus={e => e.preventDefault()}>
               <DialogHeader>
                 <DialogTitle>
                   {editingItem ? "Editar" : "Novo"} Certificado

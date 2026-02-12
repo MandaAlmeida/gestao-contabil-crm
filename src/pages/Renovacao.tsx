@@ -372,7 +372,7 @@ const STATUS_OPTIONS = [
                 Nova Renovação
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-2xl">
+            <DialogContent className="max-w-2xl" onCloseAutoFocus={e => e.preventDefault()}>
               <DialogHeader>
                 <DialogTitle>
                   {editingItem ? "Editar" : "Nova"} Renovação
