@@ -452,8 +452,9 @@ service cloud.firestore {
                       request.resource.data.type in ['certificado', 'pagamento', 'servico', 'renovacao', 'sintegra', 'despesa'] &&
                       request.resource.data.priority in ['high', 'medium', 'low'];
 
-      // Permitir atualização para usuários autenticados
+      // Permitir atualização apenas para o dono da notificação
       allow update: if isAuthenticated() &&
+                      request.auth.uid == resource.data.userId &&
                       request.resource.data.updatedAt is string &&
                       createdAtUnchanged() &&
                       request.resource.data.userId is string &&
@@ -467,8 +468,8 @@ service cloud.firestore {
                       request.resource.data.userId.size() > 0 &&
                       request.resource.data.itemId.size() > 0;
 
-      // Permitir exclusão para usuários autenticados
-      allow delete: if isAuthenticated();
+      // Permitir exclusão apenas para o dono da notificação
+      allow delete: if isAuthenticated() && request.auth.uid == resource.data.userId;
     }
 
     // ==================== NOTIFICATION VIEWS ====================

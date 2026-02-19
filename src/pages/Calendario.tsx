@@ -35,6 +35,7 @@ import { Tarefa } from "@/types/tarefas";
 import { Plus, CheckCircle2, Circle, Trash2, Edit, Calendar as CalendarIcon } from "lucide-react";
 import { pt } from "date-fns/locale";
 import { format } from "date-fns";
+import { CustomAlert } from "@/components/CustomAlert";
 
 export default function Calendario() {
   const { tarefas, addTarefa, updateTarefa, deleteTarefa, toggleConcluida } = useTarefas();
@@ -42,6 +43,8 @@ export default function Calendario() {
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingTarefa, setEditingTarefa] = useState<Tarefa | null>(null);
+  const [alertOpen, setAlertOpen] = useState(false);
+  const [tarefaParaExcluir, setTarefaParaExcluir] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     titulo: "",
     descricao: "",
@@ -102,20 +105,22 @@ export default function Calendario() {
     e.preventDefault();
     
     try {
+
       const clienteSelecionado = clientes.find((c) => c.id === formData.clienteId);
-      const tarefaData = {
+      // Monta o objeto sem campos undefined ou vazios
+      const tarefaData: any = {
         titulo: formData.titulo,
         descricao: formData.descricao,
         data: selectedDate.toISOString(),
-        horaInicio: formData.horaInicio || undefined,
-        horaFim: formData.horaFim || undefined,
         prioridade: formData.prioridade,
-        categoria: formData.categoria || undefined,
-        clienteId: formData.clienteId || undefined,
-        clienteNome: clienteSelecionado?.nome || undefined,
         concluida: editingTarefa?.concluida || false,
         ativo: true,
       };
+      if (formData.horaInicio) tarefaData.horaInicio = formData.horaInicio;
+      if (formData.horaFim) tarefaData.horaFim = formData.horaFim;
+      if (formData.categoria) tarefaData.categoria = formData.categoria;
+      if (formData.clienteId) tarefaData.clienteId = formData.clienteId;
+      if (clienteSelecionado?.nome) tarefaData.clienteNome = clienteSelecionado.nome;
 
       if (editingTarefa) {
         await updateTarefa(editingTarefa.id, tarefaData);
@@ -129,13 +134,20 @@ export default function Calendario() {
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (confirm("Tem certeza que deseja excluir esta tarefa?")) {
+  const handleDelete = (id: string) => {
+    setTarefaParaExcluir(id);
+    setAlertOpen(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (tarefaParaExcluir) {
       try {
-        await deleteTarefa(id);
+        await deleteTarefa(tarefaParaExcluir);
       } catch (error) {
         console.error("Erro ao excluir tarefa:", error);
       }
+      setTarefaParaExcluir(null);
+      setAlertOpen(false);
     }
   };
 
@@ -297,6 +309,21 @@ export default function Calendario() {
           </Card>
         </div>
 
+        {/* Alerta personalizado para exclusão de tarefa (fora do loop) */}
+        {/* Modal de confirmação de exclusão */}
+        {alertOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+            <div className="bg-white dark:bg-zinc-900 rounded-lg shadow-lg p-6 w-full max-w-sm">
+              <h2 className="text-lg font-semibold mb-2 text-destructive">Excluir Tarefa</h2>
+              <p className="mb-4">Tem certeza que deseja excluir esta tarefa? Esta ação não poderá ser desfeita.</p>
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={() => { setAlertOpen(false); setTarefaParaExcluir(null); }}>Cancelar</Button>
+                <Button variant="destructive" onClick={handleConfirmDelete}>Excluir</Button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Dialog para Adicionar/Editar Tarefa */}
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogContent className="sm:max-w-[500px]" onCloseAutoFocus={e => e.preventDefault()}>
@@ -395,16 +422,16 @@ export default function Calendario() {
                 <div className="grid gap-2">
                   <Label htmlFor="cliente">Cliente</Label>
                   <Select
-                    value={formData.clienteId}
+                    value={formData.clienteId ? formData.clienteId : "none"}
                     onValueChange={(value) =>
-                      setFormData({ ...formData, clienteId: value })
+                      setFormData({ ...formData, clienteId: value === "none" ? "" : value })
                     }
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Selecione um cliente (opcional)" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">Nenhum</SelectItem>
+                      <SelectItem value="none">Nenhum</SelectItem>
                       {clientes
                         .filter((c) => c.ativo)
                         .map((cliente) => (

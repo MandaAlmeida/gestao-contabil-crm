@@ -32,8 +32,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { PushNotificationSettings } from "@/components/PushNotificationPrompt";
-import { usePushNotifications } from "@/hooks/usePushNotifications";
 
 export default function Configuracoes() {
   const { user, updateUserProfile, updateUserEmail, updateUserPassword } =
@@ -66,12 +64,6 @@ export default function Configuracoes() {
   const [notificacoesClientes, setNotificacoesClientes] = useState(false);
   const [usuarioId, setUsuarioId] = useState<string | null>(null);
 
-  // Hook para notificações push
-  const {
-    token: pushToken,
-    permission: pushPermission,
-    isSupported: pushIsSupported,
-  } = usePushNotifications();
 
   // Carregar dados do usuário
   useEffect(() => {
@@ -299,94 +291,74 @@ export default function Configuracoes() {
   };
 
   // Função para salvar preferências de notificação
-  const handleSaveNotificationPreferences = async (preferences: {
-    notificacoesEmail?: boolean;
-    notificacoesPush?: boolean;
-    notificacoesRenovacoes?: boolean;
-    notificacoesPagamentos?: boolean;
-    notificacoesClientes?: boolean;
-    pushToken?: string;
-  }) => {
-    if (!usuarioId) {
-      toast({
-        title: "Erro",
-        description: "Usuário não encontrado.",
-        variant: "destructive",
-      });
-      return;
-    }
+const handleSaveNotificationPreferences = async (
+  updates: Partial<{
+    notificacoesEmail: boolean;
+    notificacoesRenovacoes: boolean;
+    notificacoesPagamentos: boolean;
+    notificacoesClientes: boolean;
+  }>
+) => {
+  if (!usuarioId) return;
 
-    try {
-      await updateUsuario(usuarioId, preferences);
+  try {
+    await updateUsuario(usuarioId, updates);
+  } catch (error) {
+    console.error("Erro ao salvar preferências:", error);
 
-      // Salvar token FCM se disponível
-      if (pushToken && pushPermission === "granted") {
-        await updateUsuario(usuarioId, {
-          notificacoesPush: true,
-          pushToken,
-        });
-      }
-    } catch (error: any) {
-      console.error("Erro ao salvar preferências:", error);
-      throw error;
-    }
-  };
+    toast({
+      title: "Erro ao salvar",
+      description: "Não foi possível salvar suas preferências.",
+      variant: "destructive",
+    });
+  }
+};
+
+
 
   // Função para lidar com mudança de outras notificações (salva automaticamente)
   const handleNotificationChange = async (
-    type: "email" | "renovacoes" | "pagamentos" | "clientes",
-    checked: boolean
-  ) => {
-    const updates: Record<string, boolean> = {};
+  type: "email" | "renovacoes" | "pagamentos" | "clientes",
+  checked: boolean
+) => {
+  if (!usuarioId) return;
 
+  const updates: Record<string, boolean> = {};
+
+  try {
     switch (type) {
       case "email":
         setNotificacoesEmail(checked);
         updates.notificacoesEmail = checked;
         break;
+
       case "renovacoes":
         setNotificacoesRenovacoes(checked);
         updates.notificacoesRenovacoes = checked;
         break;
+
       case "pagamentos":
         setNotificacoesPagamentos(checked);
         updates.notificacoesPagamentos = checked;
         break;
+
       case "clientes":
         setNotificacoesClientes(checked);
         updates.notificacoesClientes = checked;
         break;
     }
 
-    // Salvar automaticamente quando mudar
-    if (usuarioId) {
-      try {
-        await handleSaveNotificationPreferences(updates);
-      } catch (error: any) {
-        // Reverter mudança se falhar
-        switch (type) {
-          case "email":
-            setNotificacoesEmail(!checked);
-            break;
-          case "renovacoes":
-            setNotificacoesRenovacoes(!checked);
-            break;
-          case "pagamentos":
-            setNotificacoesPagamentos(!checked);
-            break;
-          case "clientes":
-            setNotificacoesClientes(!checked);
-            break;
-        }
-        toast({
-          title: "Erro ao salvar preferências",
-          description:
-            error.message || "Ocorreu um erro ao salvar suas preferências.",
-          variant: "destructive",
-        });
-      }
-    }
-  };
+    await handleSaveNotificationPreferences(updates);
+  } catch (error: any) {
+    toast({
+      title: "Erro ao salvar",
+      description:
+        error?.message || "Não foi possível salvar suas preferências.",
+      variant: "destructive",
+    });
+  }
+};
+
 
   return (
     <Layout>
@@ -512,9 +484,6 @@ export default function Configuracoes() {
                 />
               </div>
               <Separator />
-              <div className="p-3 rounded-md bg-muted/30 hover:bg-muted/50 transition-colors">
-                <PushNotificationSettings />
-              </div>
             </CardContent>
           </Card>
 

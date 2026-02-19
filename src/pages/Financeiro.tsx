@@ -2,47 +2,20 @@ import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { Layout } from "@/components/Layout";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { useClientes } from "@/hooks/useClientes";
 import { useFinanceiro } from "@/hooks/useFinanceiro";
 import { useServicos } from "@/hooks/useServicos";
 import { useConfirmationDialog } from "@/components/ConfirmationDialog";
-import { excluirNotificacoesItem } from "@/utils/notificacoes";
 import { Financeiro } from "@/types/crm";
 import {
-  Plus,
   Edit,
   Trash2,
   History,
 } from "lucide-react";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+
 import { useToast } from "@/hooks/use-toast";
-import {
-  calcularStatusFinanceiro,
-  normalizarFinanceiros,
-} from "@/lib/financeiro";
+import { calcularStatusFinanceiro } from "@/lib/financeiro";
+import { useFinanceiroMetricas } from "@/hooks/useFinanceiroDashboard";
 import { formatarDataBR } from "@/lib/utils";
 import { StatusButton, type StatusMeta } from "@/components/StatusButton";
 import { ExportButtons } from "@/components/ExportButtons";
@@ -59,13 +32,16 @@ import {
 } from "@/components/ui/pagination";
 import { FiltersBar } from "@/components/FiltersBar";
 import { NotificationButton } from "@/components/NotificationButton";
-import { NotificationPanel } from "@/components/NotificationPanel";
+import { NotificationPanel, NotificationType } from "@/components/NotificationPanel";
 import { HistoricoPagamentosDialog } from "@/components/HistoricoPagamentosDialog";
+import { CreateFinancer } from "@/components/CreateFinancer";
+import { useNotifications } from "@/hooks/useNotificacoesAutomaticas";
+import { useAuth } from "@/contexts/AuthContext";
 
 export default function FinanceiroPage() {
-  const location = useLocation();
   const { clientes } = useClientes();
-  const { servicos, createServico, deleteServico, refresh: refreshServicos } = useServicos();
+  const { user } = useAuth();
+  const { servicos, createServico, deleteServico} = useServicos();
   const {
     financeiros: financeirosRaw,
     createFinanceiro,
@@ -92,75 +68,22 @@ export default function FinanceiroPage() {
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [historicoDialogOpen, setHistoricoDialogOpen] = useState(false);
   const [selectedItemHistorico, setSelectedItemHistorico] = useState<Financeiro | null>(null);
+  const {
+ removeNotificationItem,
+ fetchNotifications
+  } = useNotifications(user.uid);
 
-  // Aplicar filtros do state quando a página é carregada
-  useEffect(() => {
-    if (location.state) {
-      const { statusFilter, responsavelFilter } = location.state as {
-        statusFilter?: string;
-        responsavelFilter?: string;
-      };
-
-      if (statusFilter) {
-        setFiltroStatus(statusFilter as Financeiro["status"] | "todos");
-      }
-
-      if (responsavelFilter && responsavelFilter !== "todos") {
-        setSearchResponsavel(responsavelFilter);
-      }
-    }
-  }, [location.state]);
-
-  const responsaveisDisponiveis = useMemo(
-    () =>
-      Array.from(
-        new Set(clientes.map((cliente) => cliente.responsavel))
-      ).sort(),
-    [clientes]
-  );
-
-  const financeirosNormalizados = useMemo(
-    () => normalizarFinanceiros(financeirosRaw),
-    [financeirosRaw]
-  );
-
-  // Lista de IDs de clientes que já têm registros financeiros
-  const clientesComFinanceiro = useMemo(
-    () => new Set(financeirosNormalizados.map((f) => f.clienteId)),
-    [financeirosNormalizados]
-  );
-
-  // Clientes disponíveis para seleção no formulário
-  // Ao criar novo registro, mostra apenas clientes não cadastrados
-  // Ao editar, mostra todos os clientes (incluindo o que está sendo editado)
-  const clientesDisponiveisFormulario = useMemo(() => {
-    let clientesFiltrados = clientes;
-
-    // Se estiver criando um novo registro (não editando), mostra apenas clientes não cadastrados
-    if (!editingItem) {
-      clientesFiltrados = clientes.filter(
-        (c) => !clientesComFinanceiro.has(c.id)
-      );
-    } else {
-      // Se estiver editando, inclui o cliente atual mesmo que já tenha registro
-      clientesFiltrados = clientes.filter(
-        (c) =>
-          !clientesComFinanceiro.has(c.id) || c.id === editingItem.clienteId
-      );
-    }
-
-    // Ordenar alfabeticamente por nome (ignorando espaços no início)
-    return [...clientesFiltrados].sort((a, b) =>
-      a.nome.trim().localeCompare(b.nome.trim(), "pt-BR", { sensitivity: "base" })
-    );
-  }, [clientes, clientesComFinanceiro, editingItem]);
-
+  // =========================
+  // Formulário CreateFinancer
+  // =========================
   const [formData, setFormData] = useState({
     clienteId: "",
     dataVencimento: "",
     valorMensalidade: "",
-    meioPagamento: "Pix" as Financeiro["meioPagamento"],
     valorServico: "",
+    servicoId: null,
+    status: "Pendente",
+    meioPagamento: "Pix" as "Pix" | "Boleto",
     observacoes: "",
   });
 
@@ -169,379 +92,91 @@ export default function FinanceiroPage() {
       clienteId: "",
       dataVencimento: "",
       valorMensalidade: "",
+      status: "Pendente",
       meioPagamento: "Pix",
       valorServico: "",
+      servicoId: null,
       observacoes: "",
     });
     setEditingItem(null);
   };
-
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    const cliente = clientes.find((c) => c.id === formData.clienteId);
-    if (!cliente) {
-      toast({ title: "Cliente não encontrado!", variant: "destructive" });
-      return;
-    }
-
-    let dataVencimento = formData.dataVencimento;
-
-    // Permitir usar o campo "Valor do Serviço" como base quando preenchido
-    const valorServicoNumber = parseFloat(formData.valorServico || "");
-    const valorMensalidadeNumber = parseFloat(formData.valorMensalidade || "");
-    const valorPrincipal = !Number.isNaN(valorServicoNumber)
-      ? valorServicoNumber
-      : valorMensalidadeNumber;
-
-    if (Number.isNaN(valorPrincipal)) {
-      toast({
-        title: "Informe um valor válido (mensalidade ou serviço).",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    const status = calcularStatusFinanceiro({
-      status: editingItem?.status ?? "Pendente",
-      dataPagamento: null,
-      dataVencimento,
-      historicoPagamentos: editingItem?.historicoPagamentos || [],
-    });
-
-    try {
-      if (editingItem) {
-        // Verificar se precisa criar serviço ao editar
-        let servicoIdAtualizar = editingItem.servicoId || null;
-        const temValorServico = formData.valorServico && parseFloat(formData.valorServico) > 0;
-        const naoTemServicoVinculado = !editingItem.servicoId;
-        const servicoFoiLimpado = editingItem.servicoId && !temValorServico;
-
-        // Se o serviço foi vinculado e agora foi limpo, deleta o serviço
-        if (servicoFoiLimpado) {
-          try {
-            await deleteServico(editingItem.servicoId);
-            servicoIdAtualizar = null;
-            toast({ title: "Serviço deletado!" });
-            await refreshServicos();
-          } catch (error) {
-            console.error("❌ Erro ao deletar serviço:", error);
-            servicoIdAtualizar = null;
-          }
-        }
-
-        if (temValorServico && naoTemServicoVinculado) {
-          // Criar serviço automaticamente ao editar
-          try {
-            const valorServicoNumber = parseFloat(formData.valorServico);
-            const novoServico = {
-              clienteId: formData.clienteId,
-              clienteNome: cliente.nome,
-              clienteCNPJ: cliente.cnpj,
-              responsavel: cliente.responsavel,
-              descricao: `Serviço mensal - ${cliente.nome}`,
-              dataVencimento: dataVencimento,
-              valorMensalidade: valorServicoNumber,
-              status: "Pendente" as const,
-              meioPagamento: "Pix" as const,
-              observacoes: `Serviço criado automaticamente via financeiro - ${new Date().toLocaleDateString('pt-BR')}`,
-              ativo: true,
-            };
-
-            servicoIdAtualizar = await createServico(novoServico);
-            toast({ title: "Serviço criado automaticamente!" });
-            await refreshServicos();
-          } catch (error) {
-            console.error("❌ Erro ao criar serviço na edição:", error);
-            toast({
-              title: "Registro atualizado sem vínculo com serviço",
-              description: "Não foi possível criar o serviço automaticamente.",
-            });
-          }
-        }
-
-        await updateFinanceiro(editingItem.id, {
-          clienteId: formData.clienteId,
-          clienteNome: cliente.nome,
-          clienteCNPJ: cliente.cnpj,
-          dataVencimento,
-          valorMensalidade: valorMensalidadeNumber,
-          status,
-          meioPagamento: formData.meioPagamento,
-          servicoId: servicoIdAtualizar,
-          valorServico: formData.valorServico,
-          observacoes: formData.observacoes,
-        });
-        await Promise.all([refreshFinanceiros(), refreshServicos()]);
-        toast({ title: "Registro atualizado com sucesso!" });
-      } else {
-        // Verificar se já existe serviço para este cliente
-        let servicoRelacionado = servicos.find(s => s.clienteId === formData.clienteId);
-        let servicoId: string | null = null;
-        let valorParaServico = valorPrincipal;
-        const temValorServico = formData.valorServico && parseFloat(formData.valorServico) > 0;
-
-        if (!servicoRelacionado && temValorServico) {
-          // Se não existe serviço, criar automaticamente
-          try {
-            const novoServico = {
-              clienteId: formData.clienteId,
-              clienteNome: cliente.nome,
-              clienteCNPJ: cliente.cnpj,
-              responsavel: cliente.responsavel,
-              descricao: `Serviço mensal - ${cliente.nome}`,
-              dataVencimento: dataVencimento,
-              valorMensalidade: valorPrincipal,
-              status: "Pendente" as const,
-              meioPagamento: "Pix" as const,
-              observacoes: `Serviço criado automaticamente via financeiro - ${new Date().toLocaleDateString('pt-BR')}`,
-              ativo: true,
-            };
-
-            servicoId = await createServico(novoServico);
-            toast({ title: "Serviço criado automaticamente!" });
-            
-            // Atualizar serviços para refletir o novo serviço
-            await refreshServicos();
-          } catch (error) {
-            console.error("❌ Erro ao criar serviço:", error);
-            console.error("❌ Stack trace:", (error as any)?.stack);
-            toast({
-              title: "Registro criado sem vínculo com serviço",
-              description: "Não foi possível criar o serviço automaticamente.",
-            });
-            servicoId = null;
-            valorParaServico = valorPrincipal;
-          }
-        } else if (servicoRelacionado) {
-          // Se existe serviço, usar o ID e valor dele
-          servicoId = servicoRelacionado.id;
-          valorParaServico = servicoRelacionado.valorMensalidade;
-          toast({ title: "Serviço vinculado automaticamente!" });
-        }
-
-        await createFinanceiro({
-          clienteId: formData.clienteId,
-          clienteNome: cliente.nome,
-          clienteCNPJ: cliente.cnpj,
-          dataVencimento,
-          // Usa o valor principal (mensalidade ou valor do serviço, se informado)
-          valorMensalidade: valorParaServico,
-          status,
-          meioPagamento: formData.meioPagamento,
-          servicoId: servicoId,
-          valorServico: formData.valorServico,
-          observacoes: formData.observacoes,
-          ativo: true,
-          historicoPagamentos: [],
-        });
-
-        // Garante que as listas estejam sincronizadas em tela
-        await Promise.all([refreshFinanceiros(), refreshServicos()]);
-        toast({ title: "Registro financeiro adicionado com sucesso!" });
-      }
-
-      resetForm();
-      setIsDialogOpen(false);
-    } catch (error) {
-      console.error("❌ Erro ao salvar registro:", error);
-      toast({
-        title: "Erro ao salvar registro",
-        variant: "destructive",
-      });
-    }
-  };
-
-  /**
-   * Adiciona um mês a uma data no formato YYYY-MM-DD
-   * Trabalha diretamente com strings para evitar problemas de timezone
-   */
-  const adicionarMes = (dataString: string): string => {
-    if (!dataString) {
-      const hoje = new Date();
-      return hoje.toISOString().split("T")[0];
-    }
-
-    const partes = dataString.split("-");
-    if (partes.length !== 3) {
-      return dataString;
-    }
-
-    const ano = parseInt(partes[0], 10);
-    const mes = parseInt(partes[1], 10);
-    const dia = parseInt(partes[2], 10);
-
-    let novoAno = ano;
-    let novoMes = mes + 1;
-
-    if (novoMes > 12) {
-      novoMes = 1;
-      novoAno += 1;
-    }
-
-    // Garante que o dia não ultrapasse os dias do mês
-    const ultimoDiaDoMes = new Date(novoAno, novoMes, 0).getDate();
-    const novoDia = Math.min(dia, ultimoDiaDoMes);
-
-    return `${novoAno}-${String(novoMes).padStart(2, "0")}-${String(
-      novoDia
-    ).padStart(2, "0")}`;
-  };
-
-  /**
-   * Remove um mês de uma data no formato YYYY-MM-DD
-   * Trabalha diretamente com strings para evitar problemas de timezone
-   */
-  const removerMes = (dataString: string): string => {
-    if (!dataString) {
-      const hoje = new Date();
-      return hoje.toISOString().split("T")[0];
-    }
-
-    const partes = dataString.split("-");
-    if (partes.length !== 3) {
-      return dataString;
-    }
-
-    const ano = parseInt(partes[0], 10);
-    const mes = parseInt(partes[1], 10);
-    const dia = parseInt(partes[2], 10);
-
-    let novoAno = ano;
-    let novoMes = mes - 1;
-
-    if (novoMes < 1) {
-      novoMes = 12;
-      novoAno -= 1;
-    }
-
-    // Garante que o dia não ultrapasse os dias do mês
-    const ultimoDiaDoMes = new Date(novoAno, novoMes, 0).getDate();
-    const novoDia = Math.min(dia, ultimoDiaDoMes);
-
-    return `${novoAno}-${String(novoMes).padStart(2, "0")}-${String(
-      novoDia
-    ).padStart(2, "0")}`;
+  // =========================
+  // Constantes e Handlers ausentes
+  // =========================
+  const STATUS_META: Record<"Pago" | "Pendente" | "Vencido", StatusMeta> = {
+    Pago: {
+      label: "Pago",
+      icon: CheckCircle,
+      className: "bg-green-500 text-white",
+    },
+    Pendente: {
+      label: "Pendente",
+      icon: Clock3,
+      className: "bg-yellow-500 text-black",
+    },
+    Vencido: {
+      label: "Vencido",
+      icon: AlertTriangle,
+      className: "bg-red-500 text-white",
+    },
   };
 
   const handleTogglePagamento = async (item: Financeiro) => {
-    const hoje = new Date();
-    hoje.setHours(0, 0, 0, 0);
-    const dataHojeStr = hoje.toISOString().split('T')[0];
-    
-    if (item.status === "Pago") {
-      // Verifica se o pagamento foi feito hoje
-      const pagamentoAtual = item.historicoPagamentos?.find(
-        p => p.dataVencimento === item.dataVencimento
-      );
-      
-      const pagamentoFoiHoje = pagamentoAtual?.dataPagamento === dataHojeStr;
-      
-      if (pagamentoFoiHoje) {
-        // Se foi pago hoje, apenas remove do histórico sem voltar o vencimento
-        const historicoAtualizado = (item.historicoPagamentos || []).filter(
-          p => p.dataVencimento !== item.dataVencimento
-        );
-        
-        const statusAjustado = calcularStatusFinanceiro({
-          status: "Pendente",
-          dataPagamento: null,
-          dataVencimento: item.dataVencimento,
-          historicoPagamentos: historicoAtualizado,
-        });
-
-        try {
-          await updateFinanceiro(item.id, {
-            historicoPagamentos: historicoAtualizado,
-            status: statusAjustado,
-          });
-          toast({
-            title: "Pagamento desfeito.",
-            description: `${item.clienteNome} voltou ao status anterior.`,
-          });
-        } catch (error) {
-          toast({ title: "Erro ao desfazer pagamento", variant: "destructive" });
-        }
-        return;
-      }
-      
-      // Se não foi pago hoje, remove do histórico E volta o vencimento
-      const historicoAtualizado = (item.historicoPagamentos || []).filter(
-        p => p.dataVencimento !== item.dataVencimento
-      );
-      
-      const vencimentoAnterior = removerMes(item.dataVencimento);
-
-      const statusAjustado = calcularStatusFinanceiro({
-        status: "Pendente",
-        dataPagamento: null,
-        dataVencimento: vencimentoAnterior,
-        historicoPagamentos: historicoAtualizado,
-      });
-
-      try {
-        await updateFinanceiro(item.id, {
-          historicoPagamentos: historicoAtualizado,
-          dataVencimento: vencimentoAnterior,
-          status: statusAjustado,
-        });
-        toast({
-          title: "Pagamento removido.",
-          description:
-            statusAjustado === "Pendente"
-              ? `${item.clienteNome} voltou a ficar pendente.`
-              : `${item.clienteNome} foi marcado como vencido.`,
-        });
-      } catch (error) {
-        toast({ title: "Erro ao remover pagamento", variant: "destructive" });
-      }
-      return;
-    }
-
-    // Registra o pagamento no histórico
-    const dataPagamentoStr = dataHojeStr;
-    const vencimento = new Date(item.dataVencimento + "T00:00:00");
-    const pagamento = new Date(dataHojeStr + "T00:00:00");
-    
-    const emDia = pagamento <= vencimento;
-    const novoVencimento = adicionarMes(item.dataVencimento);
-    
-    const novoPagamento = {
-      id: `${item.id}-${item.dataVencimento}-${Date.now()}`,
-      dataVencimento: item.dataVencimento,
-      dataPagamento: dataPagamentoStr,
-      emDia,
-      meioPagamento: "Pix" as const,
-    };
-    
-    const historicoAtualizado = [
-      ...(item.historicoPagamentos || []),
-      novoPagamento
-    ];
-
-    try {
-      await updateFinanceiro(item.id, {
-        historicoPagamentos: historicoAtualizado,
-        dataVencimento: novoVencimento,
-        status: "Pago",
-      });
-
-      // Excluir notificações relacionadas ao pagamento
-      await excluirNotificacoesItem(item.id, "pagamento");
-
-      toast({
-        title: emDia ? "Pagamento em dia registrado!" : "Pagamento atrasado registrado!",
-        description: emDia 
-          ? `${item.clienteNome} foi marcado como pago em dia.`
-          : `${item.clienteNome} foi marcado como pago com atraso.`,
-      });
-    } catch (error) {
-      toast({ title: "Erro ao registrar pagamento", variant: "destructive" });
-    }
+    const novoStatus: Financeiro["status"] =
+      item.status === "Pago"
+        ? "Pendente"
+        : item.status === "Pendente"
+        ? "Pago"
+        : "Pendente";
+    await updateFinanceiro(item.id, {
+      status: novoStatus,
+    });
+    toast({ title: `Status alterado para ${novoStatus}` });
+    refreshFinanceiros();
   };
 
-  const handleDeleteHistorico = async (financeiroItem: Financeiro, historicoId: string) => {
+  const getToggleTitle = (item: Financeiro) => {
+    if (item.status === "Pago") return "Marcar como pendente";
+    if (item.status === "Pendente") return "Marcar como pago";
+    if (item.status === "Vencido") return "Marcar como pendente";
+    return "Alterar status";
+  };
+
+  const handleEdit = (item: Financeiro) => {
+    setEditingItem(item);
+    setFormData({
+      clienteId: item.clienteId,
+      dataVencimento: item.dataVencimento,
+      valorMensalidade: String(item.valorMensalidade),
+      status: item.status,
+      meioPagamento: item.meioPagamento,
+      observacoes: item.observacoes || "", 
+      valorServico: item.valorServico || "",
+      servicoId:item.servicoId || null,
+    });
+    setIsDialogOpen(true);
+  };
+
+  const handleDelete = async (id: string, clientName: string, serviceId?: string) => {
+    await showConfirmation(
+      "Excluir financeiro?",
+      "Esta ação não pode ser desfeita.",
+      async () => {
+        await removeNotificationItem(user.uid, clientName, "pagamento");
+        await removeNotificationItem(user.uid, clientName, "servico");
+        await deleteFinanceiro(id);
+        if (serviceId) await deleteServico(serviceId);
+        toast({ title: "Financeiro excluído com sucesso!" });
+        // Aguarda um pequeno delay para garantir que o Firestore atualize
+        setTimeout(() => {
+          fetchNotifications();
+        }, 300);
+        refreshFinanceiros();
+      }
+    );
+  };
+
+const handleDeleteHistorico = async (financeiroItem: Financeiro, historicoId: string) => {
     // Encontra o pagamento mais recente
     const pagamentoMaisRecente = (financeiroItem.historicoPagamentos || []).reduce((ultimo, atual) => {
       const dataUltimo = new Date(ultimo.dataVencimento);
@@ -596,7 +231,7 @@ export default function FinanceiroPage() {
     }
   };
 
-  const handleEditHistorico = async (
+ const handleEditHistorico = async (
     financeiroItem: Financeiro,
     historicoId: string,
     novaData: string,
@@ -641,312 +276,359 @@ export default function FinanceiroPage() {
     }
   };
 
+const handleSubmit = async (e: React.FormEvent) => {
+  e.preventDefault();
 
-  const handleEdit = (item: Financeiro) => {
-    setEditingItem(item);
-    setFormData({
-      clienteId: item.clienteId,
-      dataVencimento: item.dataVencimento,
-      valorMensalidade: item.valorMensalidade.toString(),
-      meioPagamento: item.meioPagamento ?? "Pix",
-      valorServico: item.valorServico?.toString() ?? "",
-      observacoes: item.observacoes,
-    });
-    setIsDialogOpen(true);
-  };
+  const cliente = clientes.find((c) => c.id === formData.clienteId);
 
-  const handleDelete = async (id: string) => {
-    showConfirmation(
-      "Excluir Registro Financeiro",
-      "Tem certeza que deseja excluir este registro? Esta ação não pode ser desfeita.",
-      async () => {
-        try {
-          await deleteFinanceiro(id);
-          toast({ title: "Registro excluído com sucesso!" });
-        } catch (error) {
-          toast({ title: "Erro ao excluir registro", variant: "destructive" });
-        }
-      },
-      {
-        confirmText: "Excluir",
-        cancelText: "Cancelar",
-        variant: "destructive"
+  if (!cliente) {
+    toast({ title: "Cliente não encontrado!", variant: "destructive" });
+    return;
+  }
+
+  try {
+    const hoje = new Date();
+    const vencimento = new Date(formData.dataVencimento);
+
+    const mesmoMes =
+      hoje.getFullYear() === vencimento.getFullYear() &&
+      hoje.getMonth() === vencimento.getMonth();
+
+    let statusValid: Financeiro["status"];
+
+    if (formData.status === "Pago") {
+      statusValid = "Pago";
+    } else if (mesmoMes) {
+      statusValid = "Pendente"; // A RECEBER
+    } else if (vencimento < hoje) {
+      statusValid = "Vencido";
+    } else {
+      statusValid = "Pendente";
+    }
+
+    if (editingItem) {
+      await updateFinanceiro(editingItem.id, {
+        ...formData,
+        status: statusValid,
+        valorMensalidade: Number(formData.valorMensalidade),
+      });
+
+      toast({ title: "Financeiro atualizado com sucesso!" });
+    } else {
+      let servicoId = formData.servicoId;
+
+      if (Number(formData.valorServico) > 0 && !formData.servicoId) {
+        const novoServicoId = await createServico({
+          clienteId: formData.clienteId,
+          clienteCNPJ: cliente.cnpj,
+          clienteNome: cliente.nome,
+          responsavel: cliente.responsavel,
+          valorMensalidade: Number(formData.valorServico),
+          dataVencimento: formData.dataVencimento,
+          status: statusValid,
+          observacoes: formData.observacoes || "",
+          meioPagamento: formData.meioPagamento,
+          ativo: true,
+          descricao: ""
+        });
+
+        servicoId = novoServicoId;
       }
+
+      await createFinanceiro({
+        ...formData,
+        status: statusValid,
+        clienteNome: cliente.nome,
+        clienteCNPJ: cliente.cnpj,
+        valorMensalidade: Number(formData.valorMensalidade),
+        ativo: true,
+        servicoId: servicoId,
+      });
+
+      toast({ title: "Financeiro adicionado com sucesso!" });
+    }
+
+    resetForm();
+    setIsDialogOpen(false);
+  } catch (error) {
+    toast({ title: "Erro ao salvar financeiro", variant: "destructive" });
+  }
+};
+
+ // =========================
+// Helpers
+// =========================
+const parseDate = (date: string) => {
+  if (!date) return null;
+  const d = new Date(date + "T00:00:00");
+  d.setHours(0, 0, 0, 0);
+  return d;
+};
+
+  // =========================
+  // Filtros locais
+  // =========================
+  const filteredItems = useMemo(() => {
+    return financeirosRaw.filter((item) => {
+      const cliente = clientes.find((c) => c.id === item.clienteId);
+      const matchesSearch =
+        item.clienteNome?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        item.clienteCNPJ?.includes(searchTerm);
+      const matchesResponsavel =
+        searchResponsavel === "todos" ||
+        (cliente && cliente.responsavel === searchResponsavel);
+      let matchesData = true;
+      if (filtroDataInicio && filtroDataFim) {
+        const inicio = new Date(filtroDataInicio + "T00:00:00");
+        const fim = new Date(filtroDataFim + "T00:00:00");
+        if (item.historicoPagamentos && item.historicoPagamentos.length > 0) {
+          // Se tem histórico, filtra por dataPagamento
+          matchesData = item.historicoPagamentos.some((p) => {
+            if (!p.dataPagamento) return false;
+            const dataPag = new Date(p.dataPagamento + "T00:00:00");
+            return dataPag >= inicio && dataPag <= fim;
+          });
+        } else {
+          // Se não tem histórico, filtra por dataVencimento
+          const dataVenc = new Date(item.dataVencimento + "T00:00:00");
+          matchesData = dataVenc >= inicio && dataVenc <= fim;
+        }
+      }
+      const matchesStatus =
+        filtroStatus === "todos" || item.status === filtroStatus;
+      return (
+        matchesSearch &&
+        matchesResponsavel &&
+        matchesData &&
+        matchesStatus
+      );
+    });
+  }, [
+    financeirosRaw,
+    clientes,
+    searchTerm,
+    searchResponsavel,
+    filtroDataInicio,
+    filtroDataFim,
+    filtroStatus,
+  ]);
+
+  // =========================
+  // Normalização e Métricas
+  // =========================
+  // Definir período customizado se filtro de datas estiver preenchido
+  const periodoCustomizado =
+    filtroDataInicio && filtroDataFim
+      ? {
+          inicio: new Date(filtroDataInicio + "T00:00:00"),
+          fim: new Date(filtroDataFim + "T00:00:00"),
+        }
+      : undefined;
+
+
+// =========================
+// Responsáveis
+// =========================
+const responsaveisDisponiveis = useMemo(
+  () =>
+    Array.from(
+      new Set(clientes.map((c) => c.responsavel))
+    ).sort(),
+  [clientes]
+);
+
+// =========================
+// Clientes com financeiro
+// =========================
+const clientesComFinanceiro = useMemo(
+  () => new Set(filteredItems.map((f) => f.clienteId)),
+  [filteredItems]
+);
+
+// =========================
+// Clientes disponíveis formulário
+// =========================
+const clientesDisponiveisFormulario = useMemo(() => {
+  let lista = clientes;
+  if (!editingItem) {
+    lista = clientes.filter((c) => !clientesComFinanceiro.has(c.id));
+  } else {
+    lista = clientes.filter(
+      (c) =>
+        !clientesComFinanceiro.has(c.id) ||
+        c.id === editingItem.clienteId
     );
-  };
+  }
+  return [...lista].sort((a, b) =>
+    a.nome.trim().localeCompare(b.nome.trim(), "pt-BR", {
+      sensitivity: "base",
+    })
+  );
+}, [clientes, clientesComFinanceiro, editingItem]);
 
-  const filteredItems = financeirosNormalizados.filter((item) => {
-const cliente = clientes.find((c) => c.id === item.clienteId);
-const matchesSearch =
-      item.clienteNome.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.clienteCNPJ.includes(searchTerm);
-    const matchesResponsavel =
-      searchResponsavel === "todos" ||
-      (cliente && cliente.responsavel === searchResponsavel);
+// =========================
+// Ordenação
+// =========================
+const itemsOrdenados = useMemo(() => {
+  const items = [...filteredItems];
+  items.sort((a, b) => {
+    let comp = 0;
+    switch (ordenacao.campo) {
+      case "clienteNome":
+        comp = a.clienteNome.localeCompare(b.clienteNome, "pt-BR");
+        break;
+      case "dataVencimento":
+        comp =
+          parseDate(a.dataVencimento)!.getTime() -
+          parseDate(b.dataVencimento)!.getTime();
+        break;
+      case "valorMensalidade":
+        comp = a.valorMensalidade - b.valorMensalidade;
+        break;
+      case "status":
+        comp = a.status.localeCompare(b.status);
+        break;
+    }
+    return ordenacao.direcao === "asc" ? comp : -comp;
+  });
+  return items;
+}, [filteredItems, ordenacao]);
 
-    // Filtro por data (data de vencimento)
-    const itemData = new Date(item.dataVencimento);
-    const matchesDataInicio =
-      !filtroDataInicio || itemData >= new Date(filtroDataInicio);
-    const matchesDataFim =
-      !filtroDataFim || itemData <= new Date(filtroDataFim);
+// =========================
+// Paginação
+// =========================
+const {
+  currentPage,
+  totalPages,
+  paginatedItems: pagination,
+  nextPage,
+  previousPage,
+  goToPage,
+  startIndex,
+  endIndex,
+  totalItems,
+  itemsPerPage,
+  setItemsPerPage,
+} = usePagination(itemsOrdenados, 10);
 
-    // Filtro por status
-    const matchesStatus =
-      filtroStatus === "todos" || item.status === filtroStatus;
+const totais = useMemo(() => {
+  let financeiroRecebido = 0;
+  let financeiroAReceber = 0;
+  let financeiroVencido = 0;
+  let financeiroAtraso = 0;
 
-    return (
-      matchesSearch &&
-      matchesResponsavel &&
-      matchesDataInicio &&
-      matchesDataFim &&
-      matchesStatus
+  let servicoRecebido = 0;
+  let servicoAReceber = 0;
+  let servicoVencido = 0;
+  let servicoAtraso = 0;
+
+  const hoje = new Date();
+  hoje.setHours(0, 0, 0, 0);
+
+  let inicio: Date;
+  let fim: Date;
+
+  if (filtroDataInicio && filtroDataFim) {
+    inicio = new Date(filtroDataInicio + "T00:00:00");
+    fim = new Date(filtroDataFim + "T23:59:59");
+  } else {
+    inicio = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+    fim = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0, 23, 59, 59);
+  }
+
+  filteredItems.forEach((item) => {
+    const valorFin = item.valorMensalidade || 0;
+
+    const servico = item.servicoId
+      ? servicos.find((s) => String(s.id) === String(item.servicoId))
+      : null;
+
+    const valorServ = servico?.valorMensalidade || 0;
+
+    const historicos = item.historicoPagamentos ?? [];
+
+    let recebeuNoMes = false;
+    let recebeuAtrasado = false;
+
+    historicos.forEach((h) => {
+      if (!h.dataPagamento) return;
+
+      const dataPagamento = new Date(h.dataPagamento + "T00:00:00");
+      const dataVencimento = new Date(h.dataVencimento + "T00:00:00");
+
+      const pagamentoNoPeriodo =
+        dataPagamento >= inicio && dataPagamento <= fim;
+
+      if (!pagamentoNoPeriodo) return;
+
+      const vencimentoNoPeriodo =
+        dataVencimento >= inicio && dataVencimento <= fim;
+
+      if (vencimentoNoPeriodo) {
+        recebeuNoMes = true;
+      } else if (dataVencimento < inicio) {
+        recebeuAtrasado = true;
+      }
+    });
+
+    // ================= RECEBIDO =================
+    if (recebeuNoMes) {
+      financeiroRecebido += valorFin;
+      servicoRecebido += valorServ;
+    }
+
+    // ================= ATRASADO =================
+    if (recebeuAtrasado) {
+      financeiroAtraso += valorFin;
+      servicoAtraso += valorServ;
+    }
+
+    // ================= VENCIMENTO BASE =================
+    const vencimentoBase = new Date(
+      (item.dataVencimento || "") + "T00:00:00"
     );
+
+    // ================= A RECEBER =================
+    if (
+      !recebeuNoMes &&
+      vencimentoBase >= inicio &&
+      vencimentoBase <= fim
+    ) {
+      financeiroAReceber += valorFin;
+      servicoAReceber += valorServ;
+    }
+
+    // ================= VENCIDO =================
+    if (
+      !recebeuNoMes &&
+      vencimentoBase < inicio
+    ) {
+      financeiroVencido += valorFin;
+      servicoVencido += valorServ;
+    }
   });
 
-  // Aplicar ordenação
-  const itemsOrdenados = useMemo(() => {
-    const items = [...filteredItems];
-    items.sort((a, b) => {
-      let comparacao = 0;
-
-      switch (ordenacao.campo) {
-        case "clienteNome":
-          comparacao = a.clienteNome.localeCompare(b.clienteNome, "pt-BR", {
-            sensitivity: "base",
-          });
-          break;
-        case "dataVencimento":
-          comparacao =
-            new Date(a.dataVencimento).getTime() -
-            new Date(b.dataVencimento).getTime();
-          break;
-        case "valorMensalidade":
-          comparacao = a.valorMensalidade - b.valorMensalidade;
-          break;
-        case "status":
-          comparacao = a.status.localeCompare(b.status, "pt-BR", {
-            sensitivity: "base",
-          });
-          break;
-      }
-
-      return ordenacao.direcao === "asc" ? comparacao : -comparacao;
-    });
-    return items;
-  }, [filteredItems, ordenacao]);
-
-  const {
-    currentPage,
-    totalPages,
-    paginatedItems,
-    nextPage,
-    previousPage,
-    goToPage,
-    startIndex,
-    endIndex,
-    totalItems,
-    itemsPerPage,
-    setItemsPerPage,
-  } = usePagination(itemsOrdenados, 10);
-
-  const totaisMensalidades = useMemo(() => {
-    const total = financeirosNormalizados.reduce(
-      (acc, item) => {
-        if (item.status === "Pago") {
-          acc.recebidas += item.valorMensalidade;
-        } else {
-          acc.aReceber += item.valorMensalidade;
-        }
-        return acc;
-      },
-      { recebidas: 0, aReceber: 0 }
-    );
-    console.log("Total financeiros:", total);
-    return total;
-  }, [financeirosNormalizados]);
-
-  // Cálculos detalhados para financeiros e serviços
-  const totaisDetalhados = useMemo(() => {
-    const financeirosRecebidos = financeirosNormalizados
-      .filter((f) => f.status === "Pago")
-      .reduce((acc, f) => acc + f.valorMensalidade, 0);
-
-    const financeirosAReceber = financeirosNormalizados
-      .filter((f) => f.status !== "Pago")
-      .reduce((acc, f) => acc + f.valorMensalidade, 0);
-
-    // Serviços pagos (tem financeiro vinculado e está pago)
-    const servicosRecebidos = financeirosNormalizados
-      .filter((f) => f.servicoId && f.status === "Pago")
-      .reduce((acc, f) => {
-        const servico = servicos.find((s) => s.id === f.servicoId);
-        return servico ? acc + servico.valorMensalidade : acc;
-      }, 0);
-
-    // Serviços a receber (tem financeiro vinculado e não está pago)
-    const servicosAReceber = financeirosNormalizados
-      .filter((f) => f.servicoId && f.status !== "Pago")
-      .reduce((acc, f) => {
-        const servico = servicos.find((s) => s.id === f.servicoId);
-        return servico ? acc + servico.valorMensalidade : acc;
-      }, 0);
-
-    return {
-      financeirosRecebidos,
-      financeirosAReceber,
-      servicosRecebidos,
-      servicosAReceber,
-    };
-  }, [financeirosNormalizados, servicos]);
-
-  // Valores vencidos
-  const valoresVencidos = useMemo(() => {
-    const hoje = new Date();
-    
-    return financeirosNormalizados
-      .filter((f) => {
-        if (f.status === "Pago") return false;
-        const dataVencimento = new Date(f.dataVencimento);
-        return dataVencimento < hoje;
-      })
-      .reduce((acc, f) => {
-        const valorMensalidade = f.valorMensalidade || 0;
-        const valorServico = f.valorServico ? parseFloat(f.valorServico) : 0;
-        return acc + valorMensalidade + valorServico;
-      }, 0);
-  }, [financeirosNormalizados]);
-
-  const vencidosFinanceiro = useMemo(() => {
-    const hoje = new Date();
-    
-    return financeirosNormalizados
-      .filter((f) => {
-        if (f.status === "Pago") return false;
-        const dataVencimento = new Date(f.dataVencimento);
-        return dataVencimento < hoje;
-      })
-      .reduce((acc, f) => acc + (f.valorMensalidade || 0), 0);
-  }, [financeirosNormalizados]);
-
-  const vencidosServicos = useMemo(() => {
-    const hoje = new Date();
-    
-    return financeirosNormalizados
-      .filter((f) => {
-        if (f.status === "Pago") return false;
-        const dataVencimento = new Date(f.dataVencimento);
-        return dataVencimento < hoje;
-      })
-      .reduce((acc, f) => {
-        const valorServico = f.valorServico ? parseFloat(f.valorServico) : 0;
-        return acc + valorServico;
-      }, 0);
-  }, [financeirosNormalizados]);
-
-  // Pagamentos em atraso (pagos após o vencimento em mês diferente)
-  const pagamentosAtrasados = useMemo(() => {
-    let total = 0;
-    
-    financeirosNormalizados.forEach((f) => {
-      if (f.historicoPagamentos && f.historicoPagamentos.length > 0) {
-        f.historicoPagamentos.forEach((pagamento) => {
-          if (pagamento.emDia === false && pagamento.dataPagamento) {
-            const dataPagamento = new Date(pagamento.dataPagamento);
-            const dataVencimento = new Date(pagamento.dataVencimento);
-            
-            const mesmoMes = dataPagamento.getMonth() === dataVencimento.getMonth() && 
-                            dataPagamento.getFullYear() === dataVencimento.getFullYear();
-            
-            if (!mesmoMes) {
-              const valorMensalidade = f.valorMensalidade || 0;
-              const valorServico = f.valorServico ? parseFloat(f.valorServico) : 0;
-              total += valorMensalidade + valorServico;
-            }
-          }
-        });
-      }
-    });
-    
-    return total;
-  }, [financeirosNormalizados]);
-
-  const atrasadosFinanceiro = useMemo(() => {
-    let total = 0;
-    
-    financeirosNormalizados.forEach((f) => {
-      if (f.historicoPagamentos && f.historicoPagamentos.length > 0) {
-        f.historicoPagamentos.forEach((pagamento) => {
-          if (pagamento.emDia === false && pagamento.dataPagamento) {
-            const dataPagamento = new Date(pagamento.dataPagamento);
-            const dataVencimento = new Date(pagamento.dataVencimento);
-            
-            const mesmoMes = dataPagamento.getMonth() === dataVencimento.getMonth() && 
-                            dataPagamento.getFullYear() === dataVencimento.getFullYear();
-            
-            if (!mesmoMes) {
-              total += f.valorMensalidade || 0;
-            }
-          }
-        });
-      }
-    });
-    
-    return total;
-  }, [financeirosNormalizados]);
-
-  const atrasadosServicos = useMemo(() => {
-    let total = 0;
-    
-    financeirosNormalizados.forEach((f) => {
-      if (f.historicoPagamentos && f.historicoPagamentos.length > 0) {
-        f.historicoPagamentos.forEach((pagamento) => {
-          if (pagamento.emDia === false && pagamento.dataPagamento) {
-            const dataPagamento = new Date(pagamento.dataPagamento);
-            const dataVencimento = new Date(pagamento.dataVencimento);
-            
-            const mesmoMes = dataPagamento.getMonth() === dataVencimento.getMonth() && 
-                            dataPagamento.getFullYear() === dataVencimento.getFullYear();
-            
-            if (!mesmoMes) {
-              const valorServico = f.valorServico ? parseFloat(f.valorServico) : 0;
-              total += valorServico;
-            }
-          }
-        });
-      }
-    });
-    
-    return total;
-  }, [financeirosNormalizados]);
-
-  const STATUS_META: Record<Financeiro["status"], StatusMeta> = {
-    Pago: {
-      label: "Pago",
-      className: "bg-success/10 text-success hover:bg-success/20",
-      icon: CheckCircle,
+  return {
+    financeiro: {
+      recebido: financeiroRecebido,
+      aReceber: financeiroAReceber,
+      vencido: financeiroVencido,
+      atraso: financeiroAtraso,
     },
-    Pendente: {
-      label: "Pendente",
-      className: "bg-warning/10 text-warning hover:bg-warning/20",
-      icon: Clock3,
+    servico: {
+      recebido: servicoRecebido,
+      aReceber: servicoAReceber,
+      vencido: servicoVencido,
+      atraso: servicoAtraso,
     },
-    Vencido: {
-      label: "Vencido",
-      className: "bg-destructive/10 text-destructive hover:bg-destructive/20",
-      icon: XCircle,
+    total: {
+      recebido: financeiroRecebido + servicoRecebido,
+      aReceber: financeiroAReceber + servicoAReceber,
+      vencido: financeiroVencido + servicoVencido,
+      atraso: financeiroAtraso + servicoAtraso,
     },
   };
-
-  const getToggleTitle = (item: Financeiro) => {
-    if (item.status === "Pago") {
-      return "Remover pagamento e retornar ao ciclo atual";
-    }
-    if (item.status === "Vencido") {
-      return "Registrar pagamento (vencido)";
-    }
-    return "Registrar pagamento";
-  };
+}, [filteredItems, filtroDataInicio, filtroDataFim, servicos]);
 
   return (
     <Layout>
@@ -965,152 +647,20 @@ const matchesSearch =
             filtroDataInicio={filtroDataInicio}
             filtroDataFim={filtroDataFim}
           />
-          <Dialog
-            open={isDialogOpen}
-            onOpenChange={(open) => {
-              setIsDialogOpen(open);
-              if (!open) resetForm(); 
-              }}
-          >
-            <DialogTrigger asChild>
-              <Button>
-                <Plus className="mr-2 h-4 w-4" />
-                Novo Registro
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-2xl" onCloseAutoFocus={e => e.preventDefault()}>
-              <DialogHeader>
-                <DialogTitle>
-                  {editingItem ? "Editar" : "Novo"} Registro Financeiro
-                </DialogTitle>
-              </DialogHeader>
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="clienteId">Cliente</Label>
-                  <Select
-                    value={formData.clienteId}
-                    onValueChange={(value) => {
-                      setFormData(prev => {
-                        const novoFormData = { ...prev, clienteId: value, valorMensalidade: "" };
-                        // Preencher automaticamente valor do serviço se existir
-                        const servicoCliente = servicos.find(s => s.clienteId === value);
-                        if (servicoCliente) {
-                          novoFormData.valorMensalidade = servicoCliente.valorMensalidade.toString();
-                        }
-                        return novoFormData;
-                      });
-                    }}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecione um cliente" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {clientesDisponiveisFormulario.map((cliente) => (
-                        <SelectItem key={cliente.id} value={cliente.id}>
-                          {cliente.nome} - {cliente.cnpj}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="dataVencimento">Data de Vencimento</Label>
-                    <Input
-                      id="dataVencimento"
-                      type="date"
-                      value={formData.dataVencimento}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          dataVencimento: e.target.value,
-                        })
-                      }
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="valorMensalidade">
-                      Valor da Mensalidade
-                    </Label>
-                    <Input
-                      id="valorMensalidade"
-                      type="number"
-                      step="0.01"
-                      value={formData.valorMensalidade}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          valorMensalidade: e.target.value,
-                        })
-                      }
-                      required
-                    />
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="valorServico">
-                      Valor do Serviço
-                    </Label>
-                    <Input
-                      id="valorServico"
-                      type="number"
-                      step="0.01"
-                      value={formData.valorServico}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          valorServico: e.target.value,
-                        })
-                      }
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="meioPagamento">Meio de Pagamento</Label>
-                    <Select
-                      value={formData.meioPagamento}
-                      onValueChange={(value: Financeiro["meioPagamento"]) =>
-                        setFormData({ ...formData, meioPagamento: value })
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Pix">Pix</SelectItem>
-                        <SelectItem value="Boleto">Boleto</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="observacoes">Observações</Label>
-                  <Textarea
-                    id="observacoes"
-                    value={formData.observacoes}
-                    onChange={(e) =>
-                      setFormData({ ...formData, observacoes: e.target.value })
-                    }
-                    rows={3}
-                  />
-                </div>
-                <div className="flex justify-end gap-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => setIsDialogOpen(false)}
-                  >
-                    Cancelar
-                  </Button>
-                  <Button type="submit">Salvar</Button>
-                </div>
-              </form>
-            </DialogContent>
-          </Dialog>
+           <CreateFinancer
+            isDialogOpen={isDialogOpen}
+            setIsDialogOpen={setIsDialogOpen}
+            resetForm={resetForm}
+            editingItem={editingItem}
+            formData={formData}
+            setFormData={setFormData}
+            handleSubmit={handleSubmit}
+            clientesDisponiveisFormulario={clientesDisponiveisFormulario}
+            servicos={servicos}
+          />
           </div>
         </div>
-
+         
         <FiltersBar
           searchTerm={searchTerm}
           onSearchTermChange={setSearchTerm}
@@ -1175,76 +725,66 @@ const matchesSearch =
         <div className="mb-4 grid gap-4 md:grid-cols-2">
           {/* Card de Recebidas */}
           <div className="rounded-lg bg-primary p-4 text-primary-foreground">
-            <p className="text-lg font-semibold">
-              Recebidas: R${" "}
-              {(totaisMensalidades.recebidas + totaisDetalhados.servicosRecebidos).toLocaleString("pt-BR", {
-                minimumFractionDigits: 2,
-              })}
-            </p>
-            <p className="text-sm">
-              A receber: R${" "}
-              {(totaisMensalidades.aReceber + totaisDetalhados.servicosAReceber).toLocaleString("pt-BR", {
-                minimumFractionDigits: 2,
-              })}
-            </p>
-            {/* Detalhamento por tipo */}
-            <div className="mt-3 pt-3 border-t border-primary-foreground/20 text-xs space-y-1">
-              <p>
-                Financeiros: R${" "}
-                {totaisDetalhados.financeirosRecebidos.toLocaleString("pt-BR", {
-                  minimumFractionDigits: 2,
-                })}
-                {" | A receber: R$"}
-                {totaisDetalhados.financeirosAReceber.toLocaleString("pt-BR", {
+           <p className="text-lg font-semibold">
+                Recebidas: R${" "}
+                {totais.total.recebido.toLocaleString("pt-BR", {
                   minimumFractionDigits: 2,
                 })}
               </p>
+
+              <p className="text-sm">
+                A receber: R${" "}
+                {totais.total.aReceber.toLocaleString("pt-BR", {
+                  minimumFractionDigits: 2,
+                })}
+              </p>
+
+            {/* Detalhamento por tipo */}
+            <div className="mt-3 pt-3 border-t border-primary-foreground/20 text-xs space-y-1">
               <p>
-                Serviços: R${" "}
-                {totaisDetalhados.servicosRecebidos.toLocaleString("pt-BR", {
-                  minimumFractionDigits: 2,
-                })}
-                {" | A receber: R$"}
-                {totaisDetalhados.servicosAReceber.toLocaleString("pt-BR", {
-                  minimumFractionDigits: 2,
-                })}
+                <strong>Financeiros:</strong> Recebidas: R${totais.financeiro.recebido.toLocaleString("pt-BR", { minimumFractionDigits: 2 })} | A receber: R${totais.financeiro.aReceber.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+              </p>
+              <p>
+                <strong>Serviços:</strong> Recebidas: R${totais.servico.recebido.toLocaleString("pt-BR", { minimumFractionDigits: 2 })} | A receber: R${totais.servico.aReceber.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
               </p>
             </div>
           </div>
 
           {/* Card de Vencidos e Atrasados */}
           <div className="rounded-lg bg-destructive p-4 text-destructive-foreground">
-            <p className="text-lg font-semibold">
+           <p className="text-lg font-semibold">
               Vencidos: R${" "}
-              {valoresVencidos.toLocaleString("pt-BR", {
+              {totais.total.vencido.toLocaleString("pt-BR", {
                 minimumFractionDigits: 2,
               })}
             </p>
+
             <p className="text-sm">
               Pagos em atraso: R${" "}
-              {pagamentosAtrasados.toLocaleString("pt-BR", {
+              {totais.total.atraso.toLocaleString("pt-BR", {
                 minimumFractionDigits: 2,
               })}
             </p>
+
             {/* Detalhamento por tipo */}
             <div className="mt-3 pt-3 border-t border-destructive-foreground/20 text-xs space-y-1">
               <p>
                 Financeiros: R${" "}
-                {vencidosFinanceiro.toLocaleString("pt-BR", {
+                {totais.financeiro.vencido.toLocaleString("pt-BR", {
                   minimumFractionDigits: 2,
                 })}
                 {" | Pagos em atraso: R$"}
-                {atrasadosFinanceiro.toLocaleString("pt-BR", {
+                {totais.financeiro.atraso.toLocaleString("pt-BR", {
                   minimumFractionDigits: 2,
                 })}
               </p>
               <p>
                 Serviços: R${" "}
-                {vencidosServicos.toLocaleString("pt-BR", {
+                {totais.servico.vencido.toLocaleString("pt-BR", {
                   minimumFractionDigits: 2,
                 })}
                 {" | Pagos em atraso: R$"}
-                {atrasadosServicos.toLocaleString("pt-BR", {
+                {totais.servico.atraso.toLocaleString("pt-BR", {
                   minimumFractionDigits: 2,
                 })}
               </p>
@@ -1269,7 +809,7 @@ const matchesSearch =
               </tr>
             </thead>
             <tbody>
-              {paginatedItems.map((item) => (
+              {pagination.map((item) => (
                 <tr key={item.id} className="border-t">
                   <td className="p-3">{item.clienteNome}</td>
                   <td className="p-3">{item.clienteCNPJ}</td>
@@ -1329,7 +869,7 @@ const matchesSearch =
                       <Button
                         size="sm"
                         variant="ghost"
-                        onClick={() => handleDelete(item.id)}
+                        onClick={() => handleDelete(item.id, item.clienteNome, item.servicoId)}
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>

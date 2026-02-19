@@ -20,23 +20,44 @@ import Login from "./pages/Login";
 // import Registro from "./pages/Registro";
 import EsqueciSenha from "./pages/EsqueciSenha";
 import { ThemeProvider } from "@/components/ThemeProvider";
-import { AuthProvider } from "@/contexts/AuthContext";
+import { NotificationProvider } from "@/contexts/NotificationContext";
+import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { PublicRoute } from "@/components/PublicRoute";
-import { NotificationSystem } from "@/components/NotificationSystem";
-import { PushNotificationPrompt } from "@/components/PushNotificationPrompt";
-import { useNotificacoesAutomaticas } from "@/hooks/useNotificacoesAutomaticas";
 import Registro from "./pages/Registro";
+import { useAutomaticNotifications } from "./hooks/useNotificationsAuto";
+import { useCertificados } from "./hooks/useCertificados";
+import { useFinanceiro } from "./hooks/useFinanceiro";
+import { useServicos } from "./hooks/useServicos";
+import { useRenovacao } from "./hooks/useRenovacao";
+import { useSintegra } from "./hooks/useSintegra";
+import { useDespesas } from "./hooks/useDespesas";
 
 const queryClient = new QueryClient();
 
 // Componente wrapper para usar hooks
 function AppContent() {
   // Hook que verifica e envia notificações automaticamente
-  useNotificacoesAutomaticas();
+    const { user } = useAuth();
+  const { certificados } = useCertificados();
+  const { financeiros } = useFinanceiro();
+  const { servicos } = useServicos();
+  const { renovacoes } = useRenovacao();
+  const { sintegras } = useSintegra();
+  const { despesas } = useDespesas();
 
-  return (
-    <BrowserRouter>
+  useAutomaticNotifications({
+    user,
+    certificados,
+    financeiros,
+    servicos,
+    renovacoes,
+    sintegras,
+    despesas,
+  });
+
+
+  return (    <BrowserRouter>
       <Routes>
         {/* Rotas públicas */}
         <Route
@@ -138,14 +159,14 @@ function AppContent() {
               </ProtectedRoute>
             }
           />
-        {/* <Route
+        <Route
           path="/calendario"
           element={
             <ProtectedRoute>
               <Calendario />
             </ProtectedRoute>
           }
-        /> */}
+        />
         <Route
           path="/sintegra"
           element={
@@ -171,16 +192,15 @@ function AppContent() {
 
 const App = () => (
   <ThemeProvider>
+
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <AuthProvider>
+        <NotificationProvider>
           <Toaster />
           <Sonner />
-          <NotificationSystem />
-          <PushNotificationPrompt
-            autoShowDelay={5000}
-          />
           <AppContent />
+          </NotificationProvider>
         </AuthProvider>
       </TooltipProvider>
     </QueryClientProvider>

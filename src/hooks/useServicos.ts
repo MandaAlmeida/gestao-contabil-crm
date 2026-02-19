@@ -147,15 +147,14 @@ export function useServicos() {
       await excluirNotificacoesItem(id, "servico");
 
       await servicoService.deleteServico(id);
-      
       // Pequeno delay para garantir que o Firestore processou a atualização
       await new Promise(resolve => setTimeout(resolve, 500));
-      
-      await loadServicos();
     } catch (err) {
       console.error("Erro ao deletar serviço:", err);
       setError(err instanceof Error ? err : new Error("Erro ao deletar serviço"));
       throw err;
+    } finally {
+      await loadServicos();
     }
   };
 

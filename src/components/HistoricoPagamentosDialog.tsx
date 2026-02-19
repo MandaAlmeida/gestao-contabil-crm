@@ -33,7 +33,7 @@ export function HistoricoPagamentosDialog<T extends Financeiro | Sintegra | Desp
   const [novaData, setNovaData] = useState("");
   const [novoMeio, setNovoMeio] = useState<"Pix" | "Boleto">("Pix");
   
-  const clienteNome = item?.clienteNome || (item as any)?.descricao || "";
+  const clienteNome = item?.id || "";
   // Verifica se é Financeiro, Servico, Despesa, Renovacao ou Sintegra para pegar o histórico correto
   const historico = ('historicoPagamentos' in (item || {})) 
     ? (item as any)?.historicoPagamentos || [] 

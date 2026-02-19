@@ -1,11 +1,11 @@
 import { Financeiro, Servico } from "@/types/crm";
 import { Despesa } from "@/types/despesas";
 
-export type PeriodoFiltro = "dia" | "semana" | "mes" | "customizado";
+export type PeriodoFiltro = "dia" | "semana" | "mes" | "ano" | "customizado";
 
 export interface PeriodoCustomizado {
-  dataInicio: Date;
-  dataFim: Date;
+  inicio: Date;
+  fim: Date;
 }
 
 export interface DadosGrafico {
@@ -75,8 +75,8 @@ export const calcularPeriodo = (
     case "customizado":
       if (periodoCustomizado) {
         return {
-          inicio: startOfDay(periodoCustomizado.dataInicio),
-          fim: endOfDay(periodoCustomizado.dataFim),
+          inicio: startOfDay(periodoCustomizado.inicio),
+          fim: endOfDay(periodoCustomizado.fim),
         };
       }
       return {
@@ -98,31 +98,19 @@ export const calcularTotalEntrada = (
   periodoCustomizado?: PeriodoCustomizado
 ): number => {
   const { inicio, fim } = calcularPeriodo(periodo, periodoCustomizado);
-  
-  console.log('========================================');
-  console.log('DEBUG calcularTotalEntrada');
-  console.log('Período:', inicio.toISOString(), 'até', fim.toISOString());
-  console.log('Total de financeiros:', financeiros.length);
+
   
   // Análise detalhada
   const porStatus = financeiros.reduce((acc, f) => {
     acc[f.status] = (acc[f.status] || 0) + 1;
     return acc;
   }, {} as Record<string, number>);
-  console.log('Por status:', porStatus);
 
   const entradasFinanceiras = financeiros
     .filter((f) => {
       // Só conta se foi efetivamente pago - filtra antes de processar
       if (f.status !== "Pago") return false;
-      
-      console.log('\n--- Analisando:', f.clienteNome);
-      console.log('  Status:', f.status);
-      console.log('  Valor Mensalidade:', f.valorMensalidade);
-      console.log('  Valor Serviço:', f.valorServico);
-      console.log('  Data Vencimento:', f.dataVencimento);
-      console.log('  Data Pagamento:', f.dataPagamento);
-      console.log('  Histórico:', f.historicoPagamentos?.length || 0, 'pagamentos');
+    
       
       // Pega o ÚLTIMO pagamento do histórico (mais recente)
       // Ordena por data de pagamento decrescente e pega o primeiro
@@ -137,21 +125,16 @@ export const calcularTotalEntrada = (
       if (ultimoPagamento && ultimoPagamento.dataPagamento) {
         // Usa data do último pagamento do histórico (PRIORIDADE)
         dataPagamento = new Date(ultimoPagamento.dataPagamento);
-        console.log('  ✓ Data do último pagamento (histórico):', dataPagamento.toISOString());
-        console.log('  ✓ Vencimento deste pagamento:', ultimoPagamento.dataVencimento);
       } else if (f.dataPagamento) {
         // Fallback para campo dataPagamento direto (compatibilidade antiga)
         dataPagamento = new Date(f.dataPagamento);
-        console.log('  ⚠ Data de pagamento (campo direto):', dataPagamento.toISOString());
       } else {
         // Se está marcado como Pago mas não tem dataPagamento,
         // assume que foi pago na data de vencimento
         dataPagamento = new Date(f.dataVencimento);
-        console.log('  ⚠ Usando data de vencimento:', dataPagamento.toISOString());
       }
       
       const dentroperiodo = dataPagamento >= inicio && dataPagamento <= fim;
-      console.log('  Dentro do período?', dentroperiodo ? '✓ SIM' : '❌ NÃO');
       
       return dentroperiodo;
     })
@@ -161,13 +144,9 @@ export const calcularTotalEntrada = (
       const valorServico = f.valorServico ? parseFloat(f.valorServico) : 0;
       const valorTotal = valorMensalidade + valorServico;
       
-      console.log('  💰 Somando:', valorMensalidade, '+', valorServico, '=', valorTotal);
       
       return acc + valorTotal;
     }, 0);
-
-  console.log('\n💰 TOTAL ENTRADA:', entradasFinanceiras);
-  console.log('========================================\n');
 
   return entradasFinanceiras;
 };
@@ -180,7 +159,6 @@ export const calcularTotalEntradaServicos = (
 ): number => {
   // Serviços não são calculados separadamente
   // O valor já está incluído no financeiro (campo valorServico)
-  console.log('⚠ calcularTotalEntradaServicos não é mais usado - valores de serviço já estão no financeiro');
   return 0;
 };
 
@@ -190,11 +168,7 @@ export const calcularTotalSaida = (
   periodoCustomizado?: PeriodoCustomizado
 ): number => {
   const { inicio, fim } = calcularPeriodo(periodo, periodoCustomizado);
-  
-  console.log('========================================');
-  console.log('DEBUG calcularTotalSaida');
-  console.log('Total de despesas:', despesas.length);
-  console.log('Despesas pagas:', despesas.filter(d => d.pago).length);
+
 
   // Apenas despesas pagas aparecem como saídas realizadas
   const total = despesas
@@ -208,18 +182,13 @@ export const calcularTotalSaida = (
         : new Date(d.data);
       
       const dentroperiodo = dataPagamento >= inicio && dataPagamento <= fim;
-      
-      if (dentroperiodo) {
-        console.log('✓ Despesa:', d.recebedor, '- R$', d.valor, '-', dataPagamento.toISOString());
-      }
+    
       
       return dentroperiodo;
     })
     .reduce((acc, d) => acc + d.valor, 0);
     
-  console.log('\n💸 TOTAL SAÍDA:', total);
-  console.log('========================================\n');
-  
+
   return total;
 };
 
@@ -352,7 +321,6 @@ export const gerarDadosGraficoServicos = (
 ): DadosGrafico[] => {
   // Serviços agora são parte do financeiro
   // Retorna os mesmos dados do gráfico principal
-  console.log('⚠ gerarDadosGraficoServicos não é mais usado - dados já estão no gráfico principal');
   return gerarDadosGrafico(financeiros, despesas, periodo, periodoCustomizado);
 };
 

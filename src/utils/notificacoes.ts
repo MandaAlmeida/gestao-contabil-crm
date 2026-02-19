@@ -32,10 +32,15 @@ export async function excluirNotificacoesItem(itemId: string, itemType: Notifica
       return;
     }
 
+    // Para renovacao, certificados, etc, o padrão do itemId é `${type}-${id}`
+    const itemIdPattern = ["renovacao", "certificado", "pagamento", "servico", "sintegra", "despesa"].includes(itemType)
+      ? `${itemType}-${itemId}`
+      : itemId;
+
     const q = query(
       collection(db, "notifications"),
       where("userId", "==", user.uid),
-      where("pureItemId", "==", itemId),
+      where("itemId", "==", itemIdPattern),
       where("type", "==", itemType)
     );
 

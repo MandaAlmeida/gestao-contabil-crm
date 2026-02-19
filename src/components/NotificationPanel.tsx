@@ -15,14 +15,20 @@ import {
   EyeOff,
   CreditCard,
 } from "lucide-react";
-import { useNotificationsData } from "@/hooks/useNotificationsData";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
+import { useNotificationContext } from "@/contexts/NotificationContext";
 
-export type NotificationType = "all" | "certificado" | "pagamento" | "servico" | "renovacao" | "sintegra" | "despesa";
+export type NotificationType =
+  | "all"
+  | "certificado"
+  | "pagamento"
+  | "servico"
+  | "renovacao"
+  | "sintegra"
+  | "despesa";
 
-
-interface NotificationItem {
+export interface NotificationItem {
   id: string;
   type: NotificationType;
   title: string;
@@ -38,17 +44,30 @@ interface NotificationPanelProps {
   filterBy?: NotificationType[];
 }
 
-export function NotificationPanel({ isOpen, onToggle, filterBy = ["all"] }: NotificationPanelProps) {
-  const { user } = useAuth();
-  const { notifications, markAsViewed, markAllAsViewed, markingAsViewed } = useNotificationsData(filterBy);
+export function NotificationPanel({
+  isOpen,
+  onToggle,
+  filterBy = ["all"],
+}: NotificationPanelProps) {
+const {
+  notifications,
+  markAsViewed,
+  markAllAsViewed,
+  markingAsViewed,
+} = useNotificationContext();
+
+// Filtra notificações conforme o filtro da tela
+const filteredNotifications =
+  filterBy && filterBy.length && !filterBy.includes("all")
+    ? notifications.filter((n) => filterBy.includes(n.type))
+    : notifications;
+
   const navigate = useNavigate();
 
   const navigateToItem = (notification: NotificationItem) => {
-    // Extrair o ID real (tipo-id)
-    const [, ...rest] = notification.id.split("-");
-    const itemId = rest.join("-");
-  
-    // Mapa de rotas por tipo
+    if (!notification?.id) return;
+
+    // id formato: tipo-id-real
     const routeByType: Record<NotificationType, string> = {
       certificado: "/certificados",
       pagamento: "/financeiro",
@@ -58,20 +77,15 @@ export function NotificationPanel({ isOpen, onToggle, filterBy = ["all"] }: Noti
       despesa: "/despesas",
       all: "/dashboard",
     };
-  
-    // Pega o primeiro tipo válido (ignorando "all")
-    const typeToNavigate = notification.type;
-  
-    // Navega para a rota correspondente ou fallback
-    navigate(routeByType[typeToNavigate ?? "all"]);
-  
-    // Fecha o painel de notificações
+
+    const route = routeByType[notification.type] ?? "/dashboard";
+
+    navigate(route);
+
     onToggle();
   };
-  
-  
 
-  const getIcon = (type: string) => {
+  const getIcon = (type: NotificationType) => {
     switch (type) {
       case "certificado":
         return <FileCheck className="h-4 w-4" />;
@@ -90,7 +104,7 @@ export function NotificationPanel({ isOpen, onToggle, filterBy = ["all"] }: Noti
     }
   };
 
-  const getPriorityColor = (priority: string) => {
+  const getPriorityColor = (priority: NotificationItem["priority"]) => {
     switch (priority) {
       case "high":
         return "bg-red-100 text-red-800 border-red-200";
@@ -105,15 +119,10 @@ export function NotificationPanel({ isOpen, onToggle, filterBy = ["all"] }: Noti
 
   return (
     <>
-      {/* Backdrop para fechar ao clicar fora */}
       {isOpen && (
-        <div
-          className="fixed inset-0 z-30 bg-black/20"
-          onClick={onToggle}
-        />
+        <div className="fixed inset-0 z-30 bg-black/20" onClick={onToggle} />
       )}
 
-      {/* Painel lateral */}
       {isOpen && (
         <div
           className="fixed inset-y-0 right-0 z-40 w-96 bg-background border-l shadow-xl"
@@ -125,22 +134,25 @@ export function NotificationPanel({ isOpen, onToggle, filterBy = ["all"] }: Noti
               <div className="flex items-center gap-2">
                 <Bell className="h-5 w-5" />
                 <h2 className="text-lg font-semibold">Notificações</h2>
-                {notifications.length > 0 && (
-                  <Badge variant="secondary">{notifications.length}</Badge>
+
+                {filteredNotifications.length > 0 && (
+                  <Badge variant="secondary">{filteredNotifications.length}</Badge>
                 )}
               </div>
+
               <div className="flex items-center gap-2">
-                {notifications.length > 0 && (
+                {filteredNotifications.length > 0 && (
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={markAllAsViewed}
+                    onClick={() => markAllAsViewed(filterBy)}
                     className="text-xs"
                   >
                     <EyeOff className="h-3 w-3 mr-1" />
                     Marcar todas
                   </Button>
                 )}
+
                 <Button variant="ghost" size="icon" onClick={onToggle}>
                   <X className="h-4 w-4" />
                 </Button>
@@ -149,14 +161,14 @@ export function NotificationPanel({ isOpen, onToggle, filterBy = ["all"] }: Noti
 
             {/* Conteúdo */}
             <ScrollArea className="flex-1 p-4">
-              {notifications.length === 0 ? (
+              {filteredNotifications.length === 0 ? (
                 <div className="text-center text-muted-foreground py-8">
                   <Bell className="h-12 w-12 mx-auto mb-4 opacity-50" />
                   <p>Nenhuma notificação pendente</p>
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {notifications.map((notification) => (
+                  {filteredNotifications.map((notification: NotificationItem) => (
                     <Card
                       key={notification.id}
                       className="relative cursor-pointer hover:bg-muted/50 transition-colors"
@@ -167,14 +179,18 @@ export function NotificationPanel({ isOpen, onToggle, filterBy = ["all"] }: Noti
                           <div className="flex-shrink-0 mt-0.5">
                             {getIcon(notification.type)}
                           </div>
+
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 mb-1">
                               <h4 className="font-medium text-sm truncate">
                                 {notification.title}
                               </h4>
+
                               <Badge
                                 variant="outline"
-                                className={`text-xs ${getPriorityColor(notification.priority)}`}
+                                className={`text-xs ${getPriorityColor(
+                                  notification.priority
+                                )}`}
                               >
                                 {notification.daysRemaining < 0
                                   ? "Vencido"
@@ -183,12 +199,15 @@ export function NotificationPanel({ isOpen, onToggle, filterBy = ["all"] }: Noti
                                   : `${notification.daysRemaining}d`}
                               </Badge>
                             </div>
+
                             <p className="text-sm text-muted-foreground mb-1">
                               {notification.clienteNome.toUpperCase()}
                             </p>
+
                             <p className="text-sm text-muted-foreground mb-2">
                               {notification.message}
                             </p>
+
                             <Button
                               variant="ghost"
                               size="sm"
@@ -200,16 +219,16 @@ export function NotificationPanel({ isOpen, onToggle, filterBy = ["all"] }: Noti
                               className="h-6 px-2 text-xs text-muted-foreground hover:text-foreground"
                             >
                               {markingAsViewed.has(notification.id) ? (
-                                <>
-                                  <RefreshCw className="h-3 w-3 mr-1 animate-spin" />
-                                  Marcando...
-                                </>
-                              ) : (
-                                <>
-                              <Eye className="h-3 w-3 mr-1" />
-                              Marcar como visto
-                                </>
-                              )}
+  <>
+    <RefreshCw className="h-3 w-3 mr-1 animate-spin" />
+    Marcando...
+  </>
+) : (
+  <>
+    <Eye className="h-3 w-3 mr-1" />
+    Marcar como visto
+  </>
+)}
                             </Button>
                           </div>
                         </div>
