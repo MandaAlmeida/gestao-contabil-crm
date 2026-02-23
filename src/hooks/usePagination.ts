@@ -9,6 +9,11 @@ export function usePagination<T>(items: T[], itemsPerPage: number = 10) {
     setCurrentPage(1);
   }, [itemsPerPageState]);
 
+ useEffect(() => {
+  setCurrentPage(1);
+}, [items.length]);
+
+
   const totalPages = Math.ceil(items.length / itemsPerPageState);
 
   const paginatedItems = useMemo(() => {

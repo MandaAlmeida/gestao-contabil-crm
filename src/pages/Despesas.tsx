@@ -119,36 +119,37 @@ export default function DespesasPage() {
   const { showConfirmation, ConfirmationDialogComponent } = useConfirmationDialog();
 
   // Função auxiliar para determinar o status real da despesa baseado no histórico
-  const obterStatusDespesa = (despesa: Despesa): "pago" | "vencida" | "pendente" => {
-    // Obter mês e ano da data de vencimento atual
-    const dataVencimento = new Date(despesa.data);
-    const mesVencimento = dataVencimento.getMonth();
-    const anoVencimento = dataVencimento.getFullYear();
+const obterStatusDespesa = (
+  despesa: Despesa
+): "pago" | "vencida" | "pendente" => {
 
-    // Verificar se há pagamento no histórico para o mesmo mês/ano
-    const pagamentoNoMes = despesa.historicoPagamentos?.find(p => {
-      const dataVencimentoPagamento = new Date(p.dataVencimento);
-      return (
-        dataVencimentoPagamento.getMonth() === mesVencimento &&
-        dataVencimentoPagamento.getFullYear() === anoVencimento
-      );
-    });
+  const historico = despesa.historicoPagamentos || [];
 
-    if (pagamentoNoMes) {
-      return "pago";
-    }
+  const dataAtual = new Date();
+  const mesAtual = dataAtual.getMonth();
+  const anoAtual = dataAtual.getFullYear();
 
-    // Se não há pagamento, verificar se está vencida
-    const hoje = new Date();
-    hoje.setHours(0, 0, 0, 0);
-    dataVencimento.setHours(0, 0, 0, 0);
+  const pagamentoNoMes = historico.some((p) => {
+    const dataHist = new Date(p.dataVencimento + "T00:00:00");
 
-    if (dataVencimento < hoje) {
-      return "vencida";
-    }
+    return (
+      dataHist.getMonth() === mesAtual &&
+      dataHist.getFullYear() === anoAtual
+    );
+  });
 
-    return "pendente";
-  };
+  if (pagamentoNoMes) {
+    return "pago";
+  }
+
+  const hoje = new Date();
+  hoje.setHours(0, 0, 0, 0);
+  dataAtual.setHours(0, 0, 0, 0);
+
+  if (dataAtual < hoje) return "vencida";
+
+  return "pendente";
+};
 
   const responsaveisDisponiveis = useMemo(
     () =>
@@ -328,157 +329,115 @@ export default function DespesasPage() {
     },
   };
 
-  const removerMes = (dataString: string): string => {
-    if (!dataString) {
-      const hoje = new Date();
-      return hoje.toISOString().split("T")[0];
-    }
+const removerMes = (data: string) => {
+  const d = new Date(data + "T00:00:00");
+  d.setMonth(d.getMonth() - 1);
 
-    const partes = dataString.split("-");
-    if (partes.length !== 3) {
-      return dataString;
-    }
+  return d.toISOString().split("T")[0];
+};
 
-    const ano = parseInt(partes[0], 10);
-    const mes = parseInt(partes[1], 10);
-    const dia = parseInt(partes[2], 10);
+  const adicionarMes = (data: string) => {
+  const d = new Date(data + "T00:00:00");
+  d.setMonth(d.getMonth() + 1);
+  return d.toISOString().split("T")[0];
+};
 
-    let novoAno = ano;
-    let novoMes = mes - 1;
+const handleTogglePago = async (despesa: Despesa) => {
+  const hoje = new Date();
+  hoje.setHours(0, 0, 0, 0);
+  const hojeStr = hoje.toISOString().split("T")[0];
 
-    if (novoMes < 1) {
-      novoMes = 12;
-      novoAno -= 1;
-    }
+  const historico = despesa.historicoPagamentos || [];
+  const dataItem = new Date();
 
-    // Garante que o dia não ultrapasse os dias do mês
-    const ultimoDiaDoMes = new Date(novoAno, novoMes, 0).getDate();
-    const novoDia = Math.min(dia, ultimoDiaDoMes);
-
-    return `${novoAno}-${String(novoMes).padStart(2, "0")}-${String(
-      novoDia
-    ).padStart(2, "0")}`;
-  };
-
-  const handleTogglePago = async (despesa: Despesa) => {
-    const hoje = new Date();
-    hoje.setHours(0, 0, 0, 0);
-    const dataHojeStr = hoje.toISOString().split('T')[0];
-
-    // Verificar status atual baseado no histórico
+  try {
     const statusAtual = obterStatusDespesa(despesa);
 
-    // Obter mês e ano da data de vencimento atual
-    const dataVencimento = new Date(despesa.data);
-    const mesVencimento = dataVencimento.getMonth();
-    const anoVencimento = dataVencimento.getFullYear();
+    // ==========================
+    // DESFAZER PAGAMENTO
+    // ==========================
+    if (statusAtual === "pago") {
 
-    try {
-      if (statusAtual === "pago") {
-        // Despesa está paga, desmarcando
-        // Encontrar o pagamento do mês/ano atual
-        const pagamentoAtual = despesa.historicoPagamentos?.find(p => {
-          const dataVencimentoPagamento = new Date(p.dataVencimento);
-          return (
-            dataVencimentoPagamento.getMonth() === mesVencimento &&
-            dataVencimentoPagamento.getFullYear() === anoVencimento
-          );
-        });
+      // ✅ REMOVE HISTÓRICO DO MÊS ATUAL
+      const historicoAtualizado = historico.filter((p) => {
+        const dataHist = new Date(p.dataVencimento + "T00:00:00");
 
-        const pagamentoFoiHoje = pagamentoAtual?.dataPagamento === dataHojeStr;
+        const mesmoMes =
+          dataHist.getMonth() === dataItem.getMonth() &&
+          dataHist.getFullYear() === dataItem.getFullYear();
 
-        if (pagamentoFoiHoje || !despesa.fixo) {
-          // Se foi pago hoje OU é despesa não fixa, apenas remove do histórico sem voltar o vencimento
-          const historicoAtualizado = (despesa.historicoPagamentos || []).filter(p => {
-            const dataVencimentoPagamento = new Date(p.dataVencimento);
-            return !(
-              dataVencimentoPagamento.getMonth() === mesVencimento &&
-              dataVencimentoPagamento.getFullYear() === anoVencimento
-            );
-          });
+        return !mesmoMes;
+      });
 
-          await updateDespesa(despesa.id, {
-            historicoPagamentos: historicoAtualizado,
-            pago: false,
-            dataPagamento: null,
-          });
-
-          toast({
-            title: "Pagamento desfeito.",
-            description: `${despesa.descricao} voltou ao status anterior.`,
-          });
-          return;
-        }
-
-        // Se não foi pago hoje E é despesa fixa, remove do histórico E volta o vencimento
-        const historicoAtualizado = (despesa.historicoPagamentos || []).filter(p => {
-          const dataVencimentoPagamento = new Date(p.dataVencimento);
-          return !(
-            dataVencimentoPagamento.getMonth() === mesVencimento &&
-            dataVencimentoPagamento.getFullYear() === anoVencimento
-          );
-        });
-
-        const vencimentoAnterior = removerMes(despesa.data);
-
-        await updateDespesa(despesa.id, {
-          historicoPagamentos: historicoAtualizado,
-          data: vencimentoAnterior,
-          pago: false,
-          dataPagamento: null,
-        });
-
-        toast({
-          title: "Pagamento removido.",
-          description: `${despesa.descricao} voltou a ficar pendente.`,
-        });
-        return;
+      // ✅ VOLTA DATA SE FOR FIXO
+      let novaData = despesa.data;
+      if (despesa.fixo) {
+        novaData = removerMes(despesa.data);
       }
-
-      // Marcando como pago - adiciona ao histórico
-      const vencimento = new Date(despesa.data + "T00:00:00");
-      const pagamento = new Date(dataHojeStr + "T00:00:00");
-      vencimento.setHours(0, 0, 0, 0);
-      pagamento.setHours(0, 0, 0, 0);
-
-      const emDia = pagamento <= vencimento;
-      const novaData = despesa.fixo ? adicionarMes(despesa.data) : despesa.data;
-
-      const novoPagamento = {
-        id: `${despesa.id}-${despesa.data}-${Date.now()}`,
-        dataVencimento: despesa.data,
-        dataPagamento: dataHojeStr,
-        emDia,
-        meioPagamento: "Pix" as const,
-      };
-
-      const historicoAtualizado = [
-        ...(despesa.historicoPagamentos || []),
-        novoPagamento,
-      ];
 
       await updateDespesa(despesa.id, {
         historicoPagamentos: historicoAtualizado,
         data: novaData,
-        pago: true,
-        dataPagamento: dataHojeStr,
+        pago: false,
+        dataPagamento: null,
       });
 
       toast({
-        title: emDia ? "Pagamento em dia registrado!" : "Pagamento atrasado registrado!",
+        title: "Pagamento desfeito.",
         description: despesa.fixo
-          ? `Data avançada para ${formatarDataBR(novaData)}`
-          : emDia
-          ? `${despesa.descricao} foi marcado como pago em dia.`
-          : `${despesa.descricao} foi marcado como pago com atraso.`,
+          ? `Vencimento voltou para ${formatarDataBR(novaData)}`
+          : `${despesa.descricao} voltou para pendente.`,
       });
-    } catch (error) {
-      toast({
-        title: "Erro ao atualizar despesa",
-        variant: "destructive",
-      });
+
+      return;
     }
-  };
+
+    // ==========================
+    // REGISTRAR PAGAMENTO
+    // ==========================
+
+    const vencimentoDate = new Date(despesa.data + "T00:00:00");
+    const pagamentoDate = new Date(hojeStr + "T00:00:00");
+
+    const emDia = pagamentoDate <= vencimentoDate;
+
+    const novoPagamento = {
+      id: `${despesa.id}-${despesa.data}-${Date.now()}`,
+      dataVencimento: despesa.data,
+      dataPagamento: hojeStr,
+      emDia,
+      meioPagamento: "Pix" as const,
+    };
+
+    const historicoAtualizado = [...historico, novoPagamento];
+
+    const novaData = despesa.fixo
+      ? adicionarMes(despesa.data)
+      : despesa.data;
+
+    await updateDespesa(despesa.id, {
+      historicoPagamentos: historicoAtualizado,
+      data: novaData,
+      pago: true,
+      dataPagamento: hojeStr,
+    });
+
+    toast({
+      title: emDia
+        ? "Pagamento em dia registrado!"
+        : "Pagamento atrasado registrado!",
+      description: despesa.fixo
+        ? `Próximo vencimento em ${formatarDataBR(novaData)}`
+        : `${despesa.descricao} foi marcado como pago.`,
+    });
+
+  } catch (error) {
+    toast({
+      title: "Erro ao atualizar despesa",
+      variant: "destructive",
+    });
+  }
+};
 
   const handleDeleteHistorico = async (despesaItem: Despesa, historicoId: string) => {
     // Encontra o pagamento mais recente

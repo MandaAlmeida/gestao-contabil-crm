@@ -212,120 +212,95 @@ export default function SintegraPage() {
     );
   };
 
-  const handleToggleAtividade = async (item: Sintegra) => {
-    const hoje = new Date();
-    hoje.setHours(0, 0, 0, 0);
-    const dataHojeStr = hoje.toISOString().split('T')[0];
-    
-    if (item.status === "Concluído") {
-      // Verifica se a atividade foi concluída hoje
-      const atividadeAtual = item.historicoAtividades?.find(
-        a => a.dataPrazo === item.dataPrazo
-      );
-      
-      const atividadeFoiHoje = atividadeAtual?.dataConclusao === dataHojeStr;
-      
-      if (atividadeFoiHoje) {
-        // Se foi concluído hoje, apenas remove do histórico sem voltar o prazo
-        const historicoAtualizado = (item.historicoAtividades || []).filter(
-          a => a.dataPrazo !== item.dataPrazo
-        );
-        
-        const statusAjustado = calcularStatusSintegra({
-          status: "Pendente",
-          dataPagamento: null,
-          dataPrazo: item.dataPrazo,
-          historicoAtividades: historicoAtualizado,
-        });
+ const handleToggleAtividade = async (item: Sintegra) => {
+  const hoje = new Date();
+  hoje.setHours(0, 0, 0, 0);
+  const hojeStr = hoje.toISOString().split("T")[0];
 
-        try {
-          await updateSintegra(item.id, {
-            historicoAtividades: historicoAtualizado,
-            status: statusAjustado,
-          });
-          toast({
-            title: "Atividade desfeita.",
-            description: `${item.clienteNome} voltou ao status anterior.`,
-          });
-        } catch (error) {
-          toast({ title: "Erro ao desfazer atividade", variant: "destructive" });
-        }
-        return;
-      }
-      
-      // Se não foi concluído hoje, remove do histórico E volta o prazo
-      const historicoAtualizado = (item.historicoAtividades || []).filter(
-        a => a.dataPrazo !== item.dataPrazo
-      );
-      
-      const prazoAnterior = formatarISO(removerMes(item.dataPrazo));
+  const historico = item.historicoAtividades || [];
 
-      const statusAjustado = calcularStatusSintegra({
-        status: "Pendente",
-        dataPagamento: null,
-        dataPrazo: prazoAnterior,
-        historicoAtividades: historicoAtualizado,
-      });
+  try {
+// ==========================
+// DESFAZER CONCLUSÃO
+// ==========================
+if (item.status === "Concluído") {
 
-      try {
-        await updateSintegra(item.id, {
-          historicoAtividades: historicoAtualizado,
-          dataPrazo: prazoAnterior,
-          status: statusAjustado,
-        });
-        toast({
-          title: "Atividade removida.",
-          description:
-            statusAjustado === "Pendente"
-              ? `${item.clienteNome} voltou a ficar pendente.`
-              : `${item.clienteNome} foi marcado como vencido.`,
-        });
-      } catch (error) {
-        toast({ title: "Erro ao remover atividade", variant: "destructive" });
-      }
-      return;
-    }
+  if (!historico.length) return;
 
-    // Registra a atividade no histórico
-    const dataConclusaoStr = dataHojeStr;
-    const prazo = new Date(item.dataPrazo + "T00:00:00");
-    const conclusao = new Date(dataHojeStr + "T00:00:00");
-    
-    const noPrazo = conclusao <= prazo;
-    const novoPrazo = formatarISO(adicionarMes(item.dataPrazo));
-    
+  // pega o último registro
+  const ultimaAtividade = historico[historico.length - 1];
+
+  const atividadeFoiHoje =
+    ultimaAtividade.dataConclusao === hojeStr;
+
+  // remove apenas o último
+  const historicoAtualizado = historico.slice(0, -1);
+
+  let novoPrazo = formatarISO(removerMes(item.dataPrazo));
+
+  const statusAjustado = calcularStatusSintegra({
+    status: "Pendente",
+    dataPagamento: null,
+    dataPrazo: novoPrazo,
+    historicoAtividades: historicoAtualizado,
+  });
+
+  await updateSintegra(item.id, {
+    historicoAtividades: historicoAtualizado,
+    dataPrazo: novoPrazo,
+    status: statusAjustado,
+  });
+
+  toast({
+    title: "Atividade desfeita.",
+    description: `${item.clienteNome} voltou para ${statusAjustado}.`,
+  });
+
+  return;
+}
+
+    // ==========================
+    // REGISTRAR CONCLUSÃO
+    // ==========================
+
+    const prazoDate = new Date(item.dataPrazo + "T00:00:00");
+    const conclusaoDate = new Date(hojeStr + "T00:00:00");
+
+    const noPrazo = conclusaoDate <= prazoDate;
+
     const novaAtividade = {
       id: `${item.id}-${item.dataPrazo}-${Date.now()}`,
       dataPrazo: item.dataPrazo,
-      dataConclusao: dataConclusaoStr,
+      dataConclusao: hojeStr,
       noPrazo,
     };
-    
-    const historicoAtualizado = [
-      ...(item.historicoAtividades || []),
-      novaAtividade
-    ];
 
-    try {
-      await updateSintegra(item.id, {
-        historicoAtividades: historicoAtualizado,
-        dataPrazo: novoPrazo,
-        status: "Concluído",
-      });
+    const historicoAtualizado = [...historico, novaAtividade];
 
-      // Excluir notificações relacionadas à atividade
-      await excluirNotificacoesItem(item.id, "sintegra");
+    const novoPrazo = formatarISO(adicionarMes(item.dataPrazo));
 
-      toast({
-        title: noPrazo ? "Atividade concluída no prazo!" : "Atividade concluída com atraso!",
-        description: noPrazo 
-          ? `${item.clienteNome} foi marcado como concluído no prazo.`
-          : `${item.clienteNome} foi marcado como concluído com atraso.`,
-      });
-    } catch (error) {
-      toast({ title: "Erro ao registrar atividade", variant: "destructive" });
-    }
-  };
+    await updateSintegra(item.id, {
+      historicoAtividades: historicoAtualizado,
+      dataPrazo: novoPrazo,
+      status: "Concluído",
+    });
+
+    await excluirNotificacoesItem(item.id, "sintegra");
+
+    toast({
+      title: noPrazo
+        ? "Atividade concluída no prazo!"
+        : "Atividade concluída com atraso!",
+      description: `${item.clienteNome} foi marcado como concluído.`,
+    });
+
+  } catch (error) {
+    toast({
+      title: "Erro ao atualizar atividade",
+      variant: "destructive",
+    });
+  }
+};
 
   const handleDeleteHistorico = async (sintegraItem: Sintegra, historicoId: string) => {
     // Encontra a atividade mais recente
@@ -437,34 +412,51 @@ export default function SintegraPage() {
     }
   };
 
-  const filteredItems = sintegras.filter((item) => {
+  const filteredItems = useMemo(() => {
+  return sintegras.filter((item) => {
     const cliente = clientes.find((c) => c.id === item.clienteId);
-    const matchesSearch = item.clienteNome
-      .toLowerCase()
-      .includes(searchTerm.toLowerCase());
+
+    // 🔎 Busca por nome
+    const matchesSearch =
+      item.clienteNome?.toLowerCase().includes(searchTerm.toLowerCase());
+
+    // 👤 Responsável
     const matchesResponsavel =
       searchResponsavel === "todos" ||
       (cliente && cliente.responsavel === searchResponsavel);
 
-    // Filtro por data
-    const itemData = new Date(item.dataPrazo);
-    const matchesDataInicio =
-      !filtroDataInicio || itemData >= new Date(filtroDataInicio);
-    const matchesDataFim =
-      !filtroDataFim || itemData <= new Date(filtroDataFim);
+    // 📅 Filtro de data
+    let matchesData = true;
 
-    // Filtro por status
+    if (filtroDataInicio && filtroDataFim) {
+      const inicio = new Date(filtroDataInicio + "T00:00:00");
+      const fim = new Date(filtroDataFim + "T00:00:00");
+
+      const itemData = new Date(item.dataPrazo + "T00:00:00");
+
+      matchesData = itemData >= inicio && itemData <= fim;
+    }
+
+    // 📊 Status
     const matchesStatus =
       filtroStatus === "todos" || item.status === filtroStatus;
 
     return (
       matchesSearch &&
       matchesResponsavel &&
-      matchesDataInicio &&
-      matchesDataFim &&
+      matchesData &&
       matchesStatus
     );
   });
+}, [
+  sintegras,
+  clientes,
+  searchTerm,
+  searchResponsavel,
+  filtroDataInicio,
+  filtroDataFim,
+  filtroStatus,
+]);
 
   // Aplicar ordenação
   const itemsOrdenados = useMemo(() => {

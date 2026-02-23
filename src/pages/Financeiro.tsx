@@ -37,6 +37,7 @@ import { HistoricoPagamentosDialog } from "@/components/HistoricoPagamentosDialo
 import { CreateFinancer } from "@/components/CreateFinancer";
 import { useNotifications } from "@/hooks/useNotificacoesAutomaticas";
 import { useAuth } from "@/contexts/AuthContext";
+import { excluirNotificacoesItem } from "@/utils/notificacoes";
 
 export default function FinanceiroPage() {
   const { clientes } = useClientes();
@@ -107,33 +108,146 @@ export default function FinanceiroPage() {
     Pago: {
       label: "Pago",
       icon: CheckCircle,
-      className: "bg-green-500 text-white",
+      className: "bg-green-600/40 text-white",
     },
     Pendente: {
       label: "Pendente",
       icon: Clock3,
-      className: "bg-yellow-500 text-black",
+      className: "bg-yellow-600/40 text-white",
     },
     Vencido: {
       label: "Vencido",
       icon: AlertTriangle,
-      className: "bg-red-500 text-white",
+      className: "bg-red-600/40 text-white",
     },
   };
 
-  const handleTogglePagamento = async (item: Financeiro) => {
-    const novoStatus: Financeiro["status"] =
-      item.status === "Pago"
-        ? "Pendente"
-        : item.status === "Pendente"
-        ? "Pago"
-        : "Pendente";
-    await updateFinanceiro(item.id, {
-      status: novoStatus,
+  const alterarMes = (dataString: string, delta: number): string => {
+  if (!dataString) {
+    return new Date().toISOString().split("T")[0];
+  }
+
+  const [anoStr, mesStr, diaStr] = dataString.split("-");
+  if (!anoStr || !mesStr || !diaStr) return dataString;
+
+  let ano = parseInt(anoStr, 10);
+  let mes = parseInt(mesStr, 10) + delta;
+  const dia = parseInt(diaStr, 10);
+
+  if (mes > 12) {
+    mes = 1;
+    ano++;
+  } else if (mes < 1) {
+    mes = 12;
+    ano--;
+  }
+
+  const ultimoDia = new Date(ano, mes, 0).getDate();
+  const novoDia = Math.min(dia, ultimoDia);
+
+  return `${ano}-${String(mes).padStart(2, "0")}-${String(novoDia).padStart(2, "0")}`;
+};
+
+const adicionarMes = (data: string) => alterarMes(data, 1);
+const removerMes = (data: string) => alterarMes(data, -1);
+
+const handleTogglePagamento = async (item: Financeiro) => {
+  const hoje = new Date();
+  hoje.setHours(0, 0, 0, 0);
+  const hojeStr = hoje.toISOString().split("T")[0];
+
+  const historico = item.historicoPagamentos || [];
+
+  try {
+
+    // ==========================
+    // DESFAZER PAGAMENTO
+    // ==========================
+    if (item.status === "Pago") {
+
+    const historicoAtualizado = historico.filter((p) => {
+      if (!p.dataVencimento) return true;
+
+      const dataHist = new Date(p.dataVencimento + "T00:00:00");
+      const dataItem = new Date();
+
+      const mesmoMes =
+        dataHist.getMonth() === dataItem.getMonth() &&
+        dataHist.getFullYear() === dataItem.getFullYear();
+
+      return !mesmoMes; // remove apenas o do mesmo mês
     });
-    toast({ title: `Status alterado para ${novoStatus}` });
-    refreshFinanceiros();
-  };
+
+      const statusAjustado = calcularStatusFinanceiro({
+        status: "Pendente",
+        dataPagamento: null,
+        dataVencimento: item.dataVencimento,
+        historicoPagamentos: historicoAtualizado,
+      });
+
+      const novoVencimento = removerMes(item.dataVencimento);
+
+      await updateFinanceiro(item.id, {
+        historicoPagamentos: historicoAtualizado,
+        status: statusAjustado,
+        dataVencimento: novoVencimento,
+      });
+
+      await refreshFinanceiros();
+
+      toast({
+        title: "Pagamento desfeito.",
+        description: `${item.clienteNome} voltou para pendente.`,
+      });
+
+      return;
+    }
+
+    // ==========================
+    // REGISTRAR PAGAMENTO
+    // ==========================
+
+    const vencimentoDate = new Date(item.dataVencimento + "T00:00:00");
+    const pagamentoDate = new Date(hojeStr + "T00:00:00");
+
+    const emDia = pagamentoDate <= vencimentoDate;
+
+    const novoPagamento = {
+      id: `${item.id}-${item.dataVencimento}-${Date.now()}`,
+      dataVencimento: item.dataVencimento,
+      dataPagamento: hojeStr,
+      emDia,
+      meioPagamento: item.meioPagamento || "Pix",
+    };
+
+    const historicoAtualizado = [...historico, novoPagamento];
+
+     const novoVencimento = adicionarMes(item.dataVencimento);
+
+    await updateFinanceiro(item.id, {
+      historicoPagamentos: historicoAtualizado,
+      status: "Pago",
+      dataVencimento: novoVencimento,
+    });
+
+    await excluirNotificacoesItem(item.id, "pagamento");
+
+    await refreshFinanceiros();
+
+    toast({
+      title: emDia
+        ? "Pagamento em dia registrado!"
+        : "Pagamento atrasado registrado!",
+      description: `${item.clienteNome} foi marcado como pago.`,
+    });
+
+  } catch (error) {
+    toast({
+      title: "Erro ao atualizar pagamento",
+      variant: "destructive",
+    });
+  }
+};
 
   const getToggleTitle = (item: Financeiro) => {
     if (item.status === "Pago") return "Marcar como pendente";

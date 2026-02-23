@@ -78,7 +78,6 @@ export default function Clientes() {
   const [editingContabilidade, setEditingContabilidade] =
     useState<Contabilidade | null>(null);
   const [editingCliente, setEditingCliente] = useState<Cliente | null>(null);
-  const [notificationsOpen, setNotificationsOpen] = useState(false);
   const { toast } = useToast();
 
   // Sincronizar usuário atual quando carregar a página
@@ -274,25 +273,38 @@ const handleSubmit = async (e: React.FormEvent) => {
     );
   };
 
-  const filteredClientes = clientes.filter((cliente) => {
+const filteredClientes = useMemo(() => {
+  return clientes.filter((cliente) => {
     const matchesSearch =
-      cliente.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      cliente.cnpj.includes(searchTerm);
+      cliente.nome?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (cliente.cnpj && cliente.cnpj.includes(searchTerm));
+
     const matchesResponsavel =
       searchResponsavel === "todos" ||
       cliente.responsavel === searchResponsavel;
 
-    // Filtro por data (data de cadastro)
     const clienteData = new Date(cliente.createdAt);
+
     const matchesDataInicio =
       !filtroDataInicio || clienteData >= new Date(filtroDataInicio);
+
     const matchesDataFim =
       !filtroDataFim || clienteData <= new Date(filtroDataFim);
 
     return (
-      matchesSearch && matchesResponsavel && matchesDataInicio && matchesDataFim
+      matchesSearch &&
+      matchesResponsavel &&
+      matchesDataInicio &&
+      matchesDataFim
     );
   });
+}, [
+  clientes,
+  searchTerm,
+  searchResponsavel,
+  filtroDataInicio,
+  filtroDataFim,
+]);
 
   // Aplicar ordenação
   const clientesOrdenados = useMemo(() => {
