@@ -196,11 +196,23 @@ export default function Calendario() {
                     const dateStr = format(date, "yyyy-MM-dd");
                     return diasComTarefas.has(dateStr);
                   },
+                  comTarefasConcluidas: (date) => {
+                    const dateStr = format(date, "yyyy-MM-dd");
+                    // Verifica se todas as tarefas do dia estão concluídas
+                    const tarefasDoDia = tarefas.filter((t) => t.data.startsWith(dateStr));
+                    return tarefasDoDia.length > 0 && tarefasDoDia.every((t) => t.concluida);
+                  },
                 }}
                 modifiersStyles={{
                   comTarefas: {
                     fontWeight: "bold",
-                    textDecoration: "underline",
+                    backgroundColor: "#22c55e", // verde (tailwind green-500)
+                    color: "white",
+                  },
+                  comTarefasConcluidas: {
+                    fontWeight: "bold",
+                    backgroundColor: "#a3e635", // verde claro (tailwind lime-400)
+                    color: "#166534", // texto verde escuro
                   },
                 }}
               />

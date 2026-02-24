@@ -256,23 +256,51 @@ export default function Certificados() {
     );
   };
 
-  const filteredItems = certificadosNormalizados.filter((item) => {
-    const cliente = clientes.find((c) => c.id === item.clienteId);
+const filteredItems = useMemo(() => {
+  const parseDate = (dateStr?: string) => {
+    if (!dateStr) return null;
+    const [y, m, d] = dateStr.split("-");
+    return new Date(Number(y), Number(m) - 1, Number(d));
+  };
+
+  const clientesMap = new Map(clientes.map((c) => [c.id, c]));
+
+  return certificadosNormalizados.filter((item) => {
+    const cliente = clientesMap.get(item.clienteId);
+
+    // ======================
+    // BUSCA
+    // ======================
+    const nome = item.clienteNome?.toLowerCase() || "";
+    const cnpj = item.clienteCNPJ || "";
+    const termo = searchTerm.toLowerCase();
+
     const matchesSearch =
-      item.clienteNome.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.clienteCNPJ.includes(searchTerm);
+      nome.includes(termo) || cnpj.includes(searchTerm);
+
+    // ======================
+    // RESPONSÁVEL
+    // ======================
     const matchesResponsavel =
       searchResponsavel === "todos" ||
       (cliente && cliente.responsavel === searchResponsavel);
 
-    // Filtro por data
-    const itemData = new Date(item.dataVencimento);
-    const matchesDataInicio =
-      !filtroDataInicio || itemData >= new Date(filtroDataInicio);
-    const matchesDataFim =
-      !filtroDataFim || itemData <= new Date(filtroDataFim);
+    // ======================
+    // DATA
+    // ======================
+    const itemData = parseDate(item.dataVencimento);
+    const dataInicio = parseDate(filtroDataInicio);
+    const dataFim = parseDate(filtroDataFim);
 
-    // Filtro por status
+    const matchesDataInicio =
+      !dataInicio || (itemData && itemData >= dataInicio);
+
+    const matchesDataFim =
+      !dataFim || (itemData && itemData <= dataFim);
+
+    // ======================
+    // STATUS
+    // ======================
     const matchesStatus =
       filtroStatus === "todos" || item.status === filtroStatus;
 
@@ -284,6 +312,15 @@ export default function Certificados() {
       matchesStatus
     );
   });
+}, [
+  certificadosNormalizados,
+  clientes,
+  searchTerm,
+  searchResponsavel,
+  filtroDataInicio,
+  filtroDataFim,
+  filtroStatus,
+]);
 
   // Aplicar ordenação
   const itemsOrdenados = useMemo(() => {

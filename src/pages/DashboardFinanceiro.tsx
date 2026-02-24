@@ -51,22 +51,30 @@ import {
 } from "recharts";
 
 export default function DashboardFinanceiro() {
-    const { financeiros: financeirosRaw } = useFinanceiro();
+  const { financeiros: financeirosRaw } = useFinanceiro();
   const { servicos: servicosRaw } = useServicos();
   const { despesas } = useDespesas();
 
   const [periodoFiltro, setPeriodoFiltro] = useState<PeriodoFiltro>("mes");
-  const [periodoCustomizado, setPeriodoCustomizado] = useState({
-    inicio: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
-    fim: new Date(),
+  
+  // AJUSTE 1: Iniciar os estados com horários cravados em 00:00:00 e 23:59:59
+  const hoje = new Date();
+  const [periodoCustomizado, setPeriodoCustomizado] = useState<PeriodoCustomizado>({
+    inicio: new Date(hoje.getFullYear(), hoje.getMonth(), 1, 0, 0, 0),
+    fim: new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate(), 23, 59, 59, 999),
   });
 
-  const [recebedorFiltro, setRecebedorFiltro] =
-    useState<string>("todos");
+  const [recebedorFiltro, setRecebedorFiltro] = useState<string>("todos");
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
 
-  const [notificationsOpen, setNotificationsOpen] =
-    useState(false);
-
+  // AJUSTE 2: Função para formatar a data respeitando o fuso horário local
+  const formatarDataInput = (data: Date) => {
+    if (!data) return "";
+    const ano = data.getFullYear();
+    const mes = String(data.getMonth() + 1).padStart(2, "0");
+    const dia = String(data.getDate()).padStart(2, "0");
+    return `${ano}-${mes}-${dia}`;
+  };
 
   // Usar o hook para métricas financeiras
   const metricas = useFinanceiroMetricas(
@@ -78,7 +86,6 @@ export default function DashboardFinanceiro() {
   // =============================
   // DESPESAS FILTRO
   // =============================
-
 
   // Mantém a filtragem de despesas e cálculo de saída
   const despesasFiltradas = useMemo(() => {
@@ -105,7 +112,6 @@ export default function DashboardFinanceiro() {
   // GRÁFICO
   // =============================
 
-
   const dadosGrafico = useMemo(
     () =>
       gerarDadosGrafico(
@@ -129,7 +135,6 @@ export default function DashboardFinanceiro() {
     [dadosGrafico, periodoFiltro]
   );
 
-
   const saldo = metricas.totalEntrada - totalSaida;
 
   const percentualEntrada =
@@ -150,42 +155,41 @@ export default function DashboardFinanceiro() {
         ).toFixed(1)
       : "0";
 
-const aReceberFinanceiro = useMemo(() => {
-  const { inicio, fim } = calcularPeriodo(periodoFiltro, periodoCustomizado);
+  const aReceberFinanceiro = useMemo(() => {
+    const { inicio, fim } = calcularPeriodo(periodoFiltro, periodoCustomizado);
 
-  return (financeirosRaw ?? [])
-    .filter((f) => {
-      if (f.status === "Pago") return false;
+    return (financeirosRaw ?? [])
+      .filter((f) => {
+        if (f.status === "Pago") return false;
 
-      const dataVencimento = new Date(f.dataVencimento);
-      return dataVencimento >= inicio && dataVencimento <= fim;
-    })
-    .reduce((acc, f) => acc + (f.valorMensalidade ?? 0), 0);
-}, [financeirosRaw, periodoFiltro, periodoCustomizado]);
+        const dataVencimento = new Date(f.dataVencimento);
+        return dataVencimento >= inicio && dataVencimento <= fim;
+      })
+      .reduce((acc, f) => acc + (f.valorMensalidade ?? 0), 0);
+  }, [financeirosRaw, periodoFiltro, periodoCustomizado]);
 
-const aReceberServicos = useMemo(() => {
-  const { inicio, fim } = calcularPeriodo(periodoFiltro, periodoCustomizado);
+  const aReceberServicos = useMemo(() => {
+    const { inicio, fim } = calcularPeriodo(periodoFiltro, periodoCustomizado);
 
-  // Mapa para busca rápida por servicoId
-  const financeiroPorServico = new Map(
-    (financeirosRaw ?? []).map((f) => [f.servicoId, f])
-  );
+    // Mapa para busca rápida por servicoId
+    const financeiroPorServico = new Map(
+      (financeirosRaw ?? []).map((f) => [f.servicoId, f])
+    );
 
-  return (servicosRaw ?? [])
-    .filter((s) => {
-      const financeiroRelacionado = financeiroPorServico.get(s.id);
+    return (servicosRaw ?? [])
+      .filter((s) => {
+        const financeiroRelacionado = financeiroPorServico.get(s.id);
 
-      // Se existe financeiro e está pago → não entra
-      if (financeiroRelacionado?.status === "Pago") return false;
+        // Se existe financeiro e está pago → não entra
+        if (financeiroRelacionado?.status === "Pago") return false;
 
-      const dataVencimento = new Date(s.dataVencimento);
-      return dataVencimento >= inicio && dataVencimento <= fim;
-    })
-    .reduce((acc, s) => acc + (s.valorMensalidade ?? 0), 0);
-}, [servicosRaw, financeirosRaw, periodoFiltro, periodoCustomizado]);
+        const dataVencimento = new Date(s.dataVencimento);
+        return dataVencimento >= inicio && dataVencimento <= fim;
+      })
+      .reduce((acc, s) => acc + (s.valorMensalidade ?? 0), 0);
+  }, [servicosRaw, financeirosRaw, periodoFiltro, periodoCustomizado]);
 
-
-   const chartConfig = {
+  const chartConfig = {
     entrada: {
       label: "Entrada",
       theme: {
@@ -263,15 +267,16 @@ const aReceberServicos = useMemo(() => {
                   <Input
                     id="dataInicio"
                     type="date"
-                    value={
-                      periodoCustomizado.inicio.toISOString().split("T")[0]
-                    }
-                    onChange={(e) =>
-                      setPeriodoCustomizado({
-                        ...periodoCustomizado,
-                        inicio: new Date(e.target.value),
-                      })
-                    }
+                    value={formatarDataInput(periodoCustomizado.inicio)}
+                    onChange={(e) => {
+                      if (!e.target.value) return;
+                      // Quebra a string "YYYY-MM-DD" que vem do input
+                      const [ano, mes, dia] = e.target.value.split("-").map(Number);
+                      setPeriodoCustomizado((prev) => ({
+                        ...prev,
+                        inicio: new Date(ano, mes - 1, dia, 0, 0, 0), // Garante 00:00:00 local
+                      }));
+                    }}
                   />
                 </div>
                 <div className="w-full max-w-xs space-y-1">
@@ -281,15 +286,16 @@ const aReceberServicos = useMemo(() => {
                   <Input
                     id="dataFim"
                     type="date"
-                    value={
-                      periodoCustomizado.fim.toISOString().split("T")[0]
-                    }
-                    onChange={(e) =>
-                      setPeriodoCustomizado({
-                        ...periodoCustomizado,
-                        fim: new Date(e.target.value),
-                      })
-                    }
+                    value={formatarDataInput(periodoCustomizado.fim)}
+                    onChange={(e) => {
+                      if (!e.target.value) return;
+                      // Quebra a string "YYYY-MM-DD" que vem do input
+                      const [ano, mes, dia] = e.target.value.split("-").map(Number);
+                      setPeriodoCustomizado((prev) => ({
+                        ...prev,
+                        fim: new Date(ano, mes - 1, dia, 23, 59, 59, 999), // Garante 23:59:59 local
+                      }));
+                    }}
                   />
                 </div>
               </div>
@@ -417,7 +423,6 @@ const aReceberServicos = useMemo(() => {
               <CardContent>
                 <div className="text-2xl font-bold text-orange-600">
                   R${" "}
-                  {/* aReceberFinanceiro não está no hook, manter cálculo local se necessário */}
                   {aReceberFinanceiro.toLocaleString("pt-BR", {
                     minimumFractionDigits: 2,
                   })}
@@ -438,7 +443,6 @@ const aReceberServicos = useMemo(() => {
               <CardContent>
                 <div className="text-2xl font-bold text-orange-600">
                   R${" "}
-                  {/* aReceberServicos não está no hook, manter cálculo local se necessário */}
                   {aReceberServicos.toLocaleString("pt-BR", {
                     minimumFractionDigits: 2,
                   })}

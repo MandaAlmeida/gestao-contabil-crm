@@ -21,12 +21,15 @@ import {
   FileText,
   StickyNote,
   Calendar,
+  Clock,
+  AlertTriangle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useTheme } from "next-themes";
 import { ThemeToggle } from "./ThemeToggle";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
+import { useTarefasVencendo } from "@/hooks/useTask";
 
 
 interface LayoutProps {
@@ -39,7 +42,8 @@ export function Layout({ children }: LayoutProps) {
     return saved ? JSON.parse(saved) : false;
   });
 
-  const { resolvedTheme, setTheme } = useTheme();
+  const { tarefasAlertar, tarefasVencida } = useTarefasVencendo();
+
   const { logout } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -50,11 +54,6 @@ export function Layout({ children }: LayoutProps) {
     localStorage.setItem("sidebar-collapsed", JSON.stringify(collapsed));
   }, [collapsed]);
 
-  const isDark = resolvedTheme === "dark";
-
-  const handleToggleTheme = () => {
-    setTheme(isDark ? "light" : "dark");
-  };
 
   const handleLogout = async () => {
     showConfirmation(
@@ -192,11 +191,36 @@ export function Layout({ children }: LayoutProps) {
              </NavLink>
             <NavLink
               to="/calendario"
-              className={collapsed ? "justify-center" : ""}
+              className={collapsed ? "justify-center" : "justify-between"}
               activeClassName="bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground"
             >
+              <div className="flex gap-3">
               <Calendar className="h-5 w-5 flex-shrink-0" />
               {!collapsed && <span>Calendário</span>}
+              </div>
+              <div className="flex gap-2">
+                {/* VENCENDO EM BREVE (Atenção - Laranja + Ícone de Relógio + Pulso) */}
+                {tarefasAlertar.length > 0 && (
+                  <span 
+                    className="h-6 px-2 bg-orange-700 rounded-full flex items-center justify-center text-white text-xs font-bold gap-1 animate-pulse shadow-sm"
+                    title="Tarefas vencendo nos próximos 20 minutos"
+                  >
+                    <Clock className="w-3 h-3" />
+                    {tarefasAlertar.length}
+                  </span>
+                )}
+
+                {/* JÁ VENCEU (Atrasado/Perigo - Vermelho Escuro + Ícone de Alerta) */}
+                {tarefasVencida.length > 0 && (
+                  <span 
+                    className="h-6 px-2 bg-red-700 rounded-full flex items-center justify-center text-white text-xs font-bold gap-1 shadow-sm"
+                    title="Tarefas atrasadas"
+                  >
+                    <AlertTriangle className="w-3 h-3" />
+                    {tarefasVencida.length}
+                  </span>
+                )}
+              </div>
             </NavLink>
      
             <NavLink

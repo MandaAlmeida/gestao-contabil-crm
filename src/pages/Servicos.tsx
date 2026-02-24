@@ -244,22 +244,44 @@ export default function ServicosPage() {
     );
   };
 
-  const filteredItems = servicosNormalizados.filter((item) => {
+const filteredItems = useMemo(() => {
+  const parseDate = (dateStr?: string) => {
+    if (!dateStr) return null;
+    const [y, m, d] = dateStr.split("-");
+    return new Date(Number(y), Number(m) - 1, Number(d));
+  };
+
+  return servicosNormalizados.filter((item) => {
+    // ======================
+    // BUSCA
+    // ======================
+    const nome = item.clienteNome?.toLowerCase() || "";
+    const cnpj = item.clienteCNPJ || "";
+    const termo = searchTerm.toLowerCase();
+
     const matchesSearch =
-      item.clienteNome.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.clienteCNPJ.includes(searchTerm);
+      nome.includes(termo) || cnpj.includes(searchTerm);
+
+    // ======================
+    // RESPONSÁVEL
+    // ======================
     const matchesResponsavel =
       searchResponsavel === "todos" ||
       item.responsavel === searchResponsavel;
 
-    // Filtro por data (data de vencimento)
-    const itemData = new Date(item.dataVencimento);
-    const matchesDataInicio =
-      !filtroDataInicio || itemData >= new Date(filtroDataInicio);
-    const matchesDataFim =
-      !filtroDataFim || itemData <= new Date(filtroDataFim);
+    // ======================
+    // DATA
+    // ======================
+    const itemData = parseDate(item.dataVencimento);
+    const dataInicio = parseDate(filtroDataInicio);
+    const dataFim = parseDate(filtroDataFim);
 
-    // Filtro por status
+    const matchesDataInicio =
+      !dataInicio || (itemData && itemData >= dataInicio);
+
+    const matchesDataFim =
+      !dataFim || (itemData && itemData <= dataFim);
+
     return (
       matchesSearch &&
       matchesResponsavel &&
@@ -267,6 +289,13 @@ export default function ServicosPage() {
       matchesDataFim
     );
   });
+}, [
+  servicosNormalizados,
+  searchTerm,
+  searchResponsavel,
+  filtroDataInicio,
+  filtroDataFim,
+]);
 
   // Aplicar ordenação
   const itemsOrdenados = useMemo(() => {
