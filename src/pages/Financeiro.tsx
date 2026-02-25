@@ -302,6 +302,11 @@ const handleSubmit = async (e: React.FormEvent) => {
       };
 
       if (editingItem) {
+        // Se o valor do serviço foi zerado e existe um serviço vinculado, apaga o serviço
+        if (Number(formData.valorServico) === 0 && formData.servicoId) {
+          await deleteServico(formData.servicoId);
+          payload.servicoId = null;
+        }
         await updateFinanceiro(editingItem.id, payload);
         toast({ title: "Financeiro atualizado!" });
       } else {
