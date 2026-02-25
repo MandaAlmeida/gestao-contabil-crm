@@ -53,7 +53,12 @@ export default function Calendario() {
     prioridade: "Média" as "Baixa" | "Média" | "Alta",
     categoria: "",
     clienteId: "",
+    tipoCertificado: "", // novo campo
   });
+  const [impedirHoraFimRepetidaPF, setImpedirHoraFimRepetidaPF] = useState(false);
+  const [impedirHoraFimRepetidaPJ, setImpedirHoraFimRepetidaPJ] = useState(false);
+
+  const [erroValidacao, setErroValidacao] = useState<string | null>(null);
 
   const tarefasDoDia = useMemo(() => {
     const dateStr = format(selectedDate, "yyyy-MM-dd");
@@ -80,6 +85,7 @@ export default function Calendario() {
         prioridade: tarefa.prioridade,
         categoria: tarefa.categoria || "",
         clienteId: tarefa.clienteId || "",
+        tipoCertificado: tarefa.tipoCertificado || "",
       });
     } else {
       setEditingTarefa(null);
@@ -91,6 +97,7 @@ export default function Calendario() {
         prioridade: "Média",
         categoria: "",
         clienteId: "",
+        tipoCertificado: "",
       });
     }
     setDialogOpen(true);
@@ -103,9 +110,26 @@ export default function Calendario() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    try {
+    setErroValidacao(null);
 
+    // Validação: impedir hora final repetida se checkbox marcada
+    if ((impedirHoraFimRepetidaPF || impedirHoraFimRepetidaPJ) && formData.horaFim) {
+      const existeHoraFim = tarefasDoDia.some(
+        (t) => t.horaFim === formData.horaFim && (!editingTarefa || t.id !== editingTarefa.id)
+      );
+      if (existeHoraFim) {
+        setErroValidacao("Já existe uma tarefa com essa hora final!");
+        return;
+      }
+    }
+
+    // Validação: hora final não pode ser menor que hora inicial
+    if (formData.horaInicio && formData.horaFim && formData.horaFim <= formData.horaInicio) {
+      setErroValidacao("A hora final deve ser maior que a hora inicial.");
+      return;
+    }
+
+    try {
       const clienteSelecionado = clientes.find((c) => c.id === formData.clienteId);
       // Monta o objeto sem campos undefined ou vazios
       const tarefaData: any = {
@@ -115,6 +139,7 @@ export default function Calendario() {
         prioridade: formData.prioridade,
         concluida: editingTarefa?.concluida || false,
         ativo: true,
+        tipoCertificado: formData.tipoCertificado,
       };
       if (formData.horaInicio) tarefaData.horaInicio = formData.horaInicio;
       if (formData.horaFim) tarefaData.horaFim = formData.horaFim;
@@ -418,6 +443,30 @@ export default function Calendario() {
                     </SelectContent>
                   </Select>
                 </div>
+
+                {/* Checkbox para impedir hora final repetida */}
+                <div className="flex items-center gap-16">
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id="impedirHoraFimRepetidaPF"
+                    checked={impedirHoraFimRepetidaPF}
+                    onCheckedChange={(checked) => setImpedirHoraFimRepetidaPF(!!checked)}
+                  />
+                  <Label htmlFor="impedirHoraFimRepetidaPF">Certificado PF A1</Label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id="impedirHoraFimRepetidaPJ"
+                    checked={impedirHoraFimRepetidaPJ}
+                    onCheckedChange={(checked) => setImpedirHoraFimRepetidaPJ(!!checked)}
+                  />
+                  <Label htmlFor="impedirHoraFimRepetidaPJ">Certificado PJ A1</Label>
+                </div>
+                </div>
+                {/* Exibe erro de validação se houver */}
+                {erroValidacao && (
+                  <div className="text-red-500 text-sm font-medium mt-2">{erroValidacao}</div>
+                )}
 
                 <div className="grid gap-2">
                   <Label htmlFor="categoria">Categoria</Label>

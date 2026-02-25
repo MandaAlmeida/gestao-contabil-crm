@@ -10,6 +10,7 @@ export interface Tarefa {
   categoria?: string;
   clienteId?: string;
   clienteNome?: string;
+  tipoCertificado?: string; // campo opcional para certificado virtual
   ativo: boolean;
   createdAt: string;
   updatedAt: string;
