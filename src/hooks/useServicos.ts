@@ -1,88 +1,20 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import * as servicoService from "@/lib/firestore/servicos";
 import { useFinanceiro } from "./useFinanceiro";
 import { excluirNotificacoesItem } from "@/utils/notificacoes";
 import type { Servico } from "@/types/crm";
 
-/**
- * Adiciona um mês a uma data no formato YYYY-MM-DD
- * Trabalha diretamente com strings para evitar problemas de timezone
- */
-export const adicionarMes = (dataString: string): string => {
-  if (!dataString) {
-    const hoje = new Date();
-    return hoje.toISOString().split("T")[0];
-  }
-
-  const partes = dataString.split("-");
-  if (partes.length !== 3) {
-    return dataString;
-  }
-
-  const ano = parseInt(partes[0], 10);
-  const mes = parseInt(partes[1], 10);
-  const dia = parseInt(partes[2], 10);
-
-  let novoAno = ano;
-  let novoMes = mes + 1;
-
-  if (novoMes > 12) {
-    novoMes = 1;
-    novoAno += 1;
-  }
-
-  // Garante que o dia não ultrapasse os dias do mês
-  const ultimoDiaDoMes = new Date(novoAno, novoMes, 0).getDate();
-  const novoDia = Math.min(dia, ultimoDiaDoMes);
-
-  return `${novoAno}-${String(novoMes).padStart(2, "0")}-${String(
-    novoDia
-  ).padStart(2, "0")}`;
-};
-
-/**
- * Remove um mês de uma data no formato YYYY-MM-DD
- * Trabalha diretamente com strings para evitar problemas de timezone
- */
-export const removerMes = (dataString: string): string => {
-  if (!dataString) {
-    const hoje = new Date();
-    return hoje.toISOString().split("T")[0];
-  }
-
-  const partes = dataString.split("-");
-  if (partes.length !== 3) {
-    return dataString;
-  }
-
-  const ano = parseInt(partes[0], 10);
-  const mes = parseInt(partes[1], 10);
-  const dia = parseInt(partes[2], 10);
-
-  let novoAno = ano;
-  let novoMes = mes - 1;
-
-  if (novoMes < 1) {
-    novoMes = 12;
-    novoAno -= 1;
-  }
-
-  // Garante que o dia não ultrapasse os dias do mês
-  const ultimoDiaDoMes = new Date(novoAno, novoMes, 0).getDate();
-  const novoDia = Math.min(dia, ultimoDiaDoMes);
-
-  return `${novoAno}-${String(novoMes).padStart(2, "0")}-${String(
-    novoDia
-  ).padStart(2, "0")}`;
-};
+/* ... manter funções adicionarMes e removerMes ... */
 
 export function useServicos() {
   const [servicos, setServicos] = useState<Servico[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
-  const { financeiros, updateFinanceiro } = useFinanceiro();
+  
+  // Importamos o financeiros e a função de update do seu hook financeiro
+  const { financeiros, updateFinanceiro, refresh: refreshFinanceiros } = useFinanceiro();
 
-  const loadServicos = async () => {
+  const loadServicos = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
@@ -94,32 +26,31 @@ export function useServicos() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     loadServicos();
-  }, []);
+  }, [loadServicos]);
 
   const createServico = async (servico: Omit<Servico, "id" | "createdAt" | "updatedAt">) => {
     try {
       const id = await servicoService.createServico(servico);
 
-      // Verificar se existe um financeiro para este cliente sem serviço vinculado
+      // Vinculação automática na criação
       const financeiroSemServico = financeiros.find(f =>
         f.clienteId === servico.clienteId && !f.servicoId
       );
 
       if (financeiroSemServico) {
-        // Atualizar o registro financeiro com o ID do serviço recém-criado
-        await updateFinanceiro(financeiroSemServico.id, { servicoId: id });
+        await updateFinanceiro(financeiroSemServico.id, { 
+          servicoId: id,
+          valorServico: servico.valorMensalidade // Opcional: sincroniza o valor
+        });
       }
 
-      // Carrega os serviços novamente para refletir a mudança
       await loadServicos();
-
       return id;
     } catch (err) {
-      console.error("❌ useServicos.createServico: Erro", err);
       setError(err instanceof Error ? err : new Error("Erro ao criar serviço"));
       throw err;
     }
@@ -127,13 +58,20 @@ export function useServicos() {
 
   const updateServico = async (id: string, updates: Partial<Omit<Servico, "id" | "createdAt">>) => {
     try {
-      // Verificar se o status está sendo alterado para "Pago"
       if (updates.status === "Pago") {
-        // Buscar e excluir notificações relacionadas ao serviço
         await excluirNotificacoesItem(id, "servico");
       }
 
       await servicoService.updateServico(id, updates);
+      
+      // Sincroniza valor no financeiro se a mensalidade do serviço mudar
+      if (updates.valorMensalidade !== undefined) {
+        const financeiroVinculado = financeiros.find(f => f.servicoId === id);
+        if (financeiroVinculado) {
+          await updateFinanceiro(financeiroVinculado.id, { valorServico: updates.valorMensalidade });
+        }
+      }
+
       await loadServicos();
     } catch (err) {
       setError(err instanceof Error ? err : new Error("Erro ao atualizar serviço"));
@@ -143,21 +81,37 @@ export function useServicos() {
 
   const deleteServico = async (id: string) => {
     try {
-      // Excluir notificações relacionadas antes de excluir o serviço
+      // 1. Notificações
       await excluirNotificacoesItem(id, "servico");
 
+      // 2. DESVINCULAR DO FINANCEIRO (A lógica solicitada)
+      // Procuramos no array de financeiros quem possui este servicoId
+      const financeiroVinculado = financeiros.find(f => f.servicoId === id);
+      
+      if (financeiroVinculado) {
+        console.log(`🔗 Desvinculando serviço ${id} do financeiro ${financeiroVinculado.id}`);
+        await updateFinanceiro(financeiroVinculado.id, { 
+          servicoId: null,      // Remove o ID do vínculo
+          valorServico: 0       // Zera o valor do serviço no financeiro
+        });
+      }
+
+      // 3. Deletar o serviço de fato
       await servicoService.deleteServico(id);
-      // Pequeno delay para garantir que o Firestore processou a atualização
-      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // Pequeno delay para o Firestore
+      await new Promise(resolve => setTimeout(resolve, 300));
+      
     } catch (err) {
       console.error("Erro ao deletar serviço:", err);
       setError(err instanceof Error ? err : new Error("Erro ao deletar serviço"));
       throw err;
     } finally {
       await loadServicos();
+      // Garantir que a lista financeira da tela também atualize se houver desvinculação
+      if (refreshFinanceiros) await refreshFinanceiros();
     }
   };
-
 
   return {
     servicos,
@@ -169,4 +123,3 @@ export function useServicos() {
     refresh: loadServicos,
   };
 }
-

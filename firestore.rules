@@ -93,67 +93,17 @@ service cloud.firestore {
     
     // ==================== FINANCEIRO ====================
     match /financeiro/{financeiroId} {
-      // Campo valorServico: opcional, pode ser string ou null
-      // Usado para armazenar o valor do serviço vinculado ao financeiro
-      // Campo dataPagamento: opcional, pode ser string ou null (DEPRECATED)
-      // Usado para armazenar quando o item foi marcado como pago
-      // Campo historicoPagamentos: opcional, array de objetos com histórico de pagamentos
-      // Cada objeto contém: dataVencimento, dataPagamento, emDia (boolean), meioPagamento
+     allow read: if isAuthenticated();
+  
+  allow create: if isAuthenticated() &&
+                  hasValidTimestamps() &&
+                  request.resource.data.status in ['Pago', 'Pendente', 'Vencido'];
 
-      // Permitir leitura para usuários autenticados
-      allow read: if isAuthenticated();
-      
-      // Permitir criação para usuários autenticados com validação
-      allow create: if isAuthenticated() &&
-                      hasValidTimestamps() &&
-                      request.resource.data.clienteId is string &&
-                      request.resource.data.clienteNome is string &&
-                      request.resource.data.clienteCNPJ is string &&
-                      request.resource.data.dataVencimento is string &&
-                      request.resource.data.valorMensalidade is number &&
-                      request.resource.data.status is string &&
-                      request.resource.data.meioPagamento is string &&
-                      request.resource.data.observacoes is string &&
-                      (!('valorServico' in request.resource.data) ||
-                       request.resource.data.valorServico is string ||
-                       request.resource.data.valorServico == null) &&
-                      (!('dataPagamento' in request.resource.data) ||
-                       request.resource.data.dataPagamento is string ||
-                       request.resource.data.dataPagamento == null) &&
-                      (!('historicoPagamentos' in request.resource.data) ||
-                       request.resource.data.historicoPagamentos is list) &&
-                      request.resource.data.clienteId.size() > 0 &&
-                      request.resource.data.status in ['Pago', 'Pendente', 'Vencido'] &&
-                      request.resource.data.meioPagamento in ['Pix', 'Boleto'] &&
-                      request.resource.data.valorMensalidade >= 0;
-      
-      // Permitir atualização para usuários autenticados
-      allow update: if isAuthenticated() &&
-                      request.resource.data.updatedAt is string &&
-                      createdAtUnchanged() &&
-                      request.resource.data.clienteId is string &&
-                      request.resource.data.clienteNome is string &&
-                      request.resource.data.clienteCNPJ is string &&
-                      request.resource.data.dataVencimento is string &&
-                      request.resource.data.valorMensalidade is number &&
-                      request.resource.data.status is string &&
-                      request.resource.data.meioPagamento is string &&
-                      request.resource.data.observacoes is string &&
-                      (!('valorServico' in request.resource.data) ||
-                       request.resource.data.valorServico is string ||
-                       request.resource.data.valorServico == null) &&
-                      (!('dataPagamento' in request.resource.data) ||
-                       request.resource.data.dataPagamento is string ||
-                       request.resource.data.dataPagamento == null) &&
-                      (!('historicoPagamentos' in request.resource.data) ||
-                       request.resource.data.historicoPagamentos is list) &&
-                      request.resource.data.clienteId.size() > 0 &&
-                      request.resource.data.status in ['Pago', 'Pendente', 'Vencido'] &&
-                      request.resource.data.meioPagamento in ['Pix', 'Boleto'] &&
-                      request.resource.data.valorMensalidade >= 0;
-      
-      // Permitir exclusão para usuários autenticados
-      allow delete: if isAuthenticated();
+  allow update: if isAuthenticated() &&
+                  request.resource.data.updatedAt is string &&
+                  createdAtUnchanged();
+  
+  allow delete: if isAuthenticated();
     }
     
     // ==================== CERTIFICADOS ====================
@@ -327,9 +277,12 @@ service cloud.firestore {
                       request.resource.data.meioPagamento is string &&
                       request.resource.data.observacoes is string &&
                       request.resource.data.ativo is bool &&
-                      (!('dataPagamento' in request.resource.data) ||
-                       request.resource.data.dataPagamento is string ||
-                       request.resource.data.dataPagamento == null) &&
+                        (!('valorServico' in request.resource.data) ||
+                         request.resource.data.valorServico is number ||
+                         request.resource.data.valorServico == null) &&
+                        (!('dataPagamento' in request.resource.data) ||
+                         request.resource.data.dataPagamento is string ||
+                         request.resource.data.dataPagamento == null) &&
                       request.resource.data.clienteId.size() > 0 &&
                       request.resource.data.responsavel.size() > 0 &&
                       request.resource.data.status in ['Pago', 'Pendente', 'Vencido'] &&

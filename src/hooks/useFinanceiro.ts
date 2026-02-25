@@ -4,6 +4,18 @@ import { excluirNotificacoesItem } from "@/utils/notificacoes";
 import { normalizarFinanceiros } from "@/lib/financeiro";
 import type { Financeiro } from "@/types/crm";
 
+/* =========================
+   UTIL — DATAS LOCAL
+========================= */
+// Função para evitar o bug de fuso horário na conversão de strings "YYYY-MM-DD"
+function ajustarDataLocal(dataString: string | undefined): Date {
+  if (!dataString) return new Date();
+  if (dataString.includes("T")) return new Date(dataString);
+  
+  const [ano, mes, dia] = dataString.split("-").map(Number);
+  return new Date(ano, mes - 1, dia, 0, 0, 0);
+}
+
 export function useFinanceiro() {
   const [financeirosRaw, setFinanceirosRaw] = useState<Financeiro[]>([]);
   const [loading, setLoading] = useState(true);
@@ -114,23 +126,42 @@ export function useFinanceiro() {
   // =============================
   const totais = useMemo(() => {
     return financeiros.reduce((acc, f) => {
-      // Busca o pagamento referente ao mês de vencimento
-      let pagoNoMes = false;
+      if (!f.dataVencimento) return acc;
+
+      let pagoNaMensalidadeAtual = false;
+      const vencimentoAtual = ajustarDataLocal(f.dataVencimento);
+      
+      // 1. Busca no histórico se a parcela DESTE vencimento foi paga
       if (f.historicoPagamentos && f.historicoPagamentos.length > 0) {
-        // Considera o pagamento se a dataPagamento for no mesmo mês/ano da dataVencimento
-        const vencimento = new Date(f.dataVencimento);
         const pagamento = f.historicoPagamentos.find(h => {
           if (!h.dataPagamento) return false;
-          const pag = new Date(h.dataPagamento);
-          return pag.getMonth() === vencimento.getMonth() && pag.getFullYear() === vencimento.getFullYear();
+          
+          // O segredo aqui é comparar o VENCIMENTO do histórico com o VENCIMENTO atual
+          const vencimentoHistorico = ajustarDataLocal(h.dataVencimento || f.dataVencimento);
+          
+          return (
+            vencimentoHistorico.getMonth() === vencimentoAtual.getMonth() && 
+            vencimentoHistorico.getFullYear() === vencimentoAtual.getFullYear()
+          );
         });
-        pagoNoMes = !!pagamento;
+        
+        pagoNaMensalidadeAtual = !!pagamento;
       }
-      if (pagoNoMes) {
-        acc.recebido += f.valorMensalidade || 0;
+      
+      // 2. Fallback: Se não tem no histórico, mas o status principal diz que tá Pago
+      if (!pagoNaMensalidadeAtual && f.status === "Pago") {
+        pagoNaMensalidadeAtual = true;
+      }
+
+      // Soma a mensalidade e o serviço (para bater com o Dashboard)
+      const valorTotal = (f.valorMensalidade || 0) + (Number(f.valorServico) || 0);
+      
+      if (pagoNaMensalidadeAtual) {
+        acc.recebido += valorTotal;
       } else {
-        acc.aReceber += f.valorMensalidade || 0;
+        acc.aReceber += valorTotal;
       }
+      
       return acc;
     }, { recebido: 0, aReceber: 0 });
   }, [financeiros]);
@@ -140,13 +171,19 @@ export function useFinanceiro() {
   // =============================
   const vencidos = useMemo(() => {
     const hoje = new Date();
+    hoje.setHours(0, 0, 0, 0); // Zerar as horas de "hoje" para comparar apenas os dias
 
     return financeiros
       .filter((f) => {
         if (f.status === "Pago") return false;
-        return new Date(f.dataVencimento) < hoje;
+        if (!f.dataVencimento) return false;
+
+        const vencimento = ajustarDataLocal(f.dataVencimento);
+        vencimento.setHours(0, 0, 0, 0);
+
+        return vencimento < hoje;
       })
-      .reduce((acc, f) => acc + (f.valorMensalidade || 0), 0);
+      .reduce((acc, f) => acc + (f.valorMensalidade || 0) + (Number(f.valorServico) || 0), 0);
   }, [financeiros]);
 
   return {

@@ -1,5 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
-import { useLocation } from "react-router-dom";
+import { useMemo, useState } from "react";
 import { Layout } from "@/components/Layout";
 import { Button } from "@/components/ui/button";
 import { useClientes } from "@/hooks/useClientes";
@@ -7,19 +6,14 @@ import { useFinanceiro } from "@/hooks/useFinanceiro";
 import { useServicos } from "@/hooks/useServicos";
 import { useConfirmationDialog } from "@/components/ConfirmationDialog";
 import { Financeiro } from "@/types/crm";
-import {
-  Edit,
-  Trash2,
-  History,
-} from "lucide-react";
+import { Edit, Trash2, History } from "lucide-react";
 
 import { useToast } from "@/hooks/use-toast";
 import { calcularStatusFinanceiro } from "@/lib/financeiro";
-import { useFinanceiroMetricas } from "@/hooks/useFinanceiroDashboard";
 import { formatarDataBR } from "@/lib/utils";
 import { StatusButton, type StatusMeta } from "@/components/StatusButton";
 import { ExportButtons } from "@/components/ExportButtons";
-import { CheckCircle, Clock3, AlertTriangle, XCircle } from "lucide-react";
+import { CheckCircle, Clock3, AlertTriangle } from "lucide-react";
 import { usePagination } from "@/hooks/usePagination";
 import {
   Pagination,
@@ -32,17 +26,27 @@ import {
 } from "@/components/ui/pagination";
 import { FiltersBar } from "@/components/FiltersBar";
 import { NotificationButton } from "@/components/NotificationButton";
-import { NotificationPanel, NotificationType } from "@/components/NotificationPanel";
+import { NotificationPanel } from "@/components/NotificationPanel";
 import { HistoricoPagamentosDialog } from "@/components/HistoricoPagamentosDialog";
 import { CreateFinancer } from "@/components/CreateFinancer";
 import { useNotifications } from "@/hooks/useNotificacoesAutomaticas";
 import { useAuth } from "@/contexts/AuthContext";
 import { excluirNotificacoesItem } from "@/utils/notificacoes";
 
+/* =========================
+   UTIL — DATAS LOCAL
+========================= */
+function ajustarDataLocal(dataString: string | undefined): Date {
+  if (!dataString) return new Date();
+  if (dataString.includes("T")) return new Date(dataString);
+  const [ano, mes, dia] = dataString.split("-").map(Number);
+  return new Date(ano, mes - 1, dia, 0, 0, 0);
+}
+
 export default function FinanceiroPage() {
   const { clientes } = useClientes();
   const { user } = useAuth();
-  const { servicos, createServico, deleteServico} = useServicos();
+  const { servicos, createServico, deleteServico } = useServicos();
   const {
     financeiros: financeirosRaw,
     createFinanceiro,
@@ -56,9 +60,7 @@ export default function FinanceiroPage() {
   const [searchResponsavel, setSearchResponsavel] = useState("todos");
   const [filtroDataInicio, setFiltroDataInicio] = useState("");
   const [filtroDataFim, setFiltroDataFim] = useState("");
-  const [filtroStatus, setFiltroStatus] = useState<
-    Financeiro["status"] | "todos"
-  >("todos");
+  const [filtroStatus, setFiltroStatus] = useState<Financeiro["status"] | "todos">("todos");
   const [ordenacao, setOrdenacao] = useState<{
     campo: "clienteNome" | "dataVencimento" | "valorMensalidade" | "status";
     direcao: "asc" | "desc";
@@ -69,19 +71,13 @@ export default function FinanceiroPage() {
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [historicoDialogOpen, setHistoricoDialogOpen] = useState(false);
   const [selectedItemHistorico, setSelectedItemHistorico] = useState<Financeiro | null>(null);
-  const {
- removeNotificationItem,
- fetchNotifications
-  } = useNotifications(user.uid);
+  const { removeNotificationItem, fetchNotifications } = useNotifications(user.uid);
 
-  // =========================
-  // Formulário CreateFinancer
-  // =========================
   const [formData, setFormData] = useState({
     clienteId: "",
     dataVencimento: "",
     valorMensalidade: "",
-    valorServico: "",
+    valorServico: 0,
     servicoId: null,
     status: "Pendente",
     meioPagamento: "Pix" as "Pix" | "Boleto",
@@ -95,159 +91,90 @@ export default function FinanceiroPage() {
       valorMensalidade: "",
       status: "Pendente",
       meioPagamento: "Pix",
-      valorServico: "",
+      valorServico: 0,
       servicoId: null,
       observacoes: "",
     });
     setEditingItem(null);
   };
-  // =========================
-  // Constantes e Handlers ausentes
-  // =========================
+
   const STATUS_META: Record<"Pago" | "Pendente" | "Vencido", StatusMeta> = {
-    Pago: {
-      label: "Pago",
-      icon: CheckCircle,
-      className: "bg-green-600/40 text-white",
-    },
-    Pendente: {
-      label: "Pendente",
-      icon: Clock3,
-      className: "bg-yellow-600/40 text-white",
-    },
-    Vencido: {
-      label: "Vencido",
-      icon: AlertTriangle,
-      className: "bg-red-600/40 text-white",
-    },
+    Pago: { label: "Pago", icon: CheckCircle, className: "bg-green-600/40 text-white" },
+    Pendente: { label: "Pendente", icon: Clock3, className: "bg-yellow-600/40 text-white" },
+    Vencido: { label: "Vencido", icon: AlertTriangle, className: "bg-red-600/40 text-white" },
   };
 
   const alterarMes = (dataString: string, delta: number): string => {
-  if (!dataString) {
-    return new Date().toISOString().split("T")[0];
-  }
+    if (!dataString) return new Date().toISOString().split("T")[0];
+    const [anoStr, mesStr, diaStr] = dataString.split("-");
+    if (!anoStr || !mesStr || !diaStr) return dataString;
 
-  const [anoStr, mesStr, diaStr] = dataString.split("-");
-  if (!anoStr || !mesStr || !diaStr) return dataString;
+    let ano = parseInt(anoStr, 10);
+    let mes = parseInt(mesStr, 10) + delta;
+    const dia = parseInt(diaStr, 10);
 
-  let ano = parseInt(anoStr, 10);
-  let mes = parseInt(mesStr, 10) + delta;
-  const dia = parseInt(diaStr, 10);
+    if (mes > 12) { mes = 1; ano++; } 
+    else if (mes < 1) { mes = 12; ano--; }
 
-  if (mes > 12) {
-    mes = 1;
-    ano++;
-  } else if (mes < 1) {
-    mes = 12;
-    ano--;
-  }
+    const ultimoDia = new Date(ano, mes, 0).getDate();
+    const novoDia = Math.min(dia, ultimoDia);
+    return `${ano}-${String(mes).padStart(2, "0")}-${String(novoDia).padStart(2, "0")}`;
+  };
 
-  const ultimoDia = new Date(ano, mes, 0).getDate();
-  const novoDia = Math.min(dia, ultimoDia);
+  const adicionarMes = (data: string) => alterarMes(data, 1);
+  const removerMes = (data: string) => alterarMes(data, -1);
 
-  return `${ano}-${String(mes).padStart(2, "0")}-${String(novoDia).padStart(2, "0")}`;
-};
+  const handleTogglePagamento = async (item: Financeiro) => {
+    const hoje = new Date();
+    hoje.setHours(0, 0, 0, 0);
+    const hojeStr = hoje.toISOString().split("T")[0];
+    const historico = item.historicoPagamentos || [];
 
-const adicionarMes = (data: string) => alterarMes(data, 1);
-const removerMes = (data: string) => alterarMes(data, -1);
+    try {
+      if (item.status === "Pago") {
+        const historicoAtualizado = historico.filter((p) => {
+          if (!p.dataVencimento) return true;
+          const dataHist = new Date(p.dataVencimento + "T00:00:00");
+          const dataItem = new Date();
+          const mesmoMes = dataHist.getMonth() === dataItem.getMonth() && dataHist.getFullYear() === dataItem.getFullYear();
+          return !mesmoMes;
+        });
 
-const handleTogglePagamento = async (item: Financeiro) => {
-  const hoje = new Date();
-  hoje.setHours(0, 0, 0, 0);
-  const hojeStr = hoje.toISOString().split("T")[0];
+        const statusAjustado = calcularStatusFinanceiro({
+          status: "Pendente", dataPagamento: null, dataVencimento: item.dataVencimento, historicoPagamentos: historicoAtualizado,
+        });
 
-  const historico = item.historicoPagamentos || [];
+        const novoVencimento = removerMes(item.dataVencimento);
+        await updateFinanceiro(item.id, { historicoPagamentos: historicoAtualizado, status: statusAjustado, dataVencimento: novoVencimento });
+        await refreshFinanceiros();
+        toast({ title: "Pagamento desfeito.", description: `${item.clienteNome} voltou para pendente.` });
+        return;
+      }
 
-  try {
+      const vencimentoDate = new Date(item.dataVencimento + "T00:00:00");
+      const pagamentoDate = new Date(hojeStr + "T00:00:00");
+      const emDia = pagamentoDate <= vencimentoDate;
 
-    // ==========================
-    // DESFAZER PAGAMENTO
-    // ==========================
-    if (item.status === "Pago") {
+      const novoPagamento = {
+        id: `${item.id}-${item.dataVencimento}-${Date.now()}`,
+        dataVencimento: item.dataVencimento, dataPagamento: hojeStr, emDia, meioPagamento: item.meioPagamento || "Pix",
+      };
 
-    const historicoAtualizado = historico.filter((p) => {
-      if (!p.dataVencimento) return true;
+      const historicoAtualizado = [...historico, novoPagamento];
+      const novoVencimento = adicionarMes(item.dataVencimento);
 
-      const dataHist = new Date(p.dataVencimento + "T00:00:00");
-      const dataItem = new Date();
-
-      const mesmoMes =
-        dataHist.getMonth() === dataItem.getMonth() &&
-        dataHist.getFullYear() === dataItem.getFullYear();
-
-      return !mesmoMes; // remove apenas o do mesmo mês
-    });
-
-      const statusAjustado = calcularStatusFinanceiro({
-        status: "Pendente",
-        dataPagamento: null,
-        dataVencimento: item.dataVencimento,
-        historicoPagamentos: historicoAtualizado,
-      });
-
-      const novoVencimento = removerMes(item.dataVencimento);
-
-      await updateFinanceiro(item.id, {
-        historicoPagamentos: historicoAtualizado,
-        status: statusAjustado,
-        dataVencimento: novoVencimento,
-      });
-
+      await updateFinanceiro(item.id, { historicoPagamentos: historicoAtualizado, status: "Pago", dataVencimento: novoVencimento });
+      await excluirNotificacoesItem(item.id, "pagamento");
       await refreshFinanceiros();
 
       toast({
-        title: "Pagamento desfeito.",
-        description: `${item.clienteNome} voltou para pendente.`,
+        title: emDia ? "Pagamento em dia registrado!" : "Pagamento atrasado registrado!",
+        description: `${item.clienteNome} foi marcado como pago.`,
       });
-
-      return;
+    } catch (error) {
+      toast({ title: "Erro ao atualizar pagamento", variant: "destructive" });
     }
-
-    // ==========================
-    // REGISTRAR PAGAMENTO
-    // ==========================
-
-    const vencimentoDate = new Date(item.dataVencimento + "T00:00:00");
-    const pagamentoDate = new Date(hojeStr + "T00:00:00");
-
-    const emDia = pagamentoDate <= vencimentoDate;
-
-    const novoPagamento = {
-      id: `${item.id}-${item.dataVencimento}-${Date.now()}`,
-      dataVencimento: item.dataVencimento,
-      dataPagamento: hojeStr,
-      emDia,
-      meioPagamento: item.meioPagamento || "Pix",
-    };
-
-    const historicoAtualizado = [...historico, novoPagamento];
-
-     const novoVencimento = adicionarMes(item.dataVencimento);
-
-    await updateFinanceiro(item.id, {
-      historicoPagamentos: historicoAtualizado,
-      status: "Pago",
-      dataVencimento: novoVencimento,
-    });
-
-    await excluirNotificacoesItem(item.id, "pagamento");
-
-    await refreshFinanceiros();
-
-    toast({
-      title: emDia
-        ? "Pagamento em dia registrado!"
-        : "Pagamento atrasado registrado!",
-      description: `${item.clienteNome} foi marcado como pago.`,
-    });
-
-  } catch (error) {
-    toast({
-      title: "Erro ao atualizar pagamento",
-      variant: "destructive",
-    });
-  }
-};
+  };
 
   const getToggleTitle = (item: Financeiro) => {
     if (item.status === "Pago") return "Marcar como pendente";
@@ -259,490 +186,301 @@ const handleTogglePagamento = async (item: Financeiro) => {
   const handleEdit = (item: Financeiro) => {
     setEditingItem(item);
     setFormData({
-      clienteId: item.clienteId,
-      dataVencimento: item.dataVencimento,
-      valorMensalidade: String(item.valorMensalidade),
-      status: item.status,
-      meioPagamento: item.meioPagamento,
-      observacoes: item.observacoes || "", 
-      valorServico: item.valorServico || "",
-      servicoId:item.servicoId || null,
+      clienteId: item.clienteId, dataVencimento: item.dataVencimento, valorMensalidade: String(item.valorMensalidade),
+      status: item.status, meioPagamento: item.meioPagamento, observacoes: item.observacoes || "",
+      valorServico: Number(item.valorServico) || 0, servicoId: item.servicoId || null,
     });
     setIsDialogOpen(true);
   };
 
   const handleDelete = async (id: string, clientName: string, serviceId?: string) => {
-    await showConfirmation(
-      "Excluir financeiro?",
-      "Esta ação não pode ser desfeita.",
-      async () => {
-        await removeNotificationItem(user.uid, clientName, "pagamento");
-        await removeNotificationItem(user.uid, clientName, "servico");
-        await deleteFinanceiro(id);
-        if (serviceId) await deleteServico(serviceId);
-        toast({ title: "Financeiro excluído com sucesso!" });
-        // Aguarda um pequeno delay para garantir que o Firestore atualize
-        setTimeout(() => {
-          fetchNotifications();
-        }, 300);
-        refreshFinanceiros();
-      }
-    );
+    await showConfirmation("Excluir financeiro?", "Esta ação não pode ser desfeita.", async () => {
+      await removeNotificationItem(user.uid, clientName, "pagamento");
+      await removeNotificationItem(user.uid, clientName, "servico");
+      await deleteFinanceiro(id);
+      if (serviceId) await deleteServico(serviceId);
+      toast({ title: "Financeiro excluído com sucesso!" });
+      setTimeout(() => fetchNotifications(), 300);
+      refreshFinanceiros();
+    });
   };
 
-const handleDeleteHistorico = async (financeiroItem: Financeiro, historicoId: string) => {
-    // Encontra o pagamento mais recente
+  const handleDeleteHistorico = async (financeiroItem: Financeiro, historicoId: string) => {
     const pagamentoMaisRecente = (financeiroItem.historicoPagamentos || []).reduce((ultimo, atual) => {
-      const dataUltimo = new Date(ultimo.dataVencimento);
-      const dataAtual = new Date(atual.dataVencimento);
+      const dataUltimo = new Date(ultimo.dataVencimento); const dataAtual = new Date(atual.dataVencimento);
       return dataAtual > dataUltimo ? atual : ultimo;
     });
-    
-    // Só permite deletar o pagamento mais recente
+
     if (historicoId !== pagamentoMaisRecente.id) {
-      toast({ 
-        title: "Não é possível apagar este pagamento", 
-        description: "Você deve apagar os pagamentos mais recentes primeiro.",
-        variant: "destructive" 
-      });
+      toast({ title: "Não é possível apagar este pagamento", description: "Você deve apagar os pagamentos mais recentes primeiro.", variant: "destructive" });
       return;
     }
-    
-    const historicoAtualizado = (financeiroItem.historicoPagamentos || []).filter(
-      h => h.id !== historicoId
-    );
-    
-    // Pega a data de vencimento do pagamento que está sendo apagado
+
+    const historicoAtualizado = (financeiroItem.historicoPagamentos || []).filter(h => h.id !== historicoId);
     const pagamentoApagado = financeiroItem.historicoPagamentos?.find(h => h.id === historicoId);
     const dataVencimentoAnterior = pagamentoApagado?.dataVencimento || financeiroItem.dataVencimento;
 
     const statusAjustado = calcularStatusFinanceiro({
-      status: "Pendente",
-      dataPagamento: null,
-      dataVencimento: dataVencimentoAnterior,
-      historicoPagamentos: historicoAtualizado,
+      status: "Pendente", dataPagamento: null, dataVencimento: dataVencimentoAnterior, historicoPagamentos: historicoAtualizado,
     });
 
     try {
-      await updateFinanceiro(financeiroItem.id, {
-        historicoPagamentos: historicoAtualizado,
-        dataVencimento: dataVencimentoAnterior, // Volta para a data de vencimento do pagamento apagado
-        status: statusAjustado,
-      });
-      
+      await updateFinanceiro(financeiroItem.id, { historicoPagamentos: historicoAtualizado, dataVencimento: dataVencimentoAnterior, status: statusAjustado });
       await refreshFinanceiros();
-      
-      toast({
-        title: "Pagamento removido do histórico.",
-        description: `Data de vencimento voltou para ${formatarDataBR(dataVencimentoAnterior)}.`,
-      });
-      
-      // Fechar o dialog após deletar
-      setHistoricoDialogOpen(false);
-      setSelectedItemHistorico(null);
+      toast({ title: "Pagamento removido do histórico.", description: `Data de vencimento voltou para ${formatarDataBR(dataVencimentoAnterior)}.` });
+      setHistoricoDialogOpen(false); setSelectedItemHistorico(null);
     } catch (error) {
       toast({ title: "Erro ao remover do histórico", variant: "destructive" });
     }
   };
 
- const handleEditHistorico = async (
-    financeiroItem: Financeiro,
-    historicoId: string,
-    novaData: string,
-    novoMeio: "Pix" | "Boleto"
-  ) => {
+  const handleEditHistorico = async (financeiroItem: Financeiro, historicoId: string, novaData: string, novoMeio: "Pix" | "Boleto") => {
     const historicoAtualizado = (financeiroItem.historicoPagamentos || []).map(h => {
       if (h.id === historicoId) {
-        const vencimento = new Date(h.dataVencimento + "T00:00:00");
-        const dataPagamento = new Date(novaData + "T00:00:00");
-        vencimento.setHours(0, 0, 0, 0);
-        dataPagamento.setHours(0, 0, 0, 0);
-        const emDia = dataPagamento <= vencimento;
-        
-        return {
-          ...h,
-          dataPagamento: novaData,
-          meioPagamento: novoMeio,
-          emDia,
-        };
+        const vencimento = new Date(h.dataVencimento + "T00:00:00"); const dataPagamento = new Date(novaData + "T00:00:00");
+        vencimento.setHours(0, 0, 0, 0); dataPagamento.setHours(0, 0, 0, 0);
+        return { ...h, dataPagamento: novaData, meioPagamento: novoMeio, emDia: dataPagamento <= vencimento };
       }
       return h;
     });
 
     try {
-      await updateFinanceiro(financeiroItem.id, {
-        historicoPagamentos: historicoAtualizado,
-      });
-      
+      await updateFinanceiro(financeiroItem.id, { historicoPagamentos: historicoAtualizado });
       await refreshFinanceiros();
-      
-      toast({
-        title: "Histórico atualizado.",
-      });
-      
-      // Atualizar o item selecionado
+      toast({ title: "Histórico atualizado." });
       const financeiroAtualizado = financeirosRaw.find(f => f.id === financeiroItem.id);
-      if (financeiroAtualizado) {
-        setSelectedItemHistorico(financeiroAtualizado);
-      }
+      if (financeiroAtualizado) setSelectedItemHistorico(financeiroAtualizado);
     } catch (error) {
       toast({ title: "Erro ao atualizar histórico", variant: "destructive" });
     }
   };
 
 const handleSubmit = async (e: React.FormEvent) => {
-  e.preventDefault();
+    e.preventDefault();
+    const cliente = clientes.find((c) => c.id === formData.clienteId);
+    if (!cliente) return;
 
-  const cliente = clientes.find((c) => c.id === formData.clienteId);
+    try {
+      const hoje = new Date();
+      const vencimento = ajustarDataLocal(formData.dataVencimento);
+      const mesmoMes = hoje.getMonth() === vencimento.getMonth() && hoje.getFullYear() === vencimento.getFullYear();
+      let statusValid: Financeiro["status"] = formData.status === "Pago" ? "Pago" : mesmoMes ? "Pendente" : vencimento < hoje ? "Vencido" : "Pendente";
 
-  if (!cliente) {
-    toast({ title: "Cliente não encontrado!", variant: "destructive" });
-    return;
-  }
+      let currentServicoId = formData.servicoId;
 
-  try {
-    const hoje = new Date();
-    const vencimento = new Date(formData.dataVencimento);
-
-    const mesmoMes =
-      hoje.getFullYear() === vencimento.getFullYear() &&
-      hoje.getMonth() === vencimento.getMonth();
-
-    let statusValid: Financeiro["status"];
-
-    if (formData.status === "Pago") {
-      statusValid = "Pago";
-    } else if (mesmoMes) {
-      statusValid = "Pendente"; // A RECEBER
-    } else if (vencimento < hoje) {
-      statusValid = "Vencido";
-    } else {
-      statusValid = "Pendente";
-    }
-
-    if (editingItem) {
-      await updateFinanceiro(editingItem.id, {
-        ...formData,
-        status: statusValid,
-        valorMensalidade: Number(formData.valorMensalidade),
-      });
-
-      toast({ title: "Financeiro atualizado com sucesso!" });
-    } else {
-      let servicoId = formData.servicoId;
-
-      if (Number(formData.valorServico) > 0 && !formData.servicoId) {
-        const novoServicoId = await createServico({
+      // Só cria serviço se houver valor e não houver ID vinculado
+      if (!currentServicoId && Number(formData.valorServico) > 0) {
+        currentServicoId = await createServico({
           clienteId: formData.clienteId,
           clienteCNPJ: cliente.cnpj,
           clienteNome: cliente.nome,
-          responsavel: cliente.responsavel,
-          valorMensalidade: Number(formData.valorServico),
+          responsavel: cliente.responsavel || "",
+          descricao: "Mensalidade gerada automaticamente",
           dataVencimento: formData.dataVencimento,
+          valorMensalidade: Number(formData.valorServico), // Enviando como número
           status: statusValid,
-          observacoes: formData.observacoes || "",
           meioPagamento: formData.meioPagamento,
-          ativo: true,
-          descricao: ""
+          observacoes: formData.observacoes || "",
+          ativo: true
         });
-
-        servicoId = novoServicoId;
       }
 
-      await createFinanceiro({
-        ...formData,
-        status: statusValid,
+      // Objeto de limpeza para evitar campos undefined
+      const payload = {
+        clienteId: formData.clienteId,
         clienteNome: cliente.nome,
         clienteCNPJ: cliente.cnpj,
+        dataVencimento: formData.dataVencimento,
         valorMensalidade: Number(formData.valorMensalidade),
-        ativo: true,
-        servicoId: servicoId,
-      });
+        valorServico: Number(formData.valorServico), // Forçando Number aqui
+        servicoId: currentServicoId || null,
+        status: statusValid,
+        meioPagamento: formData.meioPagamento,
+        observacoes: formData.observacoes || "",
+        updatedAt: new Date().toISOString(),
+        ativo: true
+      };
 
-      toast({ title: "Financeiro adicionado com sucesso!" });
+      if (editingItem) {
+        await updateFinanceiro(editingItem.id, payload);
+        toast({ title: "Financeiro atualizado!" });
+      } else {
+        // Para criação, o hasValidTimestamps exige createdAt
+        const newPayload = {
+          ...payload,
+          createdAt: new Date().toISOString()
+        };
+        await createFinanceiro(newPayload);
+        toast({ title: "Financeiro criado!" });
+      }
+
+      resetForm();
+      setIsDialogOpen(false);
+      refreshFinanceiros();
+    } catch (error) {
+      console.error("Erro no Firebase:", error);
+      toast({ title: "Erro de permissão ou validação", variant: "destructive" });
     }
-
-    resetForm();
-    setIsDialogOpen(false);
-  } catch (error) {
-    toast({ title: "Erro ao salvar financeiro", variant: "destructive" });
-  }
 };
 
- // =========================
-// Helpers
-// =========================
-const parseDate = (date: string) => {
-  if (!date) return null;
-  const d = new Date(date + "T00:00:00");
-  d.setHours(0, 0, 0, 0);
-  return d;
-};
+  const parseDate = (date: string) => {
+    if (!date) return null;
+    const d = new Date(date + "T00:00:00"); d.setHours(0, 0, 0, 0); return d;
+  };
 
-  // =========================
-  // Filtros locais
-  // =========================
   const filteredItems = useMemo(() => {
     return financeirosRaw.filter((item) => {
       const cliente = clientes.find((c) => c.id === item.clienteId);
-      const matchesSearch =
-        item.clienteNome?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        item.clienteCNPJ?.includes(searchTerm);
-      const matchesResponsavel =
-        searchResponsavel === "todos" ||
-        (cliente && cliente.responsavel === searchResponsavel);
+      const matchesSearch = item.clienteNome?.toLowerCase().includes(searchTerm.toLowerCase()) || item.clienteCNPJ?.includes(searchTerm);
+      const matchesResponsavel = searchResponsavel === "todos" || (cliente && cliente.responsavel === searchResponsavel);
       let matchesData = true;
       if (filtroDataInicio && filtroDataFim) {
-        const inicio = new Date(filtroDataInicio + "T00:00:00");
-        const fim = new Date(filtroDataFim + "T00:00:00");
+        const inicio = new Date(filtroDataInicio + "T00:00:00"); const fim = new Date(filtroDataFim + "T23:59:59");
         if (item.historicoPagamentos && item.historicoPagamentos.length > 0) {
-          // Se tem histórico, filtra por dataPagamento
           matchesData = item.historicoPagamentos.some((p) => {
             if (!p.dataPagamento) return false;
-            const dataPag = new Date(p.dataPagamento + "T00:00:00");
-            return dataPag >= inicio && dataPag <= fim;
+            const dataPag = new Date(p.dataPagamento + "T00:00:00"); return dataPag >= inicio && dataPag <= fim;
           });
         } else {
-          // Se não tem histórico, filtra por dataVencimento
-          const dataVenc = new Date(item.dataVencimento + "T00:00:00");
-          matchesData = dataVenc >= inicio && dataVenc <= fim;
+          const dataVenc = new Date(item.dataVencimento + "T00:00:00"); matchesData = dataVenc >= inicio && dataVenc <= fim;
         }
       }
-      const matchesStatus =
-        filtroStatus === "todos" || item.status === filtroStatus;
-      return (
-        matchesSearch &&
-        matchesResponsavel &&
-        matchesData &&
-        matchesStatus
-      );
+      const matchesStatus = filtroStatus === "todos" || item.status === filtroStatus;
+      return matchesSearch && matchesResponsavel && matchesData && matchesStatus;
     });
-  }, [
-    financeirosRaw,
-    clientes,
-    searchTerm,
-    searchResponsavel,
-    filtroDataInicio,
-    filtroDataFim,
-    filtroStatus,
-  ]);
+  }, [financeirosRaw, clientes, searchTerm, searchResponsavel, filtroDataInicio, filtroDataFim, filtroStatus]);
 
-  // =========================
-  // Normalização e Métricas
-  // =========================
-  // Definir período customizado se filtro de datas estiver preenchido
-  const periodoCustomizado =
-    filtroDataInicio && filtroDataFim
-      ? {
-          inicio: new Date(filtroDataInicio + "T00:00:00"),
-          fim: new Date(filtroDataFim + "T00:00:00"),
+  const responsaveisDisponiveis = useMemo(() => Array.from(new Set(clientes.map((c) => c.responsavel))).sort(), [clientes]);
+  const clientesComFinanceiro = useMemo(() => new Set(filteredItems.map((f) => f.clienteId)), [filteredItems]);
+  const clientesDisponiveisFormulario = useMemo(() => {
+    let lista = !editingItem ? clientes.filter((c) => !clientesComFinanceiro.has(c.id)) : clientes.filter((c) => !clientesComFinanceiro.has(c.id) || c.id === editingItem.clienteId);
+    return [...lista].sort((a, b) => a.nome.trim().localeCompare(b.nome.trim(), "pt-BR", { sensitivity: "base" }));
+  }, [clientes, clientesComFinanceiro, editingItem]);
+
+  const itemsOrdenados = useMemo(() => {
+    const items = [...filteredItems];
+    items.sort((a, b) => {
+      let comp = 0;
+      switch (ordenacao.campo) {
+        case "clienteNome": comp = a.clienteNome.localeCompare(b.clienteNome, "pt-BR"); break;
+        case "dataVencimento": comp = parseDate(a.dataVencimento)!.getTime() - parseDate(b.dataVencimento)!.getTime(); break;
+        case "valorMensalidade": comp = a.valorMensalidade - b.valorMensalidade; break;
+        case "status": comp = a.status.localeCompare(b.status); break;
+      }
+      return ordenacao.direcao === "asc" ? comp : -comp;
+    });
+    return items;
+  }, [filteredItems, ordenacao]);
+
+  const { currentPage, totalPages, paginatedItems: pagination, nextPage, previousPage, goToPage, startIndex, endIndex, totalItems, itemsPerPage, setItemsPerPage } = usePagination(itemsOrdenados, 10);
+
+  // ==========================================
+  // LÓGICA DE TOTAIS (MANTENDO A REGRA CORRETA)
+  // ==========================================
+  const totaisCalculados = useMemo(() => {
+    let financeiroRecebido = 0;
+    let financeiroAReceber = 0;
+    let financeiroVencido = 0;
+    let financeiroAtraso = 0;
+
+    let servicoRecebido = 0;
+    let servicoAReceber = 0;
+    let servicoVencido = 0;
+    let servicoAtraso = 0;
+
+    const hoje = new Date();
+    hoje.setHours(0, 0, 0, 0);
+
+    // Se o usuário aplicar filtro, usa a data. Senão, usa o mês atual.
+    const inicio = filtroDataInicio ? ajustarDataLocal(filtroDataInicio) : new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+    inicio.setHours(0, 0, 0, 0);
+    
+    const fim = filtroDataFim ? ajustarDataLocal(filtroDataFim) : new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0);
+    fim.setHours(23, 59, 59, 999);
+
+    filteredItems.forEach((item) => {
+      const valorFin = Number(item.valorMensalidade) || 0;
+      const valorServ = Number(item.valorServico) || 0;
+
+      let pagouNoPeriodo = false;
+
+      // 1. Processa Entradas Reais (Histórico e Fallback)
+      if (item.historicoPagamentos && item.historicoPagamentos.length > 0) {
+        item.historicoPagamentos.forEach((hp) => {
+          if (!hp.dataPagamento) return;
+          const dPag = ajustarDataLocal(hp.dataPagamento); dPag.setHours(0,0,0,0);
+          const dVenc = ajustarDataLocal(hp.dataVencimento || item.dataVencimento); dVenc.setHours(0,0,0,0);
+
+          if (dPag >= inicio && dPag <= fim) {
+            pagouNoPeriodo = true;
+            const mesmoMes = dPag.getMonth() === dVenc.getMonth() && dPag.getFullYear() === dVenc.getFullYear();
+            
+            if (!mesmoMes && dPag > dVenc) {
+              financeiroAtraso += valorFin;
+              servicoAtraso += valorServ;
+            } else {
+              financeiroRecebido += valorFin;
+              servicoRecebido += valorServ;
+            }
+          }
+        });
+      } else if (item.status === "Pago") {
+        const dPag = ajustarDataLocal(item.dataPagamento || item.dataVencimento); dPag.setHours(0,0,0,0);
+        const dVenc = ajustarDataLocal(item.dataVencimento); dVenc.setHours(0,0,0,0);
+        
+        if (dPag >= inicio && dPag <= fim) {
+          pagouNoPeriodo = true;
+          const mesmoMes = dPag.getMonth() === dVenc.getMonth() && dPag.getFullYear() === dVenc.getFullYear();
+          if (!mesmoMes && dPag > dVenc) {
+            financeiroAtraso += valorFin; servicoAtraso += valorServ;
+          } else {
+            financeiroRecebido += valorFin; servicoRecebido += valorServ;
+          }
         }
-      : undefined;
+      }
 
+      // 2. Processa os Valores Em Aberto (A Receber e Vencido)
+      const vencimentoBase = ajustarDataLocal(item.dataVencimento);
+      vencimentoBase.setHours(0, 0, 0, 0);
 
-// =========================
-// Responsáveis
-// =========================
-const responsaveisDisponiveis = useMemo(
-  () =>
-    Array.from(
-      new Set(clientes.map((c) => c.responsavel))
-    ).sort(),
-  [clientes]
-);
-
-// =========================
-// Clientes com financeiro
-// =========================
-const clientesComFinanceiro = useMemo(
-  () => new Set(filteredItems.map((f) => f.clienteId)),
-  [filteredItems]
-);
-
-// =========================
-// Clientes disponíveis formulário
-// =========================
-const clientesDisponiveisFormulario = useMemo(() => {
-  let lista = clientes;
-  if (!editingItem) {
-    lista = clientes.filter((c) => !clientesComFinanceiro.has(c.id));
-  } else {
-    lista = clientes.filter(
-      (c) =>
-        !clientesComFinanceiro.has(c.id) ||
-        c.id === editingItem.clienteId
-    );
-  }
-  return [...lista].sort((a, b) =>
-    a.nome.trim().localeCompare(b.nome.trim(), "pt-BR", {
-      sensitivity: "base",
-    })
-  );
-}, [clientes, clientesComFinanceiro, editingItem]);
-
-// =========================
-// Ordenação
-// =========================
-const itemsOrdenados = useMemo(() => {
-  const items = [...filteredItems];
-  items.sort((a, b) => {
-    let comp = 0;
-    switch (ordenacao.campo) {
-      case "clienteNome":
-        comp = a.clienteNome.localeCompare(b.clienteNome, "pt-BR");
-        break;
-      case "dataVencimento":
-        comp =
-          parseDate(a.dataVencimento)!.getTime() -
-          parseDate(b.dataVencimento)!.getTime();
-        break;
-      case "valorMensalidade":
-        comp = a.valorMensalidade - b.valorMensalidade;
-        break;
-      case "status":
-        comp = a.status.localeCompare(b.status);
-        break;
-    }
-    return ordenacao.direcao === "asc" ? comp : -comp;
-  });
-  return items;
-}, [filteredItems, ordenacao]);
-
-// =========================
-// Paginação
-// =========================
-const {
-  currentPage,
-  totalPages,
-  paginatedItems: pagination,
-  nextPage,
-  previousPage,
-  goToPage,
-  startIndex,
-  endIndex,
-  totalItems,
-  itemsPerPage,
-  setItemsPerPage,
-} = usePagination(itemsOrdenados, 10);
-
-const totais = useMemo(() => {
-  let financeiroRecebido = 0;
-  let financeiroAReceber = 0;
-  let financeiroVencido = 0;
-  let financeiroAtraso = 0;
-
-  let servicoRecebido = 0;
-  let servicoAReceber = 0;
-  let servicoVencido = 0;
-  let servicoAtraso = 0;
-
-  const hoje = new Date();
-  hoje.setHours(0, 0, 0, 0);
-
-  let inicio: Date;
-  let fim: Date;
-
-  if (filtroDataInicio && filtroDataFim) {
-    inicio = new Date(filtroDataInicio + "T00:00:00");
-    fim = new Date(filtroDataFim + "T23:59:59");
-  } else {
-    inicio = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
-    fim = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0, 23, 59, 59);
-  }
-
-  filteredItems.forEach((item) => {
-    const valorFin = item.valorMensalidade || 0;
-
-    const servico = item.servicoId
-      ? servicos.find((s) => String(s.id) === String(item.servicoId))
-      : null;
-
-    const valorServ = servico?.valorMensalidade || 0;
-
-    const historicos = item.historicoPagamentos ?? [];
-
-    let recebeuNoMes = false;
-    let recebeuAtrasado = false;
-
-    historicos.forEach((h) => {
-      if (!h.dataPagamento) return;
-
-      const dataPagamento = new Date(h.dataPagamento + "T00:00:00");
-      const dataVencimento = new Date(h.dataVencimento + "T00:00:00");
-
-      const pagamentoNoPeriodo =
-        dataPagamento >= inicio && dataPagamento <= fim;
-
-      if (!pagamentoNoPeriodo) return;
-
-      const vencimentoNoPeriodo =
-        dataVencimento >= inicio && dataVencimento <= fim;
-
-      if (vencimentoNoPeriodo) {
-        recebeuNoMes = true;
-      } else if (dataVencimento < inicio) {
-        recebeuAtrasado = true;
+      // Só conta como dívida se não foi pago no período E o status ainda acusa pendência/vencido.
+      if (!pagouNoPeriodo && item.status !== "Pago") {
+        // Se a data cai na janela filtrada, é A Receber
+        if (vencimentoBase >= inicio && vencimentoBase <= fim) {
+          financeiroAReceber += valorFin;
+          servicoAReceber += valorServ;
+        }
+        
+        // Se a data já passou de hoje, é Vencido
+        if (vencimentoBase < hoje) {
+          financeiroVencido += valorFin;
+          servicoVencido += valorServ;
+        }
       }
     });
 
-    // ================= RECEBIDO =================
-    if (recebeuNoMes) {
-      financeiroRecebido += valorFin;
-      servicoRecebido += valorServ;
-    }
+    return {
+      financeiro: {
+        recebido: financeiroRecebido,
+        aReceber: financeiroAReceber,
+        vencido: financeiroVencido,
+        atraso: financeiroAtraso,
+      },
+      servico: {
+        recebido: servicoRecebido,
+        aReceber: servicoAReceber,
+        vencido: servicoVencido,
+        atraso: servicoAtraso,
+      },
+      total: {
+        recebido: financeiroRecebido + servicoRecebido,
+        aReceber: financeiroAReceber + servicoAReceber,
+        vencido: financeiroVencido + servicoVencido,
+        atraso: financeiroAtraso + servicoAtraso,
+      },
+    };
+  }, [filteredItems, filtroDataInicio, filtroDataFim]);
 
-    // ================= ATRASADO =================
-    if (recebeuAtrasado) {
-      financeiroAtraso += valorFin;
-      servicoAtraso += valorServ;
-    }
-
-    // ================= VENCIMENTO BASE =================
-    const vencimentoBase = new Date(
-      (item.dataVencimento || "") + "T00:00:00"
-    );
-
-    // ================= A RECEBER =================
-    if (
-      !recebeuNoMes &&
-      vencimentoBase >= inicio &&
-      vencimentoBase <= fim
-    ) {
-      financeiroAReceber += valorFin;
-      servicoAReceber += valorServ;
-    }
-
-    // ================= VENCIDO =================
-    if (
-      !recebeuNoMes &&
-      vencimentoBase < inicio
-    ) {
-      financeiroVencido += valorFin;
-      servicoVencido += valorServ;
-    }
-  });
-
-  return {
-    financeiro: {
-      recebido: financeiroRecebido,
-      aReceber: financeiroAReceber,
-      vencido: financeiroVencido,
-      atraso: financeiroAtraso,
-    },
-    servico: {
-      recebido: servicoRecebido,
-      aReceber: servicoAReceber,
-      vencido: servicoVencido,
-      atraso: servicoAtraso,
-    },
-    total: {
-      recebido: financeiroRecebido + servicoRecebido,
-      aReceber: financeiroAReceber + servicoAReceber,
-      vencido: financeiroVencido + servicoVencido,
-      atraso: financeiroAtraso + servicoAtraso,
-    },
-  };
-}, [filteredItems, filtroDataInicio, filtroDataFim, servicos]);
 
   return (
     <Layout>
@@ -774,7 +512,7 @@ const totais = useMemo(() => {
           />
           </div>
         </div>
-         
+          
         <FiltersBar
           searchTerm={searchTerm}
           onSearchTermChange={setSearchTerm}
@@ -837,73 +575,37 @@ const totais = useMemo(() => {
         />
 
         <div className="mb-4 grid gap-4 md:grid-cols-2">
-          {/* Card de Recebidas */}
+          
+          {/* Banner Amarelo (Recebidas / A Receber) */}
           <div className="rounded-lg bg-primary p-4 text-primary-foreground">
-           <p className="text-lg font-semibold">
-                Recebidas: R${" "}
-                {totais.total.recebido.toLocaleString("pt-BR", {
-                  minimumFractionDigits: 2,
-                })}
-              </p>
-
-              <p className="text-sm">
-                A receber: R${" "}
-                {totais.total.aReceber.toLocaleString("pt-BR", {
-                  minimumFractionDigits: 2,
-                })}
-              </p>
-
-            {/* Detalhamento por tipo */}
+            <div className="text-lg font-semibold mb-1">
+              Recebidas: R$ {totaisCalculados.total.recebido.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+            </div>
+            <div className="text-sm mb-4">
+              A receber: R$ {totaisCalculados.total.aReceber.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+            </div>
+                        
             <div className="mt-3 pt-3 border-t border-primary-foreground/20 text-xs space-y-1">
-              <p>
-                <strong>Financeiros:</strong> Recebidas: R${totais.financeiro.recebido.toLocaleString("pt-BR", { minimumFractionDigits: 2 })} | A receber: R${totais.financeiro.aReceber.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-              </p>
-              <p>
-                <strong>Serviços:</strong> Recebidas: R${totais.servico.recebido.toLocaleString("pt-BR", { minimumFractionDigits: 2 })} | A receber: R${totais.servico.aReceber.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-              </p>
+              <p>Financeiros: Recebidas: R$ {totaisCalculados.financeiro.recebido.toLocaleString("pt-BR", { minimumFractionDigits: 2 })} | A receber: R$ {totaisCalculados.financeiro.aReceber.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</p>
+              <p>Serviços: Recebidas: R$ {totaisCalculados.servico.recebido.toLocaleString("pt-BR", { minimumFractionDigits: 2 })} | A receber: R$ {totaisCalculados.servico.aReceber.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</p>
             </div>
           </div>
 
-          {/* Card de Vencidos e Atrasados */}
+          {/* Banner Vermelho (Vencidos / Pagos em Atraso) */}
           <div className="rounded-lg bg-destructive p-4 text-destructive-foreground">
-           <p className="text-lg font-semibold">
-              Vencidos: R${" "}
-              {totais.total.vencido.toLocaleString("pt-BR", {
-                minimumFractionDigits: 2,
-              })}
-            </p>
-
-            <p className="text-sm">
-              Pagos em atraso: R${" "}
-              {totais.total.atraso.toLocaleString("pt-BR", {
-                minimumFractionDigits: 2,
-              })}
-            </p>
-
-            {/* Detalhamento por tipo */}
+            <div className="text-lg font-semibold mb-1">
+              Vencidos: R$ {totaisCalculados.servico.recebido.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+            </div>
+            <div className="text-sm mb-4">
+              Pagos em atraso: R$ {totaisCalculados.total.atraso.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+            </div>
+                        
             <div className="mt-3 pt-3 border-t border-destructive-foreground/20 text-xs space-y-1">
-              <p>
-                Financeiros: R${" "}
-                {totais.financeiro.vencido.toLocaleString("pt-BR", {
-                  minimumFractionDigits: 2,
-                })}
-                {" | Pagos em atraso: R$"}
-                {totais.financeiro.atraso.toLocaleString("pt-BR", {
-                  minimumFractionDigits: 2,
-                })}
-              </p>
-              <p>
-                Serviços: R${" "}
-                {totais.servico.vencido.toLocaleString("pt-BR", {
-                  minimumFractionDigits: 2,
-                })}
-                {" | Pagos em atraso: R$"}
-                {totais.servico.atraso.toLocaleString("pt-BR", {
-                  minimumFractionDigits: 2,
-                })}
-              </p>
+              <p>Financeiros: R$ {totaisCalculados.financeiro.vencido.toLocaleString("pt-BR", { minimumFractionDigits: 2 })} | Pagos em atraso: R$ {totaisCalculados.financeiro.atraso.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</p>
+              <p>Serviços: R$ {totaisCalculados.servico.vencido.toLocaleString("pt-BR", { minimumFractionDigits: 2 })} | Pagos em atraso: R$ {totaisCalculados.servico.atraso.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</p>
             </div>
           </div>
+
         </div>
 
         <div className="rounded-md border">

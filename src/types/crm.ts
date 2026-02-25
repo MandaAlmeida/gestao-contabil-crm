@@ -51,7 +51,7 @@ export interface Financeiro {
   meioPagamento?: "Pix" | "Boleto";
   servicoId?: string | null; // Link para serviço se for cobrança de serviço
   observacoes: string;
-  valorServico?: string | null;
+  valorServico?: number;
   ativo: boolean;
   createdAt: string;
   updatedAt: string;
