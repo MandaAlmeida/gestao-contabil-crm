@@ -62,7 +62,11 @@ export default function Calendario() {
 
   const tarefasDoDia = useMemo(() => {
     const dateStr = format(selectedDate, "yyyy-MM-dd");
-    return tarefas.filter((t) => t.data.startsWith(dateStr));
+    return tarefas.filter((t) => {
+      // Extrai apenas o dia da tarefa, ignorando hora
+      const tarefaDia = t.data.slice(0, 10);
+      return tarefaDia === dateStr;
+    });
   }, [tarefas, selectedDate]);
 
   const diasComTarefas = useMemo(() => {
@@ -135,7 +139,7 @@ export default function Calendario() {
       const tarefaData: any = {
         titulo: formData.titulo,
         descricao: formData.descricao,
-        data: selectedDate.toISOString(),
+        data: format(selectedDate, "yyyy-MM-dd'T00:00:00"),
         prioridade: formData.prioridade,
         concluida: editingTarefa?.concluida || false,
         ativo: true,
@@ -217,21 +221,36 @@ export default function Calendario() {
                 locale={pt}
                 className="rounded-md border"
                 modifiers={{
-                  comTarefas: (date) => {
+                  comTarefasPendentes: (date) => {
                     const dateStr = format(date, "yyyy-MM-dd");
-                    return diasComTarefas.has(dateStr);
+                    const hojeStr = format(new Date(), "yyyy-MM-dd");
+                    const tarefasDoDia = tarefas.filter((t) => t.data.startsWith(dateStr));
+                    // Tarefas no dia atual ou futuro que ainda não foram concluídas
+                    return dateStr >= hojeStr && tarefasDoDia.length > 0 && tarefasDoDia.some((t) => !t.concluida);
+                  },
+                  comTarefasVencidas: (date) => {
+                    const dateStr = format(date, "yyyy-MM-dd");
+                    const hojeStr = format(new Date(), "yyyy-MM-dd");
+                    const tarefasDoDia = tarefas.filter((t) => t.data.startsWith(dateStr));
+                    // Dia no passado que tem tarefas e pelo menos uma não está concluída
+                    return dateStr < hojeStr && tarefasDoDia.length > 0 && tarefasDoDia.some((t) => !t.concluida);
                   },
                   comTarefasConcluidas: (date) => {
                     const dateStr = format(date, "yyyy-MM-dd");
-                    // Verifica se todas as tarefas do dia estão concluídas
                     const tarefasDoDia = tarefas.filter((t) => t.data.startsWith(dateStr));
+                    // Verifica se todas as tarefas do dia estão concluídas (e se tem pelo menos uma tarefa)
                     return tarefasDoDia.length > 0 && tarefasDoDia.every((t) => t.concluida);
                   },
                 }}
                 modifiersStyles={{
-                  comTarefas: {
+                  comTarefasPendentes: {
                     fontWeight: "bold",
                     backgroundColor: "#22c55e", // verde (tailwind green-500)
+                    color: "white",
+                  },
+                  comTarefasVencidas: {
+                    fontWeight: "bold",
+                    backgroundColor: "#ef4444", // vermelho (tailwind red-500)
                     color: "white",
                   },
                   comTarefasConcluidas: {
@@ -346,7 +365,6 @@ export default function Calendario() {
           </Card>
         </div>
 
-        {/* Alerta personalizado para exclusão de tarefa (fora do loop) */}
         {/* Modal de confirmação de exclusão */}
         {alertOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
