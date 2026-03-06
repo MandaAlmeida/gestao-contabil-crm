@@ -37,8 +37,14 @@ import { pt } from "date-fns/locale";
 import { format } from "date-fns";
 import { CustomAlert } from "@/components/CustomAlert";
 import { SelectClienteComBusca } from "@/components/SelectClienteComBusca";
+import { useRenovacao } from "@/hooks/useRenovacao";
+import { toast } from "@/hooks/use-toast";
+import { addYears, subYears, parseISO } from "date-fns";
 
 export default function Calendario() {
+// Dentro da função Calendario, logo após useClientes:
+  const { renovacoes, updateRenovacao } = useRenovacao();
+  
   const { tarefas, addTarefa, updateTarefa, deleteTarefa, toggleConcluida } = useTarefas();
   const { clientes } = useClientes();
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
@@ -194,6 +200,91 @@ export default function Calendario() {
     }
   };
 
+const handleToggleTarefa = async (tarefa: Tarefa) => {
+  const novoEstadoConcluido = !tarefa.concluida;
+
+  try {
+    // 1. Atualiza o estado da tarefa atual no banco
+    await toggleConcluida(tarefa.id, novoEstadoConcluido);
+
+    const tituloNormalizado = tarefa.titulo?.trim().toUpperCase() || "";
+    const ehRenovacao = tituloNormalizado.startsWith("RENOVAÇÃO ANUAL");
+
+    if (ehRenovacao && tarefa.clienteId) {
+      const renovacaoVinculada = renovacoes.find((r) => r.clienteId === tarefa.clienteId);
+
+      if (renovacaoVinculada) {
+        const dataTarefaAtual = parseISO(tarefa.data);
+
+        if (novoEstadoConcluido) {
+          // --- LÓGICA AO CONCLUIR (MARCAR) ---
+          const dataProximoAno = addYears(dataTarefaAtual, 1);
+          const dataFormatadaProximoAno = format(dataProximoAno, "yyyy-MM-dd'T'HH:mm:ss");
+
+          // Atualiza Renovação: Status para "Renovado" e Data para o ANO QUE VEM
+          await updateRenovacao(renovacaoVinculada.id, {
+            status: "Renovado",
+            dataRenovacao: dataFormatadaProximoAno.split('T')[0] 
+          });
+
+          // Cria a tarefa pendente para o ano seguinte
+          await addTarefa({
+            titulo: tarefa.titulo || "",
+            descricao: tarefa.descricao || "",
+            data: dataFormatadaProximoAno,
+            prioridade: tarefa.prioridade || "Média",
+            concluida: false,
+            ativo: true,
+            clienteId: tarefa.clienteId,
+            clienteNome: tarefa.clienteNome || "",
+            categoria: tarefa.categoria || "",
+            horaInicio: tarefa.horaInicio || "08:00",
+            horaFim: tarefa.horaFim || "17:00",
+            tipoCertificado: tarefa.tipoCertificado || ""
+          });
+
+          toast({ title: "Renovação concluída e agendada para o próximo ano." });
+
+        } else {
+          // --- LÓGICA AO DESMARCAR (VOLTAR ATRÁS) ---
+          
+          // CORREÇÃO: A data da renovação deve voltar para a data da tarefa que você desmarcou
+          // Se a tarefa é de 06/03/2026, a renovação volta a ser 06/03/2026
+          const dataParaRetornar = format(dataTarefaAtual, "yyyy-MM-dd");
+
+          // 1. Volta o status para "Pendente" e restaura a data correta (sem subtrair)
+          await updateRenovacao(renovacaoVinculada.id, {
+            status: "Pendente",
+            dataRenovacao: dataParaRetornar
+          });
+
+          // 2. Localiza e APAGA a tarefa futura (aquela que estava em 2027)
+          const dataFuturaBusca = format(addYears(dataTarefaAtual, 1), "yyyy-MM-dd");
+          const tarefaFutura = tarefas.find(t => 
+            t.clienteId === tarefa.clienteId && 
+            t.data.startsWith(dataFuturaBusca) &&
+            t.titulo === tarefa.titulo &&
+            !t.concluida // Garante que estamos apagando a futura pendente
+          );
+
+          if (tarefaFutura) {
+            await deleteTarefa(tarefaFutura.id);
+          }
+
+          toast({ title: "Renovação revertida para pendente." });
+        }
+      }
+    }
+  } catch (error) {
+    console.error("Erro na sincronização:", error);
+    toast({
+      title: "Erro na operação",
+      description: "Verifique os logs do console.",
+      variant: "destructive",
+    });
+  }
+};
+
   return (
     <Layout>
       <div className="p-8">
@@ -295,7 +386,7 @@ export default function Calendario() {
                       className="flex items-start gap-4 rounded-lg border p-4 hover:bg-accent transition-colors"
                     >
                       <button
-                        onClick={() => toggleConcluida(tarefa.id, !tarefa.concluida)}
+                        onClick={() => handleToggleTarefa(tarefa)}
                         className="mt-1"
                       >
                         {tarefa.concluida ? (
