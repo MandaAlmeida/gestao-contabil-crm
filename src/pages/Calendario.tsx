@@ -36,6 +36,7 @@ import { Plus, CheckCircle2, Circle, Trash2, Edit, Calendar as CalendarIcon } fr
 import { pt } from "date-fns/locale";
 import { format } from "date-fns";
 import { CustomAlert } from "@/components/CustomAlert";
+import { SelectClienteComBusca } from "@/components/SelectClienteComBusca";
 
 export default function Calendario() {
   const { tarefas, addTarefa, updateTarefa, deleteTarefa, toggleConcluida } = useTarefas();
@@ -500,26 +501,12 @@ export default function Calendario() {
 
                 <div className="grid gap-2">
                   <Label htmlFor="cliente">Cliente</Label>
-                  <Select
-                    value={formData.clienteId ? formData.clienteId : "none"}
-                    onValueChange={(value) =>
-                      setFormData({ ...formData, clienteId: value === "none" ? "" : value })
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecione um cliente (opcional)" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">Nenhum</SelectItem>
-                      {clientes
-                        .filter((c) => c.ativo)
-                        .map((cliente) => (
-                          <SelectItem key={cliente.id} value={cliente.id}>
-                            {cliente.nome}
-                          </SelectItem>
-                        ))}
-                    </SelectContent>
-                  </Select>
+                  <SelectClienteComBusca
+                    clientes={clientes.filter((c) => c.ativo)}
+                    value={formData.clienteId}
+                    onValueChange={(value) => setFormData({ ...formData, clienteId: value })}
+                    placeholder="Selecione um cliente (opcional)"
+                  />
                 </div>
               </div>
 

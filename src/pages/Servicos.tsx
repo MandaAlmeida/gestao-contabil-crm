@@ -46,6 +46,7 @@ import {
 } from "@/components/ui/pagination";
 import { useUsuarios } from "@/hooks/useUsuarios";
 import { FiltersBar } from "@/components/FiltersBar";
+import { SelectClienteComBusca } from "@/components/SelectClienteComBusca";
 
 export default function ServicosPage() {
   const { clientes } = useClientes();
@@ -387,31 +388,22 @@ const filteredItems = useMemo(() => {
               </DialogHeader>
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="clienteId">Cliente</Label>
-                  <Select
-                    value={formData.clienteId}
-                    onValueChange={(value) => {
-                      const clienteSelecionado = clientes.find(
-                        (c) => c.id === value
-                      );
-                      setFormData({
-                        ...formData,
-                        clienteId: value,
-                        responsavel: clienteSelecionado?.responsavel || "",
-                      });
-                    }}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecione um cliente" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {clientesDisponiveisFormulario.map((cliente) => (
-                        <SelectItem key={cliente.id} value={cliente.id}>
-                          {cliente.nome} - {cliente.cnpj}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                    <Label htmlFor="clienteId">Cliente</Label>
+                    <SelectClienteComBusca
+                      clientes={clientesDisponiveisFormulario}
+                      value={formData.clienteId}
+                      onValueChange={(value) => {
+                        const clienteSelecionado = clientes.find(
+                          (c) => c.id === value
+                        );
+                        setFormData({
+                          ...formData,
+                          clienteId: value,
+                          responsavel: clienteSelecionado?.responsavel || "",
+                        });
+                      }}
+                      placeholder="Selecione um cliente"
+                    />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="responsavel">Responsável</Label>

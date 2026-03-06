@@ -60,7 +60,6 @@ const DEFAULT_FORM: FormState = {
   recebedor: "",
 };
 
-
 const adicionarMes = (dataString: string): string => {
   if (!dataString) {
     const hoje = new Date();
@@ -119,37 +118,41 @@ export default function DespesasPage() {
   const { showConfirmation, ConfirmationDialogComponent } = useConfirmationDialog();
 
   // Função auxiliar para determinar o status real da despesa baseado no histórico
-const obterStatusDespesa = (
-  despesa: Despesa
-): "pago" | "vencida" | "pendente" => {
+  const obterStatusDespesa = (
+    despesa: Despesa
+  ): "pago" | "vencida" | "pendente" => {
 
-  const historico = despesa.historicoPagamentos || [];
+    const historico = despesa.historicoPagamentos || [];
 
-  const dataAtual = new Date();
-  const mesAtual = dataAtual.getMonth();
-  const anoAtual = dataAtual.getFullYear();
+    const dataAtual = new Date();
+    const mesAtual = dataAtual.getMonth();
+    const anoAtual = dataAtual.getFullYear();
 
-  const pagamentoNoMes = historico.some((p) => {
-    const dataHist = new Date(p.dataVencimento + "T00:00:00");
+    const pagamentoNoMes = historico.some((p) => {
+      if (!p.dataVencimento) return false;
+      const dataHist = new Date(p.dataVencimento + "T00:00:00");
 
-    return (
-      dataHist.getMonth() === mesAtual &&
-      dataHist.getFullYear() === anoAtual
-    );
-  });
+      return (
+        dataHist.getMonth() === mesAtual &&
+        dataHist.getFullYear() === anoAtual
+      );
+    });
 
-  if (pagamentoNoMes) {
-    return "pago";
-  }
+    if (pagamentoNoMes || despesa.pago) {
+      return "pago";
+    }
 
-  const hoje = new Date();
-  hoje.setHours(0, 0, 0, 0);
-  dataAtual.setHours(0, 0, 0, 0);
+    const hoje = new Date();
+    hoje.setHours(0, 0, 0, 0);
+    
+    // Verifica a data da despesa
+    const despesaData = new Date(despesa.data + "T00:00:00");
+    despesaData.setHours(0, 0, 0, 0);
 
-  if (dataAtual < hoje) return "vencida";
+    if (despesaData < hoje) return "vencida";
 
-  return "pendente";
-};
+    return "pendente";
+  };
 
   const responsaveisDisponiveis = useMemo(
     () =>
@@ -162,11 +165,15 @@ const obterStatusDespesa = (
   const despesasFiltradas = useMemo(() => {
     return despesas.filter((despesa) => {
       // Filtro por data
-      const despesaData = new Date(despesa.data);
+      const despesaData = new Date(despesa.data + "T00:00:00");
+      despesaData.setHours(0,0,0,0);
+      
       const matchesDataInicio =
-        !filtroDataInicio || despesaData >= new Date(filtroDataInicio);
+        !filtroDataInicio || despesaData >= new Date(filtroDataInicio + "T00:00:00");
+      
+      const dataFimLimit = filtroDataFim ? new Date(filtroDataFim + "T23:59:59") : null;
       const matchesDataFim =
-        !filtroDataFim || despesaData <= new Date(filtroDataFim);
+        !dataFimLimit || despesaData <= dataFimLimit;
 
       // Obter status real baseado no histórico
       const status = obterStatusDespesa(despesa);
@@ -234,6 +241,79 @@ const obterStatusDespesa = (
     itemsPerPage,
     setItemsPerPage,
   } = usePagination(despesasOrdenadas, 10);
+
+  // ==========================================
+  // CÁLCULO DE TOTAIS SIMPLIFICADO E PRECISO
+  // ==========================================
+  const totaisCalculados = useMemo(() => {
+    let despesaPaga = 0;
+    let despesaAPagar = 0;
+    let despesaVencida = 0;
+    let despesaAtraso = 0;
+
+    despesasFiltradas.forEach((item) => {
+      // Assegura conversão correta mesmo que por acidente o DB traga string com vírgula
+      const valorStr = String(item.valor || 0).replace(",", ".");
+      const valorFin = Number(valorStr) || 0;
+
+      const status = obterStatusDespesa(item);
+
+      if (status === "pago") {
+        let emAtraso = false;
+        
+        if (item.historicoPagamentos && item.historicoPagamentos.length > 0) {
+          // Pega o pagamento mais recente no histórico
+          const ultimoPagamento = [...item.historicoPagamentos].sort(
+            (a, b) => new Date(b.dataPagamento || 0).getTime() - new Date(a.dataPagamento || 0).getTime()
+          )[0];
+          
+          if (ultimoPagamento && ultimoPagamento.dataPagamento && ultimoPagamento.dataVencimento) {
+            const dPag = new Date(ultimoPagamento.dataPagamento + "T00:00:00");
+            const dVenc = new Date(ultimoPagamento.dataVencimento + "T00:00:00");
+            dPag.setHours(0,0,0,0); dVenc.setHours(0,0,0,0);
+            
+            // REGRA: Considerar EM DIA se foi pago no mesmo mês/ano
+            const mesmoMes = dPag.getMonth() === dVenc.getMonth() && dPag.getFullYear() === dVenc.getFullYear();
+            
+            // Se pagou DEPOIS do vencimento E não foi no mesmo mês
+            if (dPag > dVenc && !mesmoMes) {
+              emAtraso = true;
+            }
+          } else if (ultimoPagamento && ultimoPagamento.emDia === false) {
+             // Fallback
+             emAtraso = true;
+          }
+        } else if ((item as any).dataPagamento) {
+          // Fallback para despesas sem histórico
+          const dPag = new Date((item as any).dataPagamento + "T00:00:00");
+          const dVenc = new Date(item.data + "T00:00:00");
+          dPag.setHours(0,0,0,0); dVenc.setHours(0,0,0,0);
+          
+          const mesmoMes = dPag.getMonth() === dVenc.getMonth() && dPag.getFullYear() === dVenc.getFullYear();
+          if (dPag > dVenc && !mesmoMes) {
+             emAtraso = true;
+          }
+        }
+
+        if (emAtraso) {
+          despesaAtraso += valorFin;
+        } else {
+          despesaPaga += valorFin;
+        }
+      } else if (status === "vencida") {
+        despesaVencida += valorFin;
+      } else if (status === "pendente") {
+        despesaAPagar += valorFin;
+      }
+    });
+
+    return {
+      pago: despesaPaga,
+      aPagar: despesaAPagar,
+      vencida: despesaVencida,
+      atraso: despesaAtraso,
+    };
+  }, [despesasFiltradas]);
 
   const resetForm = () => {
     setFormState(DEFAULT_FORM);
@@ -329,125 +409,116 @@ const obterStatusDespesa = (
     },
   };
 
-const removerMes = (data: string) => {
-  const d = new Date(data + "T00:00:00");
-  d.setMonth(d.getMonth() - 1);
+  const removerMes = (data: string) => {
+    const d = new Date(data + "T00:00:00");
+    d.setMonth(d.getMonth() - 1);
+    return d.toISOString().split("T")[0];
+  };
 
-  return d.toISOString().split("T")[0];
-};
+  const handleTogglePago = async (despesa: Despesa) => {
+    const hoje = new Date();
+    hoje.setHours(0, 0, 0, 0);
+    const hojeStr = hoje.toISOString().split("T")[0];
 
-  const adicionarMes = (data: string) => {
-  const d = new Date(data + "T00:00:00");
-  d.setMonth(d.getMonth() + 1);
-  return d.toISOString().split("T")[0];
-};
+    const historico = despesa.historicoPagamentos || [];
+    const dataItem = new Date();
 
-const handleTogglePago = async (despesa: Despesa) => {
-  const hoje = new Date();
-  hoje.setHours(0, 0, 0, 0);
-  const hojeStr = hoje.toISOString().split("T")[0];
+    try {
+      const statusAtual = obterStatusDespesa(despesa);
 
-  const historico = despesa.historicoPagamentos || [];
-  const dataItem = new Date();
+      // ==========================
+      // DESFAZER PAGAMENTO
+      // ==========================
+      if (statusAtual === "pago") {
+        // REMOVE HISTÓRICO DO MÊS ATUAL
+        const historicoAtualizado = historico.filter((p) => {
+          const dataHist = new Date(p.dataVencimento + "T00:00:00");
+          const mesmoMes =
+            dataHist.getMonth() === dataItem.getMonth() &&
+            dataHist.getFullYear() === dataItem.getFullYear();
 
-  try {
-    const statusAtual = obterStatusDespesa(despesa);
+          return !mesmoMes;
+        });
 
-    // ==========================
-    // DESFAZER PAGAMENTO
-    // ==========================
-    if (statusAtual === "pago") {
+        // VOLTA DATA SE FOR FIXO
+        let novaData = despesa.data;
+        if (despesa.fixo) {
+          novaData = removerMes(despesa.data);
+        }
 
-      // ✅ REMOVE HISTÓRICO DO MÊS ATUAL
-      const historicoAtualizado = historico.filter((p) => {
-        const dataHist = new Date(p.dataVencimento + "T00:00:00");
+        await updateDespesa(despesa.id, {
+          historicoPagamentos: historicoAtualizado,
+          data: novaData,
+          pago: false,
+          dataPagamento: null,
+        });
 
-        const mesmoMes =
-          dataHist.getMonth() === dataItem.getMonth() &&
-          dataHist.getFullYear() === dataItem.getFullYear();
+        toast({
+          title: "Pagamento desfeito.",
+          description: despesa.fixo
+            ? `Vencimento voltou para ${formatarDataBR(novaData)}`
+            : `${despesa.descricao} voltou para pendente.`,
+        });
 
-        return !mesmoMes;
-      });
-
-      // ✅ VOLTA DATA SE FOR FIXO
-      let novaData = despesa.data;
-      if (despesa.fixo) {
-        novaData = removerMes(despesa.data);
+        return;
       }
+
+      // ==========================
+      // REGISTRAR PAGAMENTO
+      // ==========================
+
+      const vencimentoDate = new Date(despesa.data + "T00:00:00");
+      const pagamentoDate = new Date(hojeStr + "T00:00:00");
+
+      // REGRA: Considerar EM DIA se foi pago até o vencimento OU no mesmo mês
+      const mesmoMes = pagamentoDate.getMonth() === vencimentoDate.getMonth() && pagamentoDate.getFullYear() === vencimentoDate.getFullYear();
+      const emDia = pagamentoDate <= vencimentoDate || mesmoMes;
+
+      const novoPagamento = {
+        id: `${despesa.id}-${despesa.data}-${Date.now()}`,
+        dataVencimento: despesa.data,
+        dataPagamento: hojeStr,
+        emDia,
+        meioPagamento: "Pix" as const,
+      };
+
+      const historicoAtualizado = [...historico, novoPagamento];
+
+      const novaData = despesa.fixo
+        ? adicionarMes(despesa.data)
+        : despesa.data;
 
       await updateDespesa(despesa.id, {
         historicoPagamentos: historicoAtualizado,
         data: novaData,
-        pago: false,
-        dataPagamento: null,
+        pago: true,
+        dataPagamento: hojeStr,
       });
 
       toast({
-        title: "Pagamento desfeito.",
+        title: emDia
+          ? "Pagamento em dia registrado!"
+          : "Pagamento atrasado registrado!",
         description: despesa.fixo
-          ? `Vencimento voltou para ${formatarDataBR(novaData)}`
-          : `${despesa.descricao} voltou para pendente.`,
+          ? `Próximo vencimento em ${formatarDataBR(novaData)}`
+          : `${despesa.descricao} foi marcado como pago.`,
       });
 
-      return;
+    } catch (error) {
+      toast({
+        title: "Erro ao atualizar despesa",
+        variant: "destructive",
+      });
     }
-
-    // ==========================
-    // REGISTRAR PAGAMENTO
-    // ==========================
-
-    const vencimentoDate = new Date(despesa.data + "T00:00:00");
-    const pagamentoDate = new Date(hojeStr + "T00:00:00");
-
-    const emDia = pagamentoDate <= vencimentoDate;
-
-    const novoPagamento = {
-      id: `${despesa.id}-${despesa.data}-${Date.now()}`,
-      dataVencimento: despesa.data,
-      dataPagamento: hojeStr,
-      emDia,
-      meioPagamento: "Pix" as const,
-    };
-
-    const historicoAtualizado = [...historico, novoPagamento];
-
-    const novaData = despesa.fixo
-      ? adicionarMes(despesa.data)
-      : despesa.data;
-
-    await updateDespesa(despesa.id, {
-      historicoPagamentos: historicoAtualizado,
-      data: novaData,
-      pago: true,
-      dataPagamento: hojeStr,
-    });
-
-    toast({
-      title: emDia
-        ? "Pagamento em dia registrado!"
-        : "Pagamento atrasado registrado!",
-      description: despesa.fixo
-        ? `Próximo vencimento em ${formatarDataBR(novaData)}`
-        : `${despesa.descricao} foi marcado como pago.`,
-    });
-
-  } catch (error) {
-    toast({
-      title: "Erro ao atualizar despesa",
-      variant: "destructive",
-    });
-  }
-};
+  };
 
   const handleDeleteHistorico = async (despesaItem: Despesa, historicoId: string) => {
-    // Encontra o pagamento mais recente
     const pagamentoMaisRecente = (despesaItem.historicoPagamentos || []).reduce((ultimo, atual) => {
       const dataUltimo = new Date(ultimo.dataVencimento);
       const dataAtual = new Date(atual.dataVencimento);
       return dataAtual > dataUltimo ? atual : ultimo;
     });
 
-    // Só permite deletar o pagamento mais recente
     if (historicoId !== pagamentoMaisRecente.id) {
       toast({
         title: "Não é possível apagar este pagamento",
@@ -461,7 +532,6 @@ const handleTogglePago = async (despesa: Despesa) => {
       h => h.id !== historicoId
     );
 
-    // Pega a data de vencimento do pagamento que está sendo apagado
     const pagamentoApagado = despesaItem.historicoPagamentos?.find(h => h.id === historicoId);
     const dataVencimentoAnterior = pagamentoApagado?.dataVencimento || despesaItem.data;
 
@@ -478,7 +548,6 @@ const handleTogglePago = async (despesa: Despesa) => {
         description: `Data de vencimento voltou para ${formatarDataBR(dataVencimentoAnterior)}.`,
       });
 
-      // Fechar o dialog após deletar
       setHistoricoDialogOpen(false);
       setSelectedItemHistorico(null);
     } catch (error) {
@@ -498,7 +567,10 @@ const handleTogglePago = async (despesa: Despesa) => {
         const dataPagamento = new Date(novaData + "T00:00:00");
         vencimento.setHours(0, 0, 0, 0);
         dataPagamento.setHours(0, 0, 0, 0);
-        const emDia = dataPagamento <= vencimento;
+        
+        // REGRA: Considerar EM DIA se foi pago até o vencimento OU no mesmo mês
+        const mesmoMes = dataPagamento.getMonth() === vencimento.getMonth() && dataPagamento.getFullYear() === vencimento.getFullYear();
+        const emDia = dataPagamento <= vencimento || mesmoMes;
 
         return {
           ...h,
@@ -519,7 +591,6 @@ const handleTogglePago = async (despesa: Despesa) => {
         title: "Histórico atualizado.",
       });
 
-      // Atualizar o item selecionado
       const despesaAtualizada = despesas.find(d => d.id === despesaItem.id);
       if (despesaAtualizada) {
         setSelectedItemHistorico(despesaAtualizada);
@@ -565,8 +636,8 @@ const handleTogglePago = async (despesa: Despesa) => {
               Controle seus gastos e acompanhe as despesas recorrentes.
             </p>
           </div>
-            <div  className="flex gap-2 items-end">
-              <NotificationButton onClick={() => setNotificationsOpen(true)} filterBy={["despesa"]} />
+          <div className="flex gap-2 items-end">
+            <NotificationButton onClick={() => setNotificationsOpen(true)} filterBy={["despesa"]} />
             
           <Dialog
             open={isDialogOpen}
@@ -750,7 +821,7 @@ const handleTogglePago = async (despesa: Despesa) => {
               Histórico de despesas
             </h2>
           </div>
-          <div className="flex gap-4 p-4 border-b border-border">
+          <div className="flex gap-4 p-4 border-b border-border flex-wrap">
             <div className="space-y-1">
               <Label
                 htmlFor="filtro-data-inicio"
@@ -869,7 +940,7 @@ const handleTogglePago = async (despesa: Despesa) => {
             {(filtroDataInicio ||
               filtroDataFim ||
               filtroStatus !== "todos") && (
-              <div className="flex items-end">
+              <div className="flex items-end pb-1">
                 <Button
                   variant="outline"
                   size="sm"
@@ -884,6 +955,30 @@ const handleTogglePago = async (despesa: Despesa) => {
               </div>
             )}
           </div>
+
+          {/* NOVOS CARDS DE RESUMO (Despesas) */}
+          <div className="p-4 grid gap-4 md:grid-cols-2 border-b border-border bg-muted/10">
+            {/* Banner Amarelo (Pagas / A Pagar) */}
+            <div className="rounded-lg bg-primary p-4 text-primary-foreground">
+              <div className="text-lg font-semibold mb-1">
+                Pagas: R$ {totaisCalculados.pago.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+              </div>
+              <div className="text-sm">
+                A pagar: R$ {totaisCalculados.aPagar.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+              </div>
+            </div>
+
+            {/* Banner Vermelho (Vencidas / Pagas em atraso) */}
+            <div className="rounded-lg bg-destructive p-4 text-destructive-foreground">
+              <div className="text-lg font-semibold mb-1">
+                Vencidas: R$ {totaisCalculados.vencida.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+              </div>
+              <div className="text-sm">
+                Pagas em atraso: R$ {totaisCalculados.atraso.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+              </div>
+            </div>
+          </div>
+          {/* FINAL DOS CARDS */}
 
           <Table>
             <TableHeader>

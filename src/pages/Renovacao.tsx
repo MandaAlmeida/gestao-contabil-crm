@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { useClientes } from "@/hooks/useClientes";
 import { useRenovacao } from "@/hooks/useRenovacao";
 import { Renovacao } from "@/types/crm";
-import { Plus, Edit, Trash2, Download, FileSpreadsheet } from "lucide-react";
+import { Plus, Edit, Trash2, Download, FileSpreadsheet, RefreshCw } from "lucide-react";
 import { useTarefas } from "@/hooks/useTarefas";
 import {
   Dialog,
@@ -33,14 +33,17 @@ import { StatusSelect } from "@/components/StatusSelect";
 import { FiltersBar } from "@/components/FiltersBar";
 import { useConfirmationDialog } from "@/components/ConfirmationDialog";
 import { generateRenovacaoPDF, generateRenovacaoExcel } from "@/lib/pdfGenerator";
+import { SelectClienteComBusca } from "@/components/SelectClienteComBusca";
 
 export default function RenovacoesPage() {
   // 1. Hooks Customizados
-  const { addTarefa } = useTarefas();
+  const { addTarefa, tarefas } = useTarefas();
   const { clientes } = useClientes();
   const { renovacoes, createRenovacao, updateRenovacao, deleteRenovacao, refresh } = useRenovacao();
   const { showConfirmation, ConfirmationDialogComponent } = useConfirmationDialog();
   const { toast } = useToast();
+
+  const [isSyncing, setIsSyncing] = useState(false);
 
   // 2. Estados (States)
   const [searchTerm, setSearchTerm] = useState("");
@@ -182,6 +185,68 @@ export default function RenovacoesPage() {
   } = usePagination(itemsOrdenados, 10);
 
   // 5. Handlers (Funções de ação)
+  const handleSincronizarTarefas = async () => {
+    setIsSyncing(true);
+    let tarefasCriadas = 0;
+
+    // 1. Filtra as renovações que estão com o status "Pendente"
+    const renovacoesPendentes = renovacoes.filter(r => r.status === "Pendente");
+
+    console.log(renovacoesPendentes)
+
+    for (const renovacao of renovacoesPendentes) {
+      // 2. Busca na lista de tarefas se JÁ EXISTE uma com o mesmo Cliente E Título
+      const temTarefa = tarefas.some(t => 
+        t.clienteId === renovacao.clienteId && 
+        t.titulo?.trim().toUpperCase() === "RENOVAÇÃO ANUAL"
+      );
+
+      // 3. Se não encontrar a tarefa, cria uma nova com os dados da imagem
+      if (!temTarefa) {
+        try {
+          await addTarefa({
+            titulo: "RENOVAÇÃO ANUAL",
+            descricao: renovacao.observacoes || "",
+            data: `${renovacao.dataRenovacao}T00:00:00`,
+            horaInicio: "08:00",
+            horaFim: "17:00",
+            prioridade: "Média",
+            concluida: false,
+            ativo: true,
+            clienteId: renovacao.clienteId,
+            clienteNome: renovacao.clienteNome,
+            categoria: "", 
+          });
+          tarefasCriadas++;
+        } catch (error) {
+          console.error("Erro ao criar tarefa para o cliente:", renovacao.clienteNome);
+        }
+      }
+    }
+
+    setIsSyncing(false);
+    
+    // 4. Feedbacks na tela para você saber exatamente o que houve
+    if (tarefasCriadas > 0) {
+      toast({ 
+        title: `${tarefasCriadas} tarefa(s) de renovação criada(s) com sucesso!`, 
+        variant: "default" 
+      });
+    } else if (renovacoesPendentes.length === 0) {
+      toast({ 
+        title: "Nenhuma ação realizada", 
+        description: "Você não possui nenhuma renovação com o status 'Pendente'.",
+        variant: "destructive" 
+      });
+    } else {
+      toast({ 
+        title: "Tudo certo!", 
+        description: "Todas as suas renovações pendentes já possuem uma tarefa 'RENOVAÇÃO ANUAL'.",
+        variant: "default" 
+      });
+    }
+  };
+
   const handleGeneratePDF = async () => {
     await generateRenovacaoPDF(filteredItems, {
       title: "Relatório de Renovações",
@@ -265,11 +330,13 @@ export default function RenovacoesPage() {
           ativo: true,
         });
 
+        // Tarefa gerada automaticamente no formato solicitado da imagem
         await addTarefa({
-          titulo: `Vencimento Renovação: ${cliente.nome}`,
-          descricao: `Renovação vence em ${dataRenovacao} para o cliente ${cliente.nome} (${cliente.cnpj})`,
+          titulo: "RENOVAÇÃO ANUAL",
+          descricao: formData.observacoes || "",
           data: `${dataRenovacao}T00:00:00`,
-          horaInicio: "00:00",
+          horaInicio: "08:00",
+          horaFim: "17:00",
           prioridade: "Média",
           concluida: false,
           ativo: true,
@@ -342,6 +409,18 @@ export default function RenovacoesPage() {
           </div>
           <div className="flex gap-2 items-end">
             <NotificationButton onClick={() => setNotificationsOpen(true)} filterBy={["renovacao"]} />
+            
+            {/* NOVO: Botão de Sincronizar Tarefas */}
+            <Button 
+              variant="outline" 
+              onClick={handleSincronizarTarefas} 
+              disabled={isSyncing || renovacoes.length === 0}
+              title="Validar e gerar tarefas faltantes"
+            >
+              <RefreshCw className={`mr-2 h-4 w-4 ${isSyncing ? "animate-spin" : ""}`} />
+              Sincronizar Tarefas
+            </Button>
+
             <Button variant="outline" onClick={handleGeneratePDF} disabled={filteredItems.length === 0}>
               <Download className="mr-2 h-4 w-4" />
               Baixar PDF
@@ -370,32 +449,18 @@ export default function RenovacoesPage() {
                 <form onSubmit={handleSubmit} className="space-y-4">
                   <div className="space-y-2">
                     <Label htmlFor="clienteId">Cliente</Label>
-                    <Select
+                    <SelectClienteComBusca
+                      clientes={(() => {
+                        const clientesFiltrados = clientes.filter((c) => {
+                          if (!editingItem) return !clientesComRenovacao.has(c.id);
+                          return !clientesComRenovacao.has(c.id) || c.id === editingItem.clienteId;
+                        });
+                        return [...clientesFiltrados].sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR", { sensitivity: "base" }));
+                      })()}
                       value={formData.clienteId}
                       onValueChange={(value) => setFormData({ ...formData, clienteId: value })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Selecione um cliente" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {(() => {
-                          const clientesFiltrados = clientes.filter((c) => {
-                            if (!editingItem) return !clientesComRenovacao.has(c.id);
-                            return !clientesComRenovacao.has(c.id) || c.id === editingItem.clienteId;
-                          });
-
-                          const ordenados = [...clientesFiltrados].sort((a, b) =>
-                            a.nome.localeCompare(b.nome, "pt-BR", { sensitivity: "base" })
-                          );
-
-                          return ordenados.map((cliente) => (
-                            <SelectItem key={cliente.id} value={cliente.id}>
-                              {cliente.nome} - {cliente.cnpj}
-                            </SelectItem>
-                          ));
-                        })()}
-                      </SelectContent>
-                    </Select>
+                      placeholder="Selecione um cliente"
+                    />
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">

@@ -40,6 +40,7 @@ import { usePagination } from "@/hooks/usePagination";
 import { PaginationControls } from "@/components/PaginationControls";
 import { StatusSelect } from "@/components/StatusSelect";
 import { FiltersBar } from "@/components/FiltersBar";
+import { SelectClienteComBusca } from "@/components/SelectClienteComBusca";
 
 const adicionarAno = (data?: string) => {
   const baseDate = data ? new Date(data) : new Date();
@@ -440,21 +441,8 @@ const filteredItems = useMemo(() => {
                   </div>
 
                   {modoCliente === "existente" ? (
-                    <Select
-                      value={formData.clienteId}
-                      onValueChange={(value) =>
-                        setFormData({ ...formData, clienteId: value })
-                      }
-                      required
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Selecione um cliente" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {(() => {
-                          // Clientes disponíveis para seleção no formulário:
-                          // - Novo certificado: não listar clientes que já possuem certificado
-                          // - Edição: permitir o cliente atual mesmo que já tenha certificado
+                      <SelectClienteComBusca
+                        clientes={(() => {
                           const clientesFiltrados = clientes.filter((c) => {
                             if (!editingItem) {
                               return !clientesComCertificado.has(c.id);
@@ -465,22 +453,19 @@ const filteredItems = useMemo(() => {
                             );
                           });
 
-                          const clientesOrdenados = [...clientesFiltrados].sort(
-                            (a, b) =>
-                              a.nome.localeCompare(b.nome, "pt-BR", {
-                                sensitivity: "base",
-                              })
+                          return [...clientesFiltrados].sort((a, b) =>
+                            a.nome.localeCompare(b.nome, "pt-BR", {
+                              sensitivity: "base",
+                            })
                           );
-
-                          return clientesOrdenados.map((cliente) => (
-                            <SelectItem key={cliente.id} value={cliente.id}>
-                              {cliente.nome} - {cliente.cnpj}
-                            </SelectItem>
-                          ));
                         })()}
-                      </SelectContent>
-                    </Select>
-                  ) : (
+                        value={formData.clienteId}
+                        onValueChange={(value) =>
+                          setFormData({ ...formData, clienteId: value })
+                        }
+                        placeholder="Selecione um cliente"
+                      />
+                    ) : (
                     <div className="space-y-3 p-4 border rounded-md bg-muted/30">
                       <div className="grid grid-cols-2 gap-3">
                         <div className="space-y-2">

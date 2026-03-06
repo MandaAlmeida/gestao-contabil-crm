@@ -11,41 +11,50 @@ export function useNotifications(
 ) {
   const [notifications, setNotifications] = useState<PersistentNotification[]>([]);
   const [views, setViews] = useState<NotificationView[]>([]);
-    // Carrega visualizações do Firestore
-    useEffect(() => {
-      if (!userId) return;
-      async function fetchViews() {
-        try {
-          const q = query(
-            collection(db, "notificationViews"),
-            where("userId", "==", userId)
-          );
-          const snapshot = await getDocs(q);
-          const viewsArr = snapshot.docs.map((doc) => doc.data() as NotificationView);
-          setViews(viewsArr);
-        } catch (err) {
-          console.error("Erro ao buscar visualizações do Firestore:", err);
-        }
-      }
-      fetchViews();
-    }, [userId]);
-  const [markingAsViewed, setMarkingAsViewed] = useState<Set<string>>(new Set());
 
 
-  async function fetchNotifications() {
+useEffect(() => {
+    if (!userId) return;
+    async function fetchViews() {
       try {
         const q = query(
-          collection(db, "notifications"),
-          where("userId", "==", userId),
-          orderBy("updatedAt", "desc")
+          collection(db, "notificationViews"),
+          where("userId", "==", userId)
         );
         const snapshot = await getDocs(q);
-        const notifs = snapshot.docs.map((doc) => doc.data() as PersistentNotification);
-        setNotifications(notifs);
+        // CORREÇÃO AQUI: Garante que o ID do documento é repassado
+        const viewsArr = snapshot.docs.map((doc) => ({
+          ...doc.data(),
+          id: doc.id 
+        }) as NotificationView);
+        setViews(viewsArr);
       } catch (err) {
-        console.error("Erro ao buscar notificações do Firestore:", err);
+        console.error("Erro ao buscar visualizações do Firestore:", err);
       }
     }
+    fetchViews();
+  }, [userId]);
+
+  const [markingAsViewed, setMarkingAsViewed] = useState<Set<string>>(new Set());
+
+  async function fetchNotifications() {
+    try {
+      const q = query(
+        collection(db, "notifications"),
+        where("userId", "==", userId),
+        orderBy("updatedAt", "desc")
+      );
+      const snapshot = await getDocs(q);
+      // CORREÇÃO AQUI: Garante que a notificação sempre terá um ID válido
+      const notifs = snapshot.docs.map((doc) => ({
+        ...doc.data(),
+        id: doc.id
+      }) as PersistentNotification);
+      setNotifications(notifs);
+    } catch (err) {
+      console.error("Erro ao buscar notificações do Firestore:", err);
+    }
+  }
 
   /* =========================
      LOAD STORAGE
@@ -101,6 +110,12 @@ export function useNotifications(
   };
 
 const markAsViewed = async (notificationId: string) => {
+  // TRAVA DE SEGURANÇA: Se não tiver ID válido, interrompe
+  if (!notificationId) {
+    console.error("Tentativa de marcar notificação sem ID válido como vista.");
+    return;
+  }
+
   if (viewedSet.has(notificationId)) return;
 
   setMarkingAsViewed(prev => new Set(prev).add(notificationId));
@@ -116,6 +131,7 @@ const markAsViewed = async (notificationId: string) => {
     // Salva visualização no Firestore
     await setDoc(doc(collection(db, "notificationViews"), view.id), view);
     setViews(prev => [...prev, view]);
+    
     // Remover notificação do estado local imediatamente
     setNotifications(prev => prev.filter(n => n.id !== notificationId));
   } finally {

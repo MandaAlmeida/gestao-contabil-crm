@@ -34,6 +34,7 @@ import { FiltersBar } from "@/components/FiltersBar";
 import { HistoricoAtividadesDialog } from "@/components/HistoricoAtividadesDialog";
 import { calcularStatusSintegra } from "@/lib/sintegra";
 import { excluirNotificacoesItem } from "@/utils/notificacoes";
+import { SelectClienteComBusca } from "@/components/SelectClienteComBusca";
 
 const adicionarMes = (data: string) => {
   const baseDate = data ? new Date(data) : new Date();
@@ -535,43 +536,32 @@ if (item.status === "Concluído") {
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="clienteId">Cliente</Label>
-                  <Select
+                  <SelectClienteComBusca
+                    clientes={(() => {
+                      const clientesFiltrados = clientes.filter((c) => {
+                        if (!editingItem) {
+                          // Novo registro: não exibir clientes que já possuem Sintegra
+                          return !clientesComSintegra.has(c.id);
+                        }
+                        // Edição: permitir o cliente atual mesmo que já tenha Sintegra
+                        return (
+                          !clientesComSintegra.has(c.id) ||
+                          c.id === editingItem.clienteId
+                        );
+                      });
+
+                      return [...clientesFiltrados].sort((a, b) =>
+                        a.nome.localeCompare(b.nome, "pt-BR", {
+                          sensitivity: "base",
+                        })
+                      );
+                    })()}
                     value={formData.clienteId}
                     onValueChange={(value) =>
                       setFormData({ ...formData, clienteId: value })
                     }
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecione um cliente" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {(() => {
-                        const clientesFiltrados = clientes.filter((c) => {
-                          if (!editingItem) {
-                            // Novo registro: não exibir clientes que já possuem Sintegra
-                            return !clientesComSintegra.has(c.id);
-                          }
-                          // Edição: permitir o cliente atual mesmo que já tenha Sintegra
-                          return (
-                            !clientesComSintegra.has(c.id) ||
-                            c.id === editingItem.clienteId
-                          );
-                        });
-
-                        const ordenados = [...clientesFiltrados].sort((a, b) =>
-                          a.nome.localeCompare(b.nome, "pt-BR", {
-                            sensitivity: "base",
-                          })
-                        );
-
-                        return ordenados.map((cliente) => (
-                          <SelectItem key={cliente.id} value={cliente.id}>
-                            {cliente.nome} - {cliente.cnpj}
-                          </SelectItem>
-                        ));
-                      })()}
-                    </SelectContent>
-                  </Select>
+                    placeholder="Selecione um cliente"
+                  />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">

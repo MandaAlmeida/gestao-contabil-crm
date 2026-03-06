@@ -20,6 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { SelectClienteComBusca } from "./SelectClienteComBusca";
 
 type CreateFinancerProps = {
   isDialogOpen: boolean;
@@ -59,7 +60,8 @@ export function CreateFinancer({clientesDisponiveisFormulario, editingItem, form
                   <form onSubmit={handleSubmit} className="space-y-4">
                     <div className="space-y-2">
                       <Label htmlFor="clienteId">Cliente</Label>
-                      <Select
+                      <SelectClienteComBusca
+                        clientes={clientesDisponiveisFormulario}
                         value={formData.clienteId}
                         onValueChange={(value) => {
                           setFormData(prev => {
@@ -72,18 +74,8 @@ export function CreateFinancer({clientesDisponiveisFormulario, editingItem, form
                             return novoFormData;
                           });
                         }}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Selecione um cliente" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {clientesDisponiveisFormulario.map((cliente) => (
-                            <SelectItem key={cliente.id} value={cliente.id}>
-                              {cliente.nome} - {cliente.cnpj}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                        placeholder="Selecione um cliente"
+                      />
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">

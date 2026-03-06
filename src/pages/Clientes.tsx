@@ -3,6 +3,7 @@ import { Layout } from "@/components/Layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useClientes } from "@/hooks/useClientes";
+import { deleteClienteWithRelations } from "@/lib/firestore/deleteClienteWithRelations";
 import { useContabilidades } from "@/hooks/useContabilidades";
 import { useConfirmationDialog } from "@/components/ConfirmationDialog";
 import { useUsuarios } from "@/hooks/useUsuarios";
@@ -256,8 +257,8 @@ const handleSubmit = async (e: React.FormEvent) => {
       "Tem certeza que deseja excluir este cliente? Esta ação não pode ser desfeita.",
       async () => {
         try {
-          await deleteCliente(id);
-          toast({ title: "Cliente excluído com sucesso!" });
+          await deleteClienteWithRelations(id);
+          toast({ title: "Cliente excluído com sucesso! (Registros relacionados desativados, certificados mantidos)" });
         } catch (error) {
           toast({
             title: "Erro ao excluir cliente",
