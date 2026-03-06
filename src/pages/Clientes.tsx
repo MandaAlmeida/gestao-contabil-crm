@@ -42,13 +42,14 @@ import {
 import { FiltersBar } from "@/components/FiltersBar";
 
 export default function Clientes() {
-  const {
-    clientes,
-    createCliente,
-    updateCliente,
-    deleteCliente,
-    loading: clientesLoading,
-  } = useClientes();
+const {
+    clientes,
+    createCliente,
+    updateCliente,
+    deleteCliente,
+    loading: clientesLoading,
+    refresh: refreshClientes,
+  } = useClientes();
   const {
     contabilidades,
     createContabilidade,
@@ -251,28 +252,29 @@ const handleSubmit = async (e: React.FormEvent) => {
     setIsDialogOpen(true);
   };
 
-  const handleDelete = async (id: string) => {
-    showConfirmation(
-      "Excluir Cliente",
-      "Tem certeza que deseja excluir este cliente? Esta ação não pode ser desfeita.",
-      async () => {
-        try {
-          await deleteClienteWithRelations(id);
-          toast({ title: "Cliente excluído com sucesso! (Registros relacionados desativados, certificados mantidos)" });
-        } catch (error) {
-          toast({
-            title: "Erro ao excluir cliente",
-            variant: "destructive",
-          });
-        }
-      },
-      {
-        confirmText: "Excluir",
-        cancelText: "Cancelar",
-        variant: "destructive"
-      }
-    );
-  };
+const handleDelete = async (id: string) => {
+    showConfirmation(
+      "Excluir Cliente",
+      "Tem certeza que deseja excluir este cliente? Esta ação não pode ser desfeita.",
+      async () => {
+        try {
+          await deleteClienteWithRelations(id);
+          await refreshClientes(); // <-- ESTA LINHA VAI ATUALIZAR A TELA
+          toast({ title: "Cliente excluído com sucesso! (Registros relacionados desativados, certificados mantidos)" });
+        } catch (error) {
+          toast({
+            title: "Erro ao excluir cliente",
+            variant: "destructive",
+          });
+        }
+      },
+      {
+        confirmText: "Excluir",
+        cancelText: "Cancelar",
+        variant: "destructive"
+      }
+    );
+  };
 
 const filteredClientes = useMemo(() => {
   return clientes.filter((cliente) => {

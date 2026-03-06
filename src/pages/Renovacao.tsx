@@ -37,7 +37,7 @@ import { SelectClienteComBusca } from "@/components/SelectClienteComBusca";
 
 export default function RenovacoesPage() {
   // 1. Hooks Customizados
-  const { addTarefa, tarefas } = useTarefas();
+  const { addTarefa, tarefas, deleteTarefa, updateTarefa } = useTarefas();
   const { clientes } = useClientes();
   const { renovacoes, createRenovacao, updateRenovacao, deleteRenovacao, refresh } = useRenovacao();
   const { showConfirmation, ConfirmationDialogComponent } = useConfirmationDialog();
@@ -192,8 +192,6 @@ export default function RenovacoesPage() {
     // 1. Filtra as renovações que estão com o status "Pendente"
     const renovacoesPendentes = renovacoes.filter(r => r.status === "Pendente");
 
-    console.log(renovacoesPendentes)
-
     for (const renovacao of renovacoesPendentes) {
       // 2. Busca na lista de tarefas se JÁ EXISTE uma com o mesmo Cliente E Título
       const temTarefa = tarefas.some(t => 
@@ -281,77 +279,135 @@ export default function RenovacoesPage() {
     setEditingItem(null);
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+const createRenovacaoTasks = async (
+    numParcelas: number, 
+    valorTotal: number, 
+    dataBase: string, 
+    observacoes: string, 
+    clienteId: string, 
+    clienteNome: string,
+    status: string,
+    mudouEstrutura: boolean
+  ) => {
+    const [ano, mes, dia] = dataBase.split("-").map(Number);
 
-    const cliente = clientes.find((c) => c.id === formData.clienteId);
-    if (!cliente) {
-      toast({ title: "Cliente não encontrado!", variant: "destructive" });
-      return;
+    // 1. Limpeza: Se mudou algo, apaga as tarefas antigas de renovação deste cliente
+    if (mudouEstrutura) {
+      const tarefasAntigas = tarefas.filter(t => 
+        t.clienteId === clienteId && 
+        t.titulo?.trim().toUpperCase().startsWith("RENOVAÇÃO ANUAL")
+      );
+      for (const t of tarefasAntigas) {
+        try { await deleteTarefa(t.id); } catch(e) { console.error("Erro ao deletar:", e); }
+      }
     }
 
-    let dataRenovacao = formData.dataRenovacao;
+    // 2. Criação baseada no Status
+    if (status === "Parcelado") {
+      const valorMensal = valorTotal / numParcelas;
+      
+      // Cria as parcelas do ANO ATUAL
+      for (let i = 0; i < numParcelas; i++) {
+        const dataParcela = new Date(ano, (mes - 1) + i, dia);
+        const dataFormatada = `${dataParcela.getFullYear()}-${String(dataParcela.getMonth() + 1).padStart(2, '0')}-${String(dataParcela.getDate()).padStart(2, '0')}`;
+        
+        await addTarefa({
+          titulo: `RENOVAÇÃO ANUAL - Parcela ${i + 1}/${numParcelas}`,
+          descricao: `Dividido em ${numParcelas}x.\nTotal: R$ ${valorTotal.toFixed(2)}\nParcela: R$ ${valorMensal.toFixed(2)}\n\n${observacoes || ""}`,
+          data: `${dataFormatada}T00:00:00`,
+          horaInicio: "08:00", horaFim: "17:00", prioridade: "Média",
+          concluida: i === 0, // 1ª paga, demais pendentes
+          ativo: true, clienteId: clienteId || "", clienteNome: clienteNome || "", categoria: ""
+        });
+      }
+      
+      // Cria o lembrete pro ANO QUE VEM
+      await addTarefa({
+        titulo: "RENOVAÇÃO ANUAL",
+        descricao: observacoes || "",
+        data: `${ano + 1}-${String(mes).padStart(2, '0')}-${String(dia).padStart(2, '0')}T00:00:00`,
+        horaInicio: "08:00", horaFim: "17:00", prioridade: "Média",
+        concluida: false, ativo: true, clienteId: clienteId || "", clienteNome: clienteNome || "", categoria: ""
+      });
 
-    if (editingItem && formData.status === "Renovado" && editingItem.status !== "Renovado") {
-      const currentDate = new Date(formData.dataRenovacao);
-      currentDate.setFullYear(currentDate.getFullYear() + 1);
-      dataRenovacao = currentDate.toISOString().split("T")[0];
+    } else {
+      // Se for Renovado, Pendente, etc (Cria apenas uma tarefa)
+      await addTarefa({
+        titulo: "RENOVAÇÃO ANUAL",
+        descricao: observacoes || "",
+        data: `${dataBase}T00:00:00`,
+        horaInicio: "08:00", horaFim: "17:00", prioridade: "Média",
+        concluida: status === "Renovado",
+        ativo: true, clienteId: clienteId || "", clienteNome: clienteNome || "", categoria: ""
+      });
+
+      // Se marcou como pago, já agenda o ano que vem
+      if (status === "Renovado") {
+        await addTarefa({
+          titulo: "RENOVAÇÃO ANUAL",
+          descricao: observacoes || "",
+          data: `${ano + 1}-${String(mes).padStart(2, '0')}-${String(dia).padStart(2, '0')}T00:00:00`,
+          horaInicio: "08:00", horaFim: "17:00", prioridade: "Média",
+          concluida: false, ativo: true, clienteId: clienteId || "", clienteNome: clienteNome || "", categoria: ""
+        });
+      }
+    }
+  };
+
+const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const cliente = clientes.find((c) => c.id === formData.clienteId);
+    if (!cliente) return;
+
+    let dataRenovacaoBanco = formData.dataRenovacao;
+    const dataBaseOriginal = formData.dataRenovacao;
+
+    if (editingItem && (formData.status === "Renovado" || formData.status === "Parcelado") && 
+       (editingItem.status !== "Renovado" && editingItem.status !== "Parcelado")) {
+      const [y, m, d] = formData.dataRenovacao.split("-").map(Number);
+      dataRenovacaoBanco = `${y + 1}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
     }
 
     const valorRenovacaoNumber = parseFloat(formData.valorRenovacao);
-    if (Number.isNaN(valorRenovacaoNumber)) {
-      toast({ title: "Informe um valor válido.", variant: "destructive" });
-      return;
-    }
+    const numParcelas = formData.status === "Parcelado" && formData.parcela ? parseInt(String(formData.parcela).split(" ")[0]) : 1;
+    const numParcelasAntigo = editingItem?.parcela ? parseInt(String(editingItem.parcela).split(" ")[0]) : 1;
+    
+    // Sempre recria se for parcelado ou se o status mudou
+    const mudouEstrutura = editingItem 
+      ? (formData.status !== editingItem.status || numParcelas !== numParcelasAntigo)
+      : true;
 
     try {
       if (editingItem) {
         await updateRenovacao(editingItem.id, {
-          clienteId: formData.clienteId,
+          ...formData,
           clienteNome: cliente.nome,
-          clienteCNPJ: cliente.cnpj,
+          clienteCNPJ: cliente.cnpj || "", 
           valorRenovacao: valorRenovacaoNumber,
-          dataRenovacao,
-          status: formData.status,
+          dataRenovacao: dataRenovacaoBanco,
           parcela: formData.status === "Parcelado" ? formData.parcela : null,
-          observacoes: formData.observacoes,
         });
-        toast({ title: "Renovação atualizada com sucesso!" });
       } else {
         await createRenovacao({
-          clienteId: formData.clienteId,
+          ...formData,
           clienteNome: cliente.nome,
-          clienteCNPJ: cliente.cnpj,
+          clienteCNPJ: cliente.cnpj || "", 
           valorRenovacao: valorRenovacaoNumber,
-          dataRenovacao,
-          status: formData.status,
-          parcela: formData.status === "Parcelado" ? formData.parcela : null,
-          observacoes: formData.observacoes,
-          ativo: true,
+          dataRenovacao: dataRenovacaoBanco,
+          ativo: true
         });
-
-        // Tarefa gerada automaticamente no formato solicitado da imagem
-        await addTarefa({
-          titulo: "RENOVAÇÃO ANUAL",
-          descricao: formData.observacoes || "",
-          data: `${dataRenovacao}T00:00:00`,
-          horaInicio: "08:00",
-          horaFim: "17:00",
-          prioridade: "Média",
-          concluida: false,
-          ativo: true,
-          clienteId: cliente.id,
-          clienteNome: cliente.nome,
-        });
-        toast({ title: "Renovação adicionada com sucesso! Tarefa criada." });
       }
 
+      await createRenovacaoTasks(numParcelas, valorRenovacaoNumber, dataBaseOriginal, formData.observacoes, cliente.id, cliente.nome, formData.status, mudouEstrutura);
+      
+      toast({ title: "Salvo com sucesso!" });
       resetForm();
       setIsDialogOpen(false);
     } catch (error) {
-      toast({ title: "Erro ao salvar renovação", variant: "destructive" });
+      toast({ title: "Erro ao salvar", variant: "destructive" });
     }
   };
+  
 
   const handleEdit = (item: Renovacao) => {
     setEditingItem(item);
@@ -653,9 +709,29 @@ export default function RenovacoesPage() {
                   </td>
                   <td className="p-3">
                     <div className="flex gap-2">
-                      <StatusSelect
+                    <StatusSelect
                         item={item}
-                        onUpdateStatus={updateRenovacao}
+                        onUpdateStatus={async (id, data) => {
+                          const safeData = { ...data, clienteCNPJ: item.clienteCNPJ || "", observacoes: item.observacoes || "" };
+                          await updateRenovacao(id, safeData as any);
+
+                          // PEGA O NÚMERO DE PARCELAS DO 'DATA' (O novo valor clicado)
+                          const parcelaString = data.status === "Parcelado" ? (data.parcela || "1 Vez") : "1 Vez";
+                          const numParcelas = parseInt(parcelaString.split(" ")[0]) || 1;
+                          
+                          await createRenovacaoTasks(
+                            numParcelas, 
+                            item.valorRenovacao, 
+                            item.dataRenovacao, 
+                            item.observacoes || "", 
+                            item.clienteId, 
+                            item.clienteNome, 
+                            data.status as string,
+                            true 
+                          );
+                          
+                          toast({ title: "Status e tarefas atualizados!" });
+                        }}
                         onStatusChange={refresh}
                         statusOptions={STATUS_OPTIONS}
                       />

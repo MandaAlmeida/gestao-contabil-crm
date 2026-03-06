@@ -1,4 +1,3 @@
-
 import { getDocs, updateDoc, doc, collection, query, where } from "firebase/firestore";
 import { db } from "../firebase";
 import { deleteCliente } from "./clientes";
@@ -31,7 +30,7 @@ export async function deleteClienteWithRelations(clienteId: string) {
     await updateDoc(doc(db, "servicos", docSnap.id), { ativo: false, updatedAt: new Date().toISOString() });
   }
 
-      // Desativa sintegra
+  // Desativa sintegra
   const sintegras = await getDocs(query(collection(db, "sintegra"), where("clienteId", "==", clienteId)));
   for (const docSnap of sintegras.docs) {
     await updateDoc(doc(db, "sintegra", docSnap.id), { ativo: false, updatedAt: new Date().toISOString() });
@@ -43,5 +42,15 @@ export async function deleteClienteWithRelations(clienteId: string) {
     await updateDoc(doc(db, "usuarios", docSnap.id), { ativo: false, updatedAt: new Date().toISOString() });
   }
 
+  // NOVO: Desativa tarefas vinculadas ao cliente
+  const tarefas = await getDocs(query(collection(db, "tarefas"), where("clienteId", "==", clienteId)));
+  for (const docSnap of tarefas.docs) {
+    await updateDoc(doc(db, "tarefas", docSnap.id), { ativo: false, updatedAt: new Date().toISOString() });
+  }
 
+  // NOVO: Desativa notificações vinculadas ao cliente
+  const notificacoes = await getDocs(query(collection(db, "notificacoes"), where("clienteId", "==", clienteId)));
+  for (const docSnap of notificacoes.docs) {
+    await updateDoc(doc(db, "notificacoes", docSnap.id), { ativo: false, updatedAt: new Date().toISOString() });
+  }
 }
