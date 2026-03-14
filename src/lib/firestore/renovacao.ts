@@ -20,8 +20,7 @@ export async function getRenovacoes(): Promise<Renovacao[]> {
     .map((doc) => ({
       id: doc.id,
       ...doc.data(),
-    }))
-    .filter((renovacao) => renovacao.ativo !== false) as Renovacao[];
+    }as Renovacao)).filter((renovacao) => renovacao.ativo !== false);
 }
 
 export async function getRenovacao(id: string): Promise<Renovacao | null> {

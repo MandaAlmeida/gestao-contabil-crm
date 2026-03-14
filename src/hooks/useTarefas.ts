@@ -67,13 +67,10 @@ export const useTarefas = () => {
     return () => unsubscribe();
   }, [user]);
 
-  const addTarefa = async (tarefa: Omit<Tarefa, "id" | "createdAt" | "updatedAt">) => {
+  const addTarefa = async (tarefa: Omit<Tarefa, "id">) => {
     try {
-      const now = Timestamp.now().toDate().toISOString();
       await addDoc(collection(db, "tarefas"), {
-        ...tarefa,
-        createdAt: now,
-        updatedAt: now,
+        ...tarefa
       });
     } catch (error) {
       console.error("Erro ao adicionar tarefa:", error);

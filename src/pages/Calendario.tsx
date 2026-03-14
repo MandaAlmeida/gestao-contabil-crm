@@ -40,6 +40,7 @@ import { SelectClienteComBusca } from "@/components/SelectClienteComBusca";
 import { useRenovacao } from "@/hooks/useRenovacao";
 import { toast } from "@/hooks/use-toast";
 import { addYears, subYears, parseISO } from "date-fns";
+import { Timestamp } from "firebase/firestore";
 
 export default function Calendario() {
 // Dentro da função Calendario, logo após useClientes:
@@ -214,20 +215,26 @@ const handleToggleTarefa = async (tarefa: Tarefa) => {
       const renovacaoVinculada = renovacoes.find((r) => r.clienteId === tarefa.clienteId);
 
       if (renovacaoVinculada) {
-        const dataTarefaAtual = parseISO(tarefa.data);
+        // CORREÇÃO AQUI: A data base passa a ser o vencimento real da renovação no sistema, 
+        // e não a data em que a tarefa foi agendada ou fechada.
+        const dataBaseVencimento = parseISO(renovacaoVinculada.dataRenovacao);
 
         if (novoEstadoConcluido) {
           // --- LÓGICA AO CONCLUIR (MARCAR) ---
-          const dataProximoAno = addYears(dataTarefaAtual, 1);
-          const dataFormatadaProximoAno = format(dataProximoAno, "yyyy-MM-dd'T'HH:mm:ss");
+          // Joga 1 ano pra frente com base na data de vencimento da renovação
+          const dataProximoAno = addYears(dataBaseVencimento, 1);
+          const dataFormatadaProximoAno = format(dataProximoAno, "yyyy-MM-dd'T'00:00:00"); 
+          const dataNovaRenovacaoStr = format(dataProximoAno, "yyyy-MM-dd");
 
           // Atualiza Renovação: Status para "Renovado" e Data para o ANO QUE VEM
           await updateRenovacao(renovacaoVinculada.id, {
             status: "Renovado",
-            dataRenovacao: dataFormatadaProximoAno.split('T')[0] 
+            dataRenovacao: dataNovaRenovacaoStr 
           });
+          const now = Timestamp.now().toDate().toISOString();
 
-          // Cria a tarefa pendente para o ano seguinte
+
+          // Cria a tarefa pendente para o ano seguinte cravada na data de vencimento
           await addTarefa({
             titulo: tarefa.titulo || "",
             descricao: tarefa.descricao || "",
@@ -240,26 +247,29 @@ const handleToggleTarefa = async (tarefa: Tarefa) => {
             categoria: tarefa.categoria || "",
             horaInicio: tarefa.horaInicio || "08:00",
             horaFim: tarefa.horaFim || "17:00",
-            tipoCertificado: tarefa.tipoCertificado || ""
+            tipoCertificado: tarefa.tipoCertificado || "",
+            createdAt: tarefa.createdAt || now,
+            updatedAt: tarefa.updatedAt || now
           });
 
-          toast({ title: "Renovação concluída e agendada para o próximo ano." });
+          toast({ title: "Renovação concluída e agendada para o próximo ciclo." });
 
         } else {
           // --- LÓGICA AO DESMARCAR (VOLTAR ATRÁS) ---
           
-          // CORREÇÃO: A data da renovação deve voltar para a data da tarefa que você desmarcou
-          // Se a tarefa é de 06/03/2026, a renovação volta a ser 06/03/2026
-          const dataParaRetornar = format(dataTarefaAtual, "yyyy-MM-dd");
+          // Se estamos revertendo, a data deve voltar 1 ano em relação ao que está salvo na renovação
+          const dataVencimentoAnterior = subYears(dataBaseVencimento, 1);
+          const dataParaRetornar = format(dataVencimentoAnterior, "yyyy-MM-dd");
 
-          // 1. Volta o status para "Pendente" e restaura a data correta (sem subtrair)
+          // 1. Volta o status para "Pendente" e restaura a data correta
           await updateRenovacao(renovacaoVinculada.id, {
             status: "Pendente",
             dataRenovacao: dataParaRetornar
           });
 
-          // 2. Localiza e APAGA a tarefa futura (aquela que estava em 2027)
-          const dataFuturaBusca = format(addYears(dataTarefaAtual, 1), "yyyy-MM-dd");
+          // 2. Localiza e APAGA a tarefa futura
+          // Como a renovação já estava projetada pra frente, procuramos pela dataBaseVencimento
+          const dataFuturaBusca = format(dataBaseVencimento, "yyyy-MM-dd");
           const tarefaFutura = tarefas.find(t => 
             t.clienteId === tarefa.clienteId && 
             t.data.startsWith(dataFuturaBusca) &&
@@ -284,7 +294,6 @@ const handleToggleTarefa = async (tarefa: Tarefa) => {
     });
   }
 };
-
   return (
     <Layout>
       <div className="p-8">

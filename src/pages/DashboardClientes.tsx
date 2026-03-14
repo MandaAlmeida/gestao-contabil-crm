@@ -57,6 +57,8 @@ export default function DashboardClientes() {
     [financeirosRaw]
   );
 
+
+
   const responsaveisDisponiveis = useMemo(
     () =>
       Array.from(
@@ -71,6 +73,19 @@ export default function DashboardClientes() {
       : clientes.filter(
           (cliente) => cliente.responsavel === responsavelSelecionado
         );
+
+          // <-- ADICIONE ESTE BLOCO AQUI -->
+  const totaisTipoCliente = useMemo(() => {
+    return clientesFiltrados.reduce(
+      (acc, cliente) => {
+        if (cliente.isFiscal) acc.fiscal += 1;
+        if (cliente.isGerencial) acc.gerencial += 1;
+        return acc;
+      },
+      { fiscal: 0, gerencial: 0 }
+    );
+  }, [clientesFiltrados]);
+
 
   const clienteIdsFiltrados = new Set(
     clientesFiltrados.map((cliente) => cliente.id)
@@ -323,7 +338,7 @@ export default function DashboardClientes() {
 
         {/* Cards de Informações */}
         <div className="mt-8 grid gap-4 md:grid-cols-3">
-          <Card>
+         <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">
                 Total de Clientes
@@ -334,9 +349,18 @@ export default function DashboardClientes() {
               <div className="text-2xl font-bold">
                 {clientesFiltrados.length}
               </div>
-              <p className="text-xs text-muted-foreground">
-                clientes cadastrados
-              </p>
+              
+              {/* <-- NOVO: Detalhamento por Tipo --> */}
+              <div className="space-y-1.5 mt-2">
+                <div className="flex items-center text-xs text-muted-foreground">
+                  <span className="w-2 h-2 rounded-full bg-blue-500 mr-2"></span>
+                  Fiscal: <span className="font-medium text-foreground ml-1">{totaisTipoCliente.fiscal}</span>
+                </div>
+                <div className="flex items-center text-xs text-muted-foreground">
+                  <span className="w-2 h-2 rounded-full bg-purple-500 mr-2"></span>
+                  Gerencial: <span className="font-medium text-foreground ml-1">{totaisTipoCliente.gerencial}</span>
+                </div>
+              </div>
             </CardContent>
           </Card>
 

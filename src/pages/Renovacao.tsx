@@ -4,8 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useClientes } from "@/hooks/useClientes";
 import { useRenovacao } from "@/hooks/useRenovacao";
-import { Renovacao } from "@/types/crm";
-import { Plus, Edit, Trash2, Download, FileSpreadsheet, RefreshCw } from "lucide-react";
+import { Renovacao, StatusRenovacao } from "@/types/crm";
+import { Plus, Edit, Trash2, Download, FileSpreadsheet, RefreshCw, History } from "lucide-react";
 import { useTarefas } from "@/hooks/useTarefas";
 import {
   Dialog,
@@ -34,12 +34,14 @@ import { FiltersBar } from "@/components/FiltersBar";
 import { useConfirmationDialog } from "@/components/ConfirmationDialog";
 import { generateRenovacaoPDF, generateRenovacaoExcel } from "@/lib/pdfGenerator";
 import { SelectClienteComBusca } from "@/components/SelectClienteComBusca";
+import { HistoricoPagamentosDialog } from "@/components/HistoricoPagamentosDialog";
+import { calcularStatusRenovacao } from "@/lib/renovacao";
 
 export default function RenovacoesPage() {
   // 1. Hooks Customizados
   const { addTarefa, tarefas, deleteTarefa, updateTarefa } = useTarefas();
   const { clientes } = useClientes();
-  const { renovacoes, createRenovacao, updateRenovacao, deleteRenovacao, refresh } = useRenovacao();
+  const { renovacoes, resumoMesAtual, createRenovacao, updateRenovacao, deleteRenovacao, refresh, vencemNesteMes } = useRenovacao();
   const { showConfirmation, ConfirmationDialogComponent } = useConfirmationDialog();
   const { toast } = useToast();
 
@@ -59,6 +61,9 @@ export default function RenovacoesPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<Renovacao | null>(null);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+
+  const [historicoDialogOpen, setHistoricoDialogOpen] = useState(false);
+  const [selectedItemHistorico, setSelectedItemHistorico] = useState<Renovacao | null>(null);
 
   const [formData, setFormData] = useState({
     clienteId: "",
@@ -189,10 +194,10 @@ export default function RenovacoesPage() {
     setIsSyncing(true);
     let tarefasCriadas = 0;
 
-    // 1. Filtra as renovações que estão com o status "Pendente"
-    const renovacoesPendentes = renovacoes.filter(r => r.status === "Pendente");
+    // TROQUE AQUI: De 'renovacoes' para 'renovacoesProcessadas'
+    const renovacoesPendentes = renovacoesProcessadas.filter(r => r.status === "Pendente");
 
-    for (const renovacao of renovacoesPendentes) {
+        for (const renovacao of renovacoesPendentes) {
       // 2. Busca na lista de tarefas se JÁ EXISTE uma com o mesmo Cliente E Título
       const temTarefa = tarefas.some(t => 
         t.clienteId === renovacao.clienteId && 
@@ -214,6 +219,8 @@ export default function RenovacoesPage() {
             clienteId: renovacao.clienteId,
             clienteNome: renovacao.clienteNome,
             categoria: "", 
+            createdAt: "",
+            updatedAt: ""
           });
           tarefasCriadas++;
         } catch (error) {
@@ -280,79 +287,126 @@ export default function RenovacoesPage() {
   };
 
 const createRenovacaoTasks = async (
-    numParcelas: number, 
-    valorTotal: number, 
-    dataBase: string, 
-    observacoes: string, 
-    clienteId: string, 
-    clienteNome: string,
-    status: string,
-    mudouEstrutura: boolean
-  ) => {
-    const [ano, mes, dia] = dataBase.split("-").map(Number);
+  numParcelas: number, 
+  valorTotal: number, 
+  dataBase: string, 
+  observacoes: string, 
+  clienteId: string, 
+  clienteNome: string,
+  status: string,
+  mudouEstrutura: boolean
+) => {
+  const [ano, mes, dia] = dataBase.split("-").map(Number);
+  let manteveTarefaDoMes = false;
 
-    // 1. Limpeza: Se mudou algo, apaga as tarefas antigas de renovação deste cliente
-    if (mudouEstrutura) {
-      const tarefasAntigas = tarefas.filter(t => 
-        t.clienteId === clienteId && 
-        t.titulo?.trim().toUpperCase().startsWith("RENOVAÇÃO ANUAL")
-      );
-      for (const t of tarefasAntigas) {
+  // 1. Limpeza: Se mudou algo, apaga as tarefas antigas (exceto a do mês atual se for para Renovado)
+  if (mudouEstrutura) {
+    const hoje = new Date();
+    const mesAtual = hoje.getMonth();
+    const anoAtual = hoje.getFullYear();
+
+    const tarefasAntigas = tarefas.filter(t => 
+      t.clienteId === clienteId && 
+      t.titulo?.trim().toUpperCase().startsWith("RENOVAÇÃO ANUAL")
+    );
+
+    for (const t of tarefasAntigas) {
+      const dataTarefa = t.data ? new Date(t.data) : null;
+      // Verifica se a tarefa pertence ao mês em que estamos
+      const isMesAtual = dataTarefa && dataTarefa.getMonth() === mesAtual && dataTarefa.getFullYear() === anoAtual;
+
+      // REGRA NOVA: Ao mudar para Renovado, preserva a tarefa do mês atual (marca como concluída) e apaga as futuras
+      if (status === "Renovado" && isMesAtual && !manteveTarefaDoMes) {
+        try { 
+          await updateTarefa(t.id, { 
+            concluida: true, 
+            titulo: "RENOVAÇÃO ANUAL",
+            descricao: observacoes || ""
+          });
+          manteveTarefaDoMes = true; // Garante que preservou a tarefa base
+        } catch(e) { console.error("Erro ao atualizar tarefa:", e); }
+      } else {
+        // Se for do futuro, ou se for outro status, apaga
         try { await deleteTarefa(t.id); } catch(e) { console.error("Erro ao deletar:", e); }
       }
     }
+  }
 
-    // 2. Criação baseada no Status
-    if (status === "Parcelado") {
-      const valorMensal = valorTotal / numParcelas;
+  // 2. Criação baseada no Status
+  if (status === "Parcelado") {
+    const valorMensal = valorTotal / numParcelas;
+    
+    // Cria as parcelas do ANO ATUAL
+    for (let i = 0; i < numParcelas; i++) {
+      const dataParcela = new Date(ano, (mes - 1) + i, dia);
+      const dataFormatada = `${dataParcela.getFullYear()}-${String(dataParcela.getMonth() + 1).padStart(2, '0')}-${String(dataParcela.getDate()).padStart(2, '0')}`;
       
-      // Cria as parcelas do ANO ATUAL
-      for (let i = 0; i < numParcelas; i++) {
-        const dataParcela = new Date(ano, (mes - 1) + i, dia);
-        const dataFormatada = `${dataParcela.getFullYear()}-${String(dataParcela.getMonth() + 1).padStart(2, '0')}-${String(dataParcela.getDate()).padStart(2, '0')}`;
-        
-        await addTarefa({
-          titulo: `RENOVAÇÃO ANUAL - Parcela ${i + 1}/${numParcelas}`,
-          descricao: `Dividido em ${numParcelas}x.\nTotal: R$ ${valorTotal.toFixed(2)}\nParcela: R$ ${valorMensal.toFixed(2)}\n\n${observacoes || ""}`,
-          data: `${dataFormatada}T00:00:00`,
-          horaInicio: "08:00", horaFim: "17:00", prioridade: "Média",
-          concluida: i === 0, // 1ª paga, demais pendentes
-          ativo: true, clienteId: clienteId || "", clienteNome: clienteNome || "", categoria: ""
-        });
-      }
-      
-      // Cria o lembrete pro ANO QUE VEM
+      await addTarefa({
+        titulo: `RENOVAÇÃO ANUAL - Parcela ${i + 1}/${numParcelas}`,
+        descricao: `Dividido em ${numParcelas}x.\nTotal: R$ ${valorTotal.toFixed(2)}\nParcela: R$ ${valorMensal.toFixed(2)}\n\n${observacoes || ""}`,
+        data: `${dataFormatada}T00:00:00`,
+        horaInicio: "08:00", horaFim: "17:00", prioridade: "Média",
+        concluida: i === 0, // 1ª paga, demais pendentes
+        ativo: true, clienteId: clienteId || "", 
+        clienteNome: clienteNome || "", 
+        categoria: "",
+        createdAt: "",
+        updatedAt: "",
+      });
+    }
+    
+    // Cria o lembrete pro ANO QUE VEM
+    await addTarefa({
+      titulo: "RENOVAÇÃO ANUAL",
+      descricao: observacoes || "",
+      data: `${ano + 1}-${String(mes).padStart(2, '0')}-${String(dia).padStart(2, '0')}T00:00:00`,
+      horaInicio: "08:00", horaFim: "17:00", 
+      prioridade: "Média",
+      concluida: false, ativo: true, 
+      clienteId: clienteId || "", 
+      clienteNome: clienteNome || "", 
+      categoria: "",
+      createdAt: "",
+      updatedAt: "",
+    });
+
+  } else {
+    // Se for Renovado, Pendente, etc. (Só cria a tarefa base se não tiver reaproveitado a do mês atual)
+    if (!manteveTarefaDoMes) {
+      await addTarefa({
+        titulo: "RENOVAÇÃO ANUAL",
+        descricao: observacoes || "",
+        data: `${dataBase}T00:00:00`,
+        horaInicio: "08:00", 
+        horaFim: "17:00", 
+        prioridade: "Média",
+        concluida: status === "Renovado",
+        ativo: true, 
+        clienteId: clienteId || "", 
+        clienteNome: clienteNome || "", 
+        categoria: "",
+        createdAt: "",
+        updatedAt: "",
+      });
+    }
+
+    // Se marcou como pago (Renovado), já agenda a do ano que vem
+    if (status === "Renovado") {
       await addTarefa({
         titulo: "RENOVAÇÃO ANUAL",
         descricao: observacoes || "",
         data: `${ano + 1}-${String(mes).padStart(2, '0')}-${String(dia).padStart(2, '0')}T00:00:00`,
         horaInicio: "08:00", horaFim: "17:00", prioridade: "Média",
-        concluida: false, ativo: true, clienteId: clienteId || "", clienteNome: clienteNome || "", categoria: ""
+        concluida: false, ativo: true, 
+        clienteId: clienteId || "", 
+        clienteNome: clienteNome || "",       
+        categoria: "",
+        createdAt: "",
+        updatedAt: "",
       });
-
-    } else {
-      // Se for Renovado, Pendente, etc (Cria apenas uma tarefa)
-      await addTarefa({
-        titulo: "RENOVAÇÃO ANUAL",
-        descricao: observacoes || "",
-        data: `${dataBase}T00:00:00`,
-        horaInicio: "08:00", horaFim: "17:00", prioridade: "Média",
-        concluida: status === "Renovado",
-        ativo: true, clienteId: clienteId || "", clienteNome: clienteNome || "", categoria: ""
-      });
-
-      // Se marcou como pago, já agenda o ano que vem
-      if (status === "Renovado") {
-        await addTarefa({
-          titulo: "RENOVAÇÃO ANUAL",
-          descricao: observacoes || "",
-          data: `${ano + 1}-${String(mes).padStart(2, '0')}-${String(dia).padStart(2, '0')}T00:00:00`,
-          horaInicio: "08:00", horaFim: "17:00", prioridade: "Média",
-          concluida: false, ativo: true, clienteId: clienteId || "", clienteNome: clienteNome || "", categoria: ""
-        });
-      }
     }
-  };
+  }
+};
 
 const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -441,6 +495,158 @@ const handleSubmit = async (e: React.FormEvent) => {
       }
     );
   };
+
+  const alterarAno = (dataString: string, delta: number): string => {
+  if (!dataString) return new Date().toISOString().split("T")[0];
+  const [anoStr, mesStr, diaStr] = dataString.split("-");
+  const ano = parseInt(anoStr, 10) + delta;
+  return `${ano}-${mesStr}-${diaStr}`;
+};
+
+const adicionarAno = (data: string) => alterarAno(data, 1);
+const removerAno = (data: string) => alterarAno(data, -1);
+
+const handleToggleRenovacao = async (item: Renovacao, acao: "concluir" | "desfazer", novoStatus?: string) => {
+  const hoje = new Date();
+  hoje.setHours(0, 0, 0, 0);
+  const hojeStr = hoje.toISOString().split("T")[0];
+  const historico = item.historicoPagamentos || [];
+  const updatedAtISO = new Date().toISOString(); // Garantir timestamp válido
+
+  try {
+    if (acao === "desfazer") {
+      const historicoAtualizado = [...historico];
+      if (historicoAtualizado.length > 0) {
+        historicoAtualizado.sort((a, b) => new Date(b.dataVencimento).getTime() - new Date(a.dataVencimento).getTime());
+        historicoAtualizado.shift(); 
+      }
+
+      const novoVencimento = removerAno(item.dataRenovacao);
+      
+      await updateRenovacao(item.id, { 
+        historicoPagamentos: historicoAtualizado, 
+        status: novoStatus as StatusRenovacao || "Pendente", 
+        dataRenovacao: novoVencimento,
+        updatedAt: updatedAtISO // <- Regra satisfeita
+      });
+      
+      toast({ title: "Renovação desfeita", description: "Vencimento retornou para o ciclo anterior." });
+      return;
+    }
+
+    if (acao === "concluir") {
+      const vencimentoOriginal = new Date(item.dataRenovacao + "T00:00:00");
+      const emDia = hoje <= vencimentoOriginal;
+
+      const novoRegistroHistorico = {
+        id: `${item.id}-${item.dataRenovacao}-${Date.now()}`,
+        dataVencimento: item.dataRenovacao,
+        dataPagamento: hojeStr,
+        emDia,
+      };
+
+      const novoVencimento = adicionarAno(item.dataRenovacao);
+
+      await updateRenovacao(item.id, { 
+        historicoPagamentos: [...historico, novoRegistroHistorico], 
+        status: "Renovado", 
+        dataRenovacao: novoVencimento,
+        updatedAt: updatedAtISO // <- Regra satisfeita
+      });
+
+      await createRenovacaoTasks(1, item.valorRenovacao, novoVencimento, item.observacoes || "", item.clienteId, item.clienteNome, "Pendente", true);
+
+      toast({ title: "Renovado com sucesso!", description: `Próximo vencimento: ${formatarDataBR(novoVencimento)}` });
+    }
+  } catch (error) {
+    console.error("Erro no handleToggleRenovacao:", error);
+    toast({ title: "Erro ao processar renovação", variant: "destructive" });
+  }
+};
+
+const handleDeleteHistorico = async (renovacaoItem: Renovacao, historicoId: string) => {
+  const pagamentoMaisRecente = (renovacaoItem.historicoPagamentos || []).reduce((ultimo, atual) => {
+      const dataUltimo = new Date(ultimo.dataVencimento); const dataAtual = new Date(atual.dataVencimento);
+      return dataAtual > dataUltimo ? atual : ultimo;
+    });
+
+  if (historicoId !== pagamentoMaisRecente.id) {
+      toast({ title: "Não é possível apagar este pagamento", description: "Você deve apagar os pagamentos mais recentes primeiro.", variant: "destructive" });
+      return;
+  }
+
+  const historicoAtualizado = (renovacaoItem.historicoPagamentos || []).filter(h => h.id !== historicoId);
+  const pagamentoApagado = renovacaoItem.historicoPagamentos?.find(h => h.id === historicoId);
+  const dataAnterior = pagamentoApagado?.dataVencimento || renovacaoItem.dataRenovacao;
+
+  const statusAjustado = calcularStatusRenovacao({
+        status: "Pendente", dataRenovacao: dataAnterior, historicoPagamentos: historicoAtualizado,
+  });
+
+
+  try {
+    await updateRenovacao(renovacaoItem.id, { 
+      historicoPagamentos: historicoAtualizado, 
+      dataRenovacao: dataAnterior, 
+      status: statusAjustado 
+    });
+    await refresh(); 
+    setHistoricoDialogOpen(false); 
+    setSelectedItemHistorico(null);
+    toast({ title: "Registro removido do histórico." });
+  } catch (error) {
+    toast({ title: "Erro ao remover histórico", variant: "destructive" });
+  }
+};
+
+const handleEditHistorico = async (renovacaoItem: Renovacao, historicoId: string, novaData: string) => {
+  const historicoAtualizado = (renovacaoItem.historicoPagamentos || []).map(h => {
+    if (h.id === historicoId) {
+      const venc = new Date(h.dataVencimento + "T00:00:00");
+      const pag = new Date(novaData + "T00:00:00");
+      return { ...h, dataPagamento: novaData, emDia: pag <= venc };
+    }
+    return h;
+  });
+
+  try {
+    await updateRenovacao(renovacaoItem.id, { historicoPagamentos: historicoAtualizado });
+    refresh();
+    toast({ title: "Histórico atualizado." });
+  } catch (error) {
+    toast({ title: "Erro ao editar histórico", variant: "destructive" });
+  }
+};
+
+// 3. Inteligência de Status (Muda para Pendente na virada do ciclo)
+  const renovacoesProcessadas = useMemo(() => {
+    const anoAtual = new Date().getFullYear();
+    
+    return renovacoes.map((item) => {
+      let statusCorrigido = item.status;
+      
+      // Só precisamos verificar se estiver como Renovado ou Parcelado
+      if (statusCorrigido === "Renovado" || statusCorrigido?.includes("Parcelado")) {
+        const dataVencimentoItem = new Date(item.dataRenovacao + "T00:00:00");
+        const anoVencimentoItem = dataVencimentoItem.getFullYear();
+        
+        let ultimoAnoHistorico = -1;
+        if (item.historicoPagamentos && item.historicoPagamentos.length > 0) {
+           // Puxa o ano do pagamento mais recente lá do histórico
+           const pagamentos = [...item.historicoPagamentos].sort((a,b) => new Date(b.dataVencimento).getTime() - new Date(a.dataVencimento).getTime());
+           ultimoAnoHistorico = new Date(pagamentos[0].dataVencimento + "T00:00:00").getFullYear();
+        }
+        
+        // REGRA DE OURO: Se o vencimento é deste ano (ou já passou) 
+        // E o último histórico pago foi num ano ANTERIOR a este vencimento...
+        if (anoVencimentoItem <= anoAtual && ultimoAnoHistorico < anoVencimentoItem) {
+           statusCorrigido = "Pendente";
+        }
+      }
+      
+      return { ...item, status: statusCorrigido };
+    });
+  }, [renovacoes]);
 
   // 6. Constantes
   const STATUS_OPTIONS = [
@@ -670,20 +876,56 @@ const handleSubmit = async (e: React.FormEvent) => {
           }}
         />
 
-        <div className="mb-4 rounded-lg bg-primary p-4 text-primary-foreground">
-          <p className="text-lg font-semibold">
-            Total de Renovações: R${" "}
-            {totalGeral.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-          </p>
-          <div className="mt-3 pt-3 border-t border-primary-foreground/20 text-xs space-y-1">
-            <p>Renovado: R$ {totaisPorStatus.renovado.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</p>
-            <p>Pendente: R$ {totaisPorStatus.pendente.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</p>
-            <p>Em Negociação: R$ {totaisPorStatus.negociacao.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</p>
-            <p>Parcelados: R$ {totaisPorStatus.parcelado.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</p>
-            {totaisPorStatus.avisado > 0 && (
-              <p>Avisado: R$ {totaisPorStatus.avisado.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</p>
-            )}
+{/* === BANNERS DE TOTAIS === */}
+        <div className="mb-4 grid gap-4 md:grid-cols-2">
+          
+          {/* Banner 1: Total Geral (O que você já tinha) */}
+          <div className="rounded-lg bg-primary p-4 text-primary-foreground">
+            <p className="text-lg font-semibold">
+              Total de Renovações: R$ {totalGeral.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+            </p>
+            <div className="mt-3 pt-3 border-t border-primary-foreground/20 text-xs space-y-1">
+              <p>Renovado: R$ {totaisPorStatus.renovado.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</p>
+              <p>Pendente: R$ {totaisPorStatus.pendente.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</p>
+              <p>Em Negociação: R$ {totaisPorStatus.negociacao.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</p>
+              <p>Parcelados: R$ {totaisPorStatus.parcelado.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</p>
+              {totaisPorStatus.avisado > 0 && (
+                <p>Avisado: R$ {totaisPorStatus.avisado.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</p>
+              )}
+            </div>
           </div>
+
+         {/* Banner 2: Resumo do Mês Atual */}
+          <div className="rounded-lg bg-destructive p-4 text-white shadow-sm flex flex-col justify-between">
+            <div>
+              <p className="text-lg font-semibold mb-1">
+                Resumo de {new Date().toLocaleString('pt-BR', { month: 'long' }).replace(/^\w/, c => c.toUpperCase())}
+              </p>
+              <p className="text-sm border-b border-white/20 pb-3 opacity-90">
+                Acompanhamento das renovações do ciclo atual.
+              </p>
+            </div>
+            
+            <div className="grid grid-cols-2 gap-4 mt-3">
+              <div>
+                <p className="text-xs font-medium opacity-80 uppercase tracking-wider mb-1">
+                  Pendentes ({resumoMesAtual.pendentesQtd})
+                </p>
+                <p className="text-lg font-bold">
+                  R$ {resumoMesAtual.pendentesValor.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs font-medium opacity-80 uppercase tracking-wider mb-1">
+                  Pagas ({resumoMesAtual.pagasQtd})
+                </p>
+                <p className="text-lg font-bold text-emerald-300">
+                  R$ {resumoMesAtual.pagasValor.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                </p>
+              </div>
+            </div>
+          </div>
+          
         </div>
 
         <div className="rounded-md border">
@@ -709,43 +951,146 @@ const handleSubmit = async (e: React.FormEvent) => {
                   </td>
                   <td className="p-3">
                     <div className="flex gap-2">
-                    <StatusSelect
-                        item={item}
-                        onUpdateStatus={async (id, data) => {
-                          const safeData = { ...data, clienteCNPJ: item.clienteCNPJ || "", observacoes: item.observacoes || "" };
-                          await updateRenovacao(id, safeData as any);
+                        <StatusSelect
+                            item={item}
+                            onUpdateStatus={async (id, data) => {
+                              const novoStatus = data.status;
+                              const statusAnterior = item.status;
+                              
+                              const isConcluido = novoStatus === "Renovado" || novoStatus === "Parcelado";
+                              const wasConcluido = statusAnterior === "Renovado" || statusAnterior === "Parcelado";
 
-                          // PEGA O NÚMERO DE PARCELAS DO 'DATA' (O novo valor clicado)
-                          const parcelaString = data.status === "Parcelado" ? (data.parcela || "1 Vez") : "1 Vez";
-                          const numParcelas = parseInt(parcelaString.split(" ")[0]) || 1;
-                          
-                          await createRenovacaoTasks(
-                            numParcelas, 
-                            item.valorRenovacao, 
-                            item.dataRenovacao, 
-                            item.observacoes || "", 
-                            item.clienteId, 
-                            item.clienteNome, 
-                            data.status as string,
-                            true 
-                          );
-                          
-                          toast({ title: "Status e tarefas atualizados!" });
-                        }}
-                        onStatusChange={refresh}
-                        statusOptions={STATUS_OPTIONS}
-                      />
+                              const parcelaString = novoStatus === "Parcelado" ? (data.parcela || "1 Vez") : "1 Vez";
+                              const numParcelas = parseInt(parcelaString.split(" ")[0]) || 1;
+
+                              if (isConcluido && !wasConcluido) {
+                                // 1. AÇÃO: CONCLUIR (Pendente para Parcelado/Renovado -> Cria histórico e avança o ano)
+                                const hoje = new Date();
+                                hoje.setHours(0, 0, 0, 0);
+                                const hojeStr = hoje.toISOString().split("T")[0];
+                                const vencimentoOriginal = new Date(item.dataRenovacao + "T00:00:00");
+                                const emDia = hoje <= vencimentoOriginal;
+
+                                const novoRegistroHistorico = {
+                                  id: `${item.id}-${item.dataRenovacao}-${Date.now()}`,
+                                  dataVencimento: item.dataRenovacao,
+                                  dataPagamento: hojeStr,
+                                  emDia,
+                                };
+
+                                const novoVencimento = adicionarAno(item.dataRenovacao);
+                                const historicoAtualizado = [...(item.historicoPagamentos || []), novoRegistroHistorico];
+
+                                const safeData = {
+                                  ...data,
+                                  clienteCNPJ: item.clienteCNPJ || "",
+                                  observacoes: item.observacoes || "",
+                                  historicoPagamentos: historicoAtualizado,
+                                  dataRenovacao: novoVencimento,
+                                  updatedAt: new Date().toISOString()
+                                };
+
+                                await updateRenovacao(id, safeData as any);
+
+                                await createRenovacaoTasks(
+                                  numParcelas, item.valorRenovacao, item.dataRenovacao, 
+                                  item.observacoes || "", item.clienteId, item.clienteNome, novoStatus, true
+                                );
+
+                                toast({ 
+                                  title: "Renovação registrada no histórico!", 
+                                  description: `Próximo vencimento geral: ${formatarDataBR(novoVencimento)}` 
+                                });
+                              } 
+                              else if (!isConcluido && wasConcluido) {
+                                // 2. AÇÃO: DESFAZER (Parcelado/Renovado para Pendente -> Remove do histórico e volta o ano)
+                                const historicoAtualizado = [...(item.historicoPagamentos || [])];
+                                if (historicoAtualizado.length > 0) {
+                                  historicoAtualizado.sort((a, b) => new Date(b.dataVencimento).getTime() - new Date(a.dataVencimento).getTime());
+                                  historicoAtualizado.shift(); 
+                                }
+
+                                const dataVencimentoAnterior = removerAno(item.dataRenovacao);
+
+                                const safeData = {
+                                  ...data,
+                                  clienteCNPJ: item.clienteCNPJ || "",
+                                  observacoes: item.observacoes || "",
+                                  historicoPagamentos: historicoAtualizado,
+                                  dataRenovacao: dataVencimentoAnterior,
+                                  updatedAt: new Date().toISOString()
+                                };
+
+                                await updateRenovacao(id, safeData as any);
+
+                                await createRenovacaoTasks(
+                                  1, item.valorRenovacao, dataVencimentoAnterior,
+                                  item.observacoes || "", item.clienteId, item.clienteNome, novoStatus, true
+                                );
+
+                                toast({ 
+                                  title: "Renovação desfeita", 
+                                  description: "O vencimento e o histórico retornaram para o ciclo anterior." 
+                                });
+                              } 
+                              else if (isConcluido && wasConcluido && novoStatus !== statusAnterior) {
+                                // 3. TRANSIÇÃO: PARCELADO <-> RENOVADO (Não muda o ano da tabela, só limpa as parcelas futuras)
+                                const safeData = { ...data, clienteCNPJ: item.clienteCNPJ || "", observacoes: item.observacoes || "" };
+                                await updateRenovacao(id, safeData as any);
+
+                                // Como o ano já havia sido avançado quando mudou para "Parcelado", usamos o ano original para as tarefas
+                                const dataBaseOriginal = removerAno(item.dataRenovacao);
+
+                                await createRenovacaoTasks(
+                                  numParcelas, item.valorRenovacao, dataBaseOriginal,
+                                  item.observacoes || "", item.clienteId, item.clienteNome, novoStatus, true
+                                );
+
+                                toast({ title: "Modo de renovação quitado/atualizado!" });
+                              }
+                              else {
+                                // 4. AÇÃO: APENAS ATUALIZAR STATUS COMUNS
+                                const safeData = { ...data, clienteCNPJ: item.clienteCNPJ || "", observacoes: item.observacoes || "" };
+                                await updateRenovacao(id, safeData as any);
+
+                                await createRenovacaoTasks(
+                                  numParcelas, item.valorRenovacao, item.dataRenovacao,
+                                  item.observacoes || "", item.clienteId, item.clienteNome, novoStatus, true
+                                );
+
+                                toast({ title: "Status atualizado!" });
+                              }
+                            }}
+                            onStatusChange={refresh}
+                            statusOptions={STATUS_OPTIONS}
+                          />
                     </div>
                   </td>
                   <td className="p-3">
-                    <div className="flex gap-2">
-                      <Button size="sm" variant="ghost" onClick={() => handleEdit(item)}>
-                        <Edit className="h-4 w-4" />
-                      </Button>
-                      <Button size="sm" variant="ghost" onClick={() => handleDelete(item.id)}>
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
+                   <td className="p-3">
+                      <div className="flex gap-2">
+                        {/* NOVO: Botão de Histórico adicionado aqui */}
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => {
+                            setSelectedItemHistorico(item);
+                            setHistoricoDialogOpen(true);
+                          }}
+                          title="Ver histórico de renovações"
+                        >
+                          <History className="h-4 w-4" />
+                        </Button>
+
+                        {/* Botões que você já tinha */}
+                        <Button size="sm" variant="ghost" onClick={() => handleEdit(item)}>
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                        <Button size="sm" variant="ghost" onClick={() => handleDelete(item.id)}>
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </td>
                   </td>
                 </tr>
               ))}
@@ -775,6 +1120,13 @@ const handleSubmit = async (e: React.FormEvent) => {
         />
       </div>
       {ConfirmationDialogComponent}
-    </Layout>
+        <HistoricoPagamentosDialog
+            isOpen={historicoDialogOpen}
+            onOpenChange={setHistoricoDialogOpen}
+            item={selectedItemHistorico}
+            onDeleteHistorico={handleDeleteHistorico}
+            onEditHistorico={handleEditHistorico}
+          />
+        </Layout>
   );
 }

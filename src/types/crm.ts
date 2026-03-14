@@ -18,6 +18,8 @@ export interface Cliente {
   contabilidade: string;
   responsavel: string;
   observacoes: string;
+  isFiscal?: boolean;     // <-- Adicionado
+  isGerencial?: boolean;  // <-- Adicionado
   ativo: boolean;
   createdAt: string;
   updatedAt: string;
@@ -28,7 +30,7 @@ export interface HistoricoPagamento {
   dataVencimento: string;
   dataPagamento: string;
   emDia: boolean; // true se pagou antes/no vencimento, false se atrasado
-  meioPagamento: "Pix" | "Boleto";
+  meioPagamento?: "Pix" | "Boleto";
 }
 
 export interface HistoricoAtividade {
@@ -55,6 +57,11 @@ export interface Financeiro {
   ativo: boolean;
   createdAt: string;
   updatedAt: string;
+  // Adicione isso tanto na interface Servico quanto na interface Financeiro:
+  nfe?: boolean;
+  nfeDatas?: string;
+  nfce?: boolean;
+  nfceDatas?: string;
 }
 
 export interface Certificado {
@@ -71,20 +78,22 @@ export interface Certificado {
   updatedAt: string;
 }
 
+export type StatusRenovacao = "Pendente"
+    | "Avisado"
+    | "Em Negociação"
+    | "Parcelado"
+    | "Renovado"
+    | "Cancelado";
+
 export interface Renovacao {
   id: string;
   clienteId: string;
   clienteNome: string;
   clienteCNPJ: string;
   dataRenovacao: string;
+  dataPagamento?: string | null; // Adicionado para controle do ciclo atual (igual ao financeiro)
   valorRenovacao: number;
-  status:
-    | "Pendente"
-    | "Avisado"
-    | "Em Negociação"
-    | "Parcelado"
-    | "Renovado"
-    | "Cancelado";
+  status: StatusRenovacao;
   parcela?: "1 Vez" | "2 Vezes" | "3 Vezes" | null;
   historicoPagamentos?: HistoricoPagamento[];
   observacoes: string;
@@ -125,4 +134,9 @@ export interface Servico {
   ativo: boolean;
   createdAt: string;
   updatedAt: string;
+  // Adicione isso tanto na interface Servico quanto na interface Financeiro:
+  nfe?: boolean;
+  nfeDatas?: string;
+  nfce?: boolean;
+  nfceDatas?: string;
 }

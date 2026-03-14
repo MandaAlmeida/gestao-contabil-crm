@@ -23,10 +23,8 @@ service cloud.firestore {
     
     // ==================== CONTABILIDADES ====================
     match /contabilidades/{contabilidadeId} {
-      // Permitir leitura para usuários autenticados
       allow read: if isAuthenticated();
       
-      // Permitir criação para usuários autenticados com validação
       allow create: if isAuthenticated() &&
                       hasValidTimestamps() &&
                       request.resource.data.nome is string &&
@@ -35,7 +33,6 @@ service cloud.firestore {
                       request.resource.data.email.size() > 0 &&
                       (!('cnpj' in request.resource.data) || request.resource.data.cnpj is string);
       
-      // Permitir atualização para usuários autenticados
       allow update: if isAuthenticated() &&
                       request.resource.data.updatedAt is string &&
                       createdAtUnchanged() &&
@@ -45,16 +42,13 @@ service cloud.firestore {
                       request.resource.data.email.size() > 0 &&
                       (!('cnpj' in request.resource.data) || request.resource.data.cnpj is string);
       
-      // Permitir exclusão para usuários autenticados
       allow delete: if isAuthenticated();
     }
     
     // ==================== CLIENTES ====================
     match /clientes/{clienteId} {
-      // Permitir leitura para usuários autenticados
       allow read: if isAuthenticated();
       
-      // Permitir criação para usuários autenticados com validação
       allow create: if isAuthenticated() &&
                       hasValidTimestamps() &&
                       request.resource.data.nome is string &&
@@ -68,9 +62,10 @@ service cloud.firestore {
                       request.resource.data.cnpj.size() > 0 &&
                       request.resource.data.cidade.size() > 0 &&
                       request.resource.data.contato.size() > 0 &&
-                      request.resource.data.responsavel.size() > 0;
+                      request.resource.data.responsavel.size() > 0 &&
+                      (!('isFiscal' in request.resource.data) || request.resource.data.isFiscal is bool) &&
+                      (!('isGerencial' in request.resource.data) || request.resource.data.isGerencial is bool);
       
-      // Permitir atualização para usuários autenticados
       allow update: if isAuthenticated() &&
                       request.resource.data.updatedAt is string &&
                       createdAtUnchanged() &&
@@ -85,33 +80,37 @@ service cloud.firestore {
                       request.resource.data.cnpj.size() > 0 &&
                       request.resource.data.cidade.size() > 0 &&
                       request.resource.data.contato.size() > 0 &&
-                      request.resource.data.responsavel.size() > 0;
+                      request.resource.data.responsavel.size() > 0 &&
+                      (!('isFiscal' in request.resource.data) || request.resource.data.isFiscal is bool) &&
+                      (!('isGerencial' in request.resource.data) || request.resource.data.isGerencial is bool);
       
-      // Permitir exclusão para usuários autenticados
       allow delete: if isAuthenticated();
     }
     
     // ==================== FINANCEIRO ====================
     match /financeiro/{financeiroId} {
-     allow read: if isAuthenticated();
+      allow read: if isAuthenticated();
   
-  allow create: if isAuthenticated() &&
-                  hasValidTimestamps() &&
-                  request.resource.data.status in ['Pago', 'Pendente', 'Vencido'];
+      allow create: if isAuthenticated() &&
+                      hasValidTimestamps() &&
+                      request.resource.data.status in ['Pago', 'Pendente', 'Vencido'] &&
+                      request.resource.data.meioPagamento in ['Pix', 'Boleto'] &&
+                      request.resource.data.valorMensalidade is number &&
+                      (!('valorServico' in request.resource.data) || request.resource.data.valorServico is number) &&
+                      (!('historicoPagamentos' in request.resource.data) || request.resource.data.historicoPagamentos is list);
 
-  allow update: if isAuthenticated() &&
-                  request.resource.data.updatedAt is string &&
-                  createdAtUnchanged();
+      allow update: if isAuthenticated() &&
+                      request.resource.data.updatedAt is string &&
+                      createdAtUnchanged() &&
+                      (!('historicoPagamentos' in request.resource.data) || request.resource.data.historicoPagamentos is list);
   
-  allow delete: if isAuthenticated();
+      allow delete: if isAuthenticated();
     }
     
     // ==================== CERTIFICADOS ====================
     match /certificados/{certificadoId} {
-      // Permitir leitura para usuários autenticados
       allow read: if isAuthenticated();
       
-      // Permitir criação para usuários autenticados com validação
       allow create: if isAuthenticated() &&
                       hasValidTimestamps() &&
                       request.resource.data.clienteId is string &&
@@ -125,7 +124,6 @@ service cloud.firestore {
                       request.resource.data.tipoCertificado in ['A1', 'A3'] &&
                       request.resource.data.status in ['Pendente', 'Avisado', 'Renovado'];
       
-      // Permitir atualização para usuários autenticados
       allow update: if isAuthenticated() &&
                       request.resource.data.updatedAt is string &&
                       createdAtUnchanged() &&
@@ -140,20 +138,13 @@ service cloud.firestore {
                       request.resource.data.tipoCertificado in ['A1', 'A3'] &&
                       request.resource.data.status in ['Pendente', 'Avisado', 'Renovado'];
       
-      // Permitir exclusão para usuários autenticados
       allow delete: if isAuthenticated();
     }
     
     // ==================== SINTEGRA ====================
     match /sintegra/{sintegraId} {
-      // Campo dataPagamento: opcional, pode ser string ou null (DEPRECATED)
-      // Usado para armazenar quando o item foi marcado como concluído
-      // Campo historicoAtividades: opcional, array de objetos com histórico de atividades
-      
-      // Permitir leitura para usuários autenticados
       allow read: if isAuthenticated();
       
-      // Permitir criação para usuários autenticados com validação
       allow create: if isAuthenticated() &&
                       hasValidTimestamps() &&
                       request.resource.data.clienteId is string &&
@@ -170,7 +161,6 @@ service cloud.firestore {
                       (!('historicoAtividades' in request.resource.data) ||
                        request.resource.data.historicoAtividades is list);
       
-      // Permitir atualização para usuários autenticados
       allow update: if isAuthenticated() &&
                       request.resource.data.updatedAt is string &&
                       createdAtUnchanged() &&
@@ -188,19 +178,13 @@ service cloud.firestore {
                       (!('historicoAtividades' in request.resource.data) ||
                        request.resource.data.historicoAtividades is list);
       
-      // Permitir exclusão para usuários autenticados
       allow delete: if isAuthenticated();
     }
     
     // ==================== DESPESAS ====================
     match /despesas/{despesaId} {
-      // Campo dataPagamento: opcional, pode ser string ou null
-      // Campo atrasado: opcional, indica se foi pago fora do mês de vencimento
-      
-      // Permitir leitura para usuários autenticados
       allow read: if isAuthenticated();
       
-      // Permitir criação para usuários autenticados com validação
       allow create: if isAuthenticated() &&
                       hasValidTimestamps() &&
                       request.resource.data.descricao is string &&
@@ -213,7 +197,6 @@ service cloud.firestore {
                       (!('dataPagamento' in request.resource.data) || request.resource.data.dataPagamento is string || request.resource.data.dataPagamento == null) &&
                       (!('atrasado' in request.resource.data) || request.resource.data.atrasado is bool);
       
-      // Permitir atualização para usuários autenticados
       allow update: if isAuthenticated() &&
                       request.resource.data.updatedAt is string &&
                       createdAtUnchanged() &&
@@ -227,19 +210,13 @@ service cloud.firestore {
                       (!('dataPagamento' in request.resource.data) || request.resource.data.dataPagamento is string || request.resource.data.dataPagamento == null) &&
                       (!('atrasado' in request.resource.data) || request.resource.data.atrasado is bool);
       
-      // Permitir exclusão para usuários autenticados
       allow delete: if isAuthenticated();
     }
     
     // ==================== SERVICOS ====================
     match /servicos/{servicoId} {
-      // Campo dataPagamento: opcional, pode ser string ou null
-      // Usado para armazenar quando o item foi marcado como pago
-      
-      // Permitir leitura para usuários autenticados
       allow read: if isAuthenticated();
       
-      // Permitir criação para usuários autenticados com validação
       allow create: if isAuthenticated() &&
                       hasValidTimestamps() &&
                       request.resource.data.clienteId is string &&
@@ -262,7 +239,6 @@ service cloud.firestore {
                       request.resource.data.meioPagamento in ['Pix', 'Boleto'] &&
                       request.resource.data.valorMensalidade >= 0;
       
-      // Permitir atualização para usuários autenticados
       allow update: if isAuthenticated() &&
                       request.resource.data.updatedAt is string &&
                       createdAtUnchanged() &&
@@ -289,57 +265,34 @@ service cloud.firestore {
                       request.resource.data.meioPagamento in ['Pix', 'Boleto'] &&
                       request.resource.data.valorMensalidade >= 0;
       
-      // Permitir exclusão para usuários autenticados
       allow delete: if isAuthenticated();
     }
     
     // ==================== RENOVACAO ====================
     match /renovacao/{renovacaoId} {
-      // Permitir leitura para usuários autenticados
       allow read: if isAuthenticated();
       
-      // Permitir criação para usuários autenticados com validação
       allow create: if isAuthenticated() &&
                       hasValidTimestamps() &&
                       request.resource.data.clienteId is string &&
-                      request.resource.data.clienteNome is string &&
-                      request.resource.data.clienteCNPJ is string &&
-                      request.resource.data.dataRenovacao is string &&
-                      request.resource.data.valorRenovacao is number &&
-                      request.resource.data.status is string &&
-                      request.resource.data.observacoes is string &&
-                      request.resource.data.clienteId.size() > 0 &&
                       request.resource.data.status in ['Pendente', 'Avisado', 'Em Negociação', 'Parcelado', 'Renovado', 'Cancelado'] &&
-                      (!('parcela' in request.resource.data) || request.resource.data.parcela == null || (request.resource.data.parcela is string && request.resource.data.parcela in ['1 Vez', '2 Vezes', '3 Vezes'])) &&
-                      request.resource.data.valorRenovacao >= 0;
+                      (!('parcela' in request.resource.data) || request.resource.data.parcela == null || (request.resource.data.parcela is string)) &&
+                      (!('historicoPagamentos' in request.resource.data) || request.resource.data.historicoPagamentos is list) && 
+                      (!('dataPagamento' in request.resource.data) || request.resource.data.dataPagamento is string || request.resource.data.dataPagamento == null);
       
-      // Permitir atualização para usuários autenticados
       allow update: if isAuthenticated() &&
                       request.resource.data.updatedAt is string &&
                       createdAtUnchanged() &&
-                      request.resource.data.clienteId is string &&
-                      request.resource.data.clienteNome is string &&
-                      request.resource.data.clienteCNPJ is string &&
-                      request.resource.data.dataRenovacao is string &&
-                      request.resource.data.valorRenovacao is number &&
-                      request.resource.data.status is string &&
-                      request.resource.data.observacoes is string &&
-                      request.resource.data.clienteId.size() > 0 &&
                       request.resource.data.status in ['Pendente', 'Avisado', 'Em Negociação', 'Parcelado', 'Renovado', 'Cancelado'] &&
-                      (!('parcela' in request.resource.data) || request.resource.data.parcela == null || (request.resource.data.parcela is string && request.resource.data.parcela in ['1 Vez', '2 Vezes', '3 Vezes'])) &&
-                      request.resource.data.valorRenovacao >= 0;
+                      (!('historicoPagamentos' in request.resource.data) || request.resource.data.historicoPagamentos is list);
       
-      // Permitir exclusão para usuários autenticados
       allow delete: if isAuthenticated();
     }
     
     // ==================== USUÁRIOS ====================
     match /usuarios/{usuarioId} {
-      // Permitir leitura para usuários autenticados
       allow read: if isAuthenticated();
 
-      // Permitir criação para usuários autenticados
-      // Permite que qualquer usuário autenticado crie um registro de usuário
       allow create: if isAuthenticated() &&
                       request.resource.data.nome is string &&
                       request.resource.data.email is string &&
@@ -351,7 +304,6 @@ service cloud.firestore {
                       request.resource.data.createdAt is string &&
                       request.resource.data.updatedAt is string;
 
-      // Permitir atualização para usuários autenticados
       allow update: if isAuthenticated() &&
                      request.resource.data.nome is string &&
                      request.resource.data.email is string &&
@@ -363,16 +315,13 @@ service cloud.firestore {
                      (resource == null || resource.data.createdAt == request.resource.data.createdAt) &&
                      (!('telefone' in request.resource.data) || request.resource.data.telefone is string);
 
-      // Permitir exclusão para usuários autenticados
       allow delete: if isAuthenticated();
     }
 
     // ==================== USER PREFERENCES ====================
     match /userPreferences/{userId} {
-      // Permitir leitura apenas para o próprio usuário
       allow read: if isAuthenticated() && request.auth.uid == userId;
 
-      // Permitir criação e atualização apenas para o próprio usuário
       allow create, update: if isAuthenticated() &&
                             request.auth.uid == userId &&
                             (!('viewedNotifications' in request.resource.data) ||
@@ -380,16 +329,13 @@ service cloud.firestore {
                             (!('updatedAt' in request.resource.data) ||
                              request.resource.data.updatedAt is number);
 
-      // Permitir exclusão apenas para o próprio usuário
       allow delete: if isAuthenticated() && request.auth.uid == userId;
     }
 
     // ==================== NOTIFICATIONS ====================
     match /notifications/{notificationId} {
-      // Permitir leitura apenas para usuários autenticados
       allow read: if isAuthenticated();
 
-      // Permitir criação para usuários autenticados com validação
       allow create: if isAuthenticated() &&
                       hasValidTimestamps() &&
                       request.resource.data.userId is string &&
@@ -405,7 +351,6 @@ service cloud.firestore {
                       request.resource.data.type in ['certificado', 'pagamento', 'servico', 'renovacao', 'sintegra', 'despesa'] &&
                       request.resource.data.priority in ['high', 'medium', 'low'];
 
-      // Permitir atualização apenas para o dono da notificação
       allow update: if isAuthenticated() &&
                       request.auth.uid == resource.data.userId &&
                       request.resource.data.updatedAt is string &&
@@ -421,47 +366,36 @@ service cloud.firestore {
                       request.resource.data.userId.size() > 0 &&
                       request.resource.data.itemId.size() > 0;
 
-      // Permitir exclusão apenas para o dono da notificação
       allow delete: if isAuthenticated() && request.auth.uid == resource.data.userId;
     }
 
     // ==================== NOTIFICATION VIEWS ====================
     match /notificationViews/{viewId} {
-      // Permitir leitura apenas para o próprio usuário
       allow read: if isAuthenticated() && request.auth.uid == resource.data.userId;
 
-      // Permitir criação apenas para o próprio usuário
       allow create: if isAuthenticated() &&
                       request.auth.uid == request.resource.data.userId &&
                       request.resource.data.notificationId is string &&
                       request.resource.data.viewedAt is string &&
                       request.resource.data.notificationId.size() > 0;
 
-      // Permitir exclusão para usuários autenticados (necessário para limpar visualizações ao excluir notificações)
       allow delete: if isAuthenticated();
       
-      // Não permitir atualização (visualizações são imutáveis)
       allow update: if false;
     }
     
     // ==================== ANOTACOES ====================
     match /anotacoes/{anotacaoId} {
-      // Permitir leitura para usuários autenticados
       allow read: if isAuthenticated();
-      // Permitir criação para usuários autenticados
       allow create: if isAuthenticated();
-      // Permitir atualização para usuários autenticados
       allow update: if isAuthenticated();
-      // Permitir exclusão para usuários autenticados
       allow delete: if isAuthenticated();
     }
     
     // ==================== TAREFAS ====================
     match /tarefas/{tarefaId} {
-      // Permitir leitura para usuários autenticados
       allow read: if isAuthenticated();
       
-      // Permitir criação para usuários autenticados com validação
       allow create: if isAuthenticated() &&
                       hasValidTimestamps() &&
                       request.resource.data.titulo is string &&
@@ -471,19 +405,15 @@ service cloud.firestore {
                       request.resource.data.prioridade is string &&
                       request.resource.data.titulo.size() > 0;
       
-      // Permitir atualização para usuários autenticados
       allow update: if isAuthenticated() &&
                       request.resource.data.updatedAt is string &&
                       createdAtUnchanged();
       
-      // Permitir exclusão para usuários autenticados
       allow delete: if isAuthenticated();
     }
     
-    // Negar todas as outras operações por padrão
     match /{document=**} {
       allow read, write: if false;
     }
   }
 }
-
