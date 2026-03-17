@@ -32,9 +32,16 @@ export function useServicos() {
     loadServicos();
   }, [loadServicos]);
 
-  const createServico = async (servico: Omit<Servico, "id" | "createdAt" | "updatedAt">) => {
+const createServico = async (servico: Omit<Servico, "id" | "createdAt" | "updatedAt">) => {
     try {
-      const id = await servicoService.createServico(servico);
+      const now = new Date().toISOString(); // <-- GERA A DATA AQUI
+      
+      // Passa as datas para o service
+      const id = await servicoService.createServico({
+        ...servico,
+        createdAt: now,
+        updatedAt: now
+      } as any); 
 
       // Vinculação automática na criação
       const financeiroSemServico = financeiros.find(f =>
@@ -44,7 +51,8 @@ export function useServicos() {
       if (financeiroSemServico) {
         await updateFinanceiro(financeiroSemServico.id, { 
           servicoId: id,
-          valorServico: servico.valorMensalidade // Opcional: sincroniza o valor
+          valorServico: servico.valorMensalidade,
+          updatedAt: now // <-- BLINDA A ATUALIZAÇÃO DO FINANCEIRO
         });
       }
 
@@ -58,17 +66,26 @@ export function useServicos() {
 
   const updateServico = async (id: string, updates: Partial<Omit<Servico, "id" | "createdAt">>) => {
     try {
+      const now = new Date().toISOString();
+
       if (updates.status === "Pago") {
         await excluirNotificacoesItem(id, "servico");
       }
 
-      await servicoService.updateServico(id, updates);
+      // Injeta o updatedAt na atualização do serviço
+      await servicoService.updateServico(id, {
+        ...updates,
+        updatedAt: now
+      });
       
       // Sincroniza valor no financeiro se a mensalidade do serviço mudar
       if (updates.valorMensalidade !== undefined) {
         const financeiroVinculado = financeiros.find(f => f.servicoId === id);
         if (financeiroVinculado) {
-          await updateFinanceiro(financeiroVinculado.id, { valorServico: updates.valorMensalidade });
+          await updateFinanceiro(financeiroVinculado.id, { 
+            valorServico: updates.valorMensalidade,
+            updatedAt: now // <-- BLINDA A ATUALIZAÇÃO DO FINANCEIRO
+          });
         }
       }
 
@@ -81,25 +98,28 @@ export function useServicos() {
 
   const deleteServico = async (id: string) => {
     try {
+      const now = new Date().toISOString();
+
       // 1. Notificações
       await excluirNotificacoesItem(id, "servico");
 
-      // 2. DESVINCULAR DO FINANCEIRO (A lógica solicitada)
-      // Procuramos no array de financeiros quem possui este servicoId
+      // 2. DESVINCULAR DO FINANCEIRO
       const financeiroVinculado = financeiros.find(f => f.servicoId === id);
       
       if (financeiroVinculado) {
         console.log(`🔗 Desvinculando serviço ${id} do financeiro ${financeiroVinculado.id}`);
         await updateFinanceiro(financeiroVinculado.id, { 
-          servicoId: null,      // Remove o ID do vínculo
-          valorServico: 0       // Zera o valor do serviço no financeiro
+          servicoId: null,      
+          valorServico: 0,      
+          updatedAt: now // <-- BLINDA A ATUALIZAÇÃO DO FINANCEIRO
         });
       }
 
-      // 3. Deletar o serviço de fato
+      // 3. Deletar (inativar) o serviço de fato
+      // Se a sua função deleteServico faz um updateDoc para ativo: false,
+      // garanta que lá dentro ela também está enviando o updatedAt!
       await servicoService.deleteServico(id);
       
-      // Pequeno delay para o Firestore
       await new Promise(resolve => setTimeout(resolve, 300));
       
     } catch (err) {
@@ -108,7 +128,6 @@ export function useServicos() {
       throw err;
     } finally {
       await loadServicos();
-      // Garantir que a lista financeira da tela também atualize se houver desvinculação
       if (refreshFinanceiros) await refreshFinanceiros();
     }
   };

@@ -144,7 +144,7 @@ export default function ServicosPage() {
     setEditingItem(null);
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const cliente = clientes.find((c) => c.id === formData.clienteId);
     if (!cliente) return toast({ title: "Cliente não encontrado!", variant: "destructive" });
@@ -153,6 +153,26 @@ export default function ServicosPage() {
     
     const valorMensalidadeNumber = parseFloat(formData.valorMensalidade);
     if (Number.isNaN(valorMensalidadeNumber)) return toast({ title: "Valor inválido.", variant: "destructive" });
+
+    // <-- INÍCIO DA NOVA VALIDAÇÃO NF-e / NFC-e -->
+    if (formData.nfe) {
+      if (!formData.nfeInicio) {
+        return toast({ title: "A data inicial da NF-e é obrigatória.", variant: "destructive" });
+      }
+      if (formData.nfeFim && formData.nfeFim < formData.nfeInicio) {
+        return toast({ title: "A data final da NF-e não pode ser anterior à inicial.", variant: "destructive" });
+      }
+    }
+
+    if (formData.nfce) {
+      if (!formData.nfceInicio) {
+        return toast({ title: "A data inicial da NFC-e é obrigatória.", variant: "destructive" });
+      }
+      if (formData.nfceFim && formData.nfceFim < formData.nfceInicio) {
+        return toast({ title: "A data final da NFC-e não pode ser anterior à inicial.", variant: "destructive" });
+      }
+    }
+    // <-- FIM DA NOVA VALIDAÇÃO -->
 
     const nfeDatasFormatada = [formData.nfeInicio, formData.nfeFim].filter(Boolean).join("|");
     const nfceDatasFormatada = [formData.nfceInicio, formData.nfceFim].filter(Boolean).join("|");
@@ -181,6 +201,7 @@ export default function ServicosPage() {
       resetForm();
       setIsDialogOpen(false);
     } catch (error) {
+      console.log(error)
       toast({ title: "Erro ao salvar registro", variant: "destructive" });
     }
   };
@@ -239,8 +260,33 @@ export default function ServicosPage() {
       toast({ title: "Notas fiscais atualizadas!" });
       setIsNfeModalOpen(false);
     } catch (error) {
+      console.log(error)
       toast({ title: "Erro ao salvar notas fiscais", variant: "destructive" });
     }
+  };
+
+  const handleDeleteNfe = async () => {
+    if (!selectedNfeItem) return;
+
+    showConfirmation(
+      "Excluir Notas Fiscais",
+      "Tem certeza que deseja remover as informações de NF-e e NFC-e deste serviço?",
+      async () => {
+        try {
+          await updateServico(selectedNfeItem.id, {
+            nfe: false,
+            nfeDatas: "",
+            nfce: false,
+            nfceDatas: "",
+          });
+          toast({ title: "Notas fiscais excluídas com sucesso!" });
+          setIsNfeModalOpen(false);
+        } catch (error) {
+          toast({ title: "Erro ao excluir notas", variant: "destructive" });
+        }
+      },
+      { confirmText: "Excluir Notas", cancelText: "Cancelar", variant: "destructive" }
+    );
   };
 
   const filteredItems = useMemo(() => {
@@ -569,9 +615,21 @@ export default function ServicosPage() {
               </div>
 
             </div>
-            <div className="flex justify-end gap-2">
-              <Button type="button" variant="outline" onClick={() => setIsNfeModalOpen(false)}>Cancelar</Button>
-              <Button type="submit">Salvar Notas</Button>
+            <div className="flex items-center justify-between pt-4 mt-4 border-t">
+              <Button 
+                type="button" 
+                variant="ghost" 
+                className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                onClick={handleDeleteNfe}
+              >
+                <Trash2 className="mr-2 h-4 w-4" />
+                Excluir Notas
+              </Button>
+              
+              <div className="flex gap-2">
+                <Button type="button" variant="outline" onClick={() => setIsNfeModalOpen(false)}>Cancelar</Button>
+                <Button type="submit">Salvar Notas</Button>
+              </div>
             </div>
           </form>
         </DialogContent>

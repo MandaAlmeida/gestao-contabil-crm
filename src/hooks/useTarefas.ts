@@ -69,8 +69,12 @@ export const useTarefas = () => {
 
   const addTarefa = async (tarefa: Omit<Tarefa, "id">) => {
     try {
+      const now = new Date().toISOString();
+      
       await addDoc(collection(db, "tarefas"), {
-        ...tarefa
+        ...tarefa,
+        createdAt: now,  // Adiciona o campo obrigatório pelas Rules
+      updatedAt: now
       });
     } catch (error) {
       console.error("Erro ao adicionar tarefa:", error);

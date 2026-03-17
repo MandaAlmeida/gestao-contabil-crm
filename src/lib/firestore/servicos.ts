@@ -2,7 +2,7 @@ import {
   collection,
   doc,
   getDocs,
-  getDoc,
+  getDoc, // <-- NOVO IMPORT AQUI
   addDoc,
   updateDoc,
   query,
@@ -62,25 +62,51 @@ export async function createServico(
   }
 }
 
+// ==========================================================
+// FUNÇÃO DE "CURA": Preenche campos faltando em cadastros antigos
+// ==========================================================
+async function prepararUpdateSeguro(docRef: any, updates: any) {
+  const docSnap = await getDoc(docRef);
+  if (docSnap.exists()) {
+    const data = docSnap.data() as Servico;
+    return {
+      // Força a inclusão de campos obrigatórios que podem estar em branco no banco:
+      clienteCNPJ: data.clienteCNPJ || "",
+      descricao: data.descricao || "",
+      observacoes: data.observacoes || "",
+      meioPagamento: data.meioPagamento || "Pix",
+      ativo: data.ativo ?? true,
+      
+      // Aplica as novas alterações por cima de tudo:
+      ...updates,
+      updatedAt: new Date().toISOString(),
+    };
+  }
+  
+  return {
+    ...updates,
+    updatedAt: new Date().toISOString(),
+  };
+}
+
 export async function updateServico(
   id: string,
   updates: Partial<Omit<Servico, "id" | "createdAt">>
 ): Promise<void> {
   const docRef = doc(db, COLLECTION_NAME, id);
-  await updateDoc(docRef, {
-    ...updates,
-    updatedAt: new Date().toISOString(),
-  });
+  
+  // Usa a função de cura antes de atualizar
+  const updatesSeguros = await prepararUpdateSeguro(docRef, updates);
+  await updateDoc(docRef, updatesSeguros);
 }
 
 export async function deleteServico(id: string): Promise<void> {
   try {
     const docRef = doc(db, COLLECTION_NAME, id);
     
-    await updateDoc(docRef, {
-      ativo: false,
-      updatedAt: new Date().toISOString(),
-    });
+    // Usa a função de cura até mesmo na hora de deletar!
+    const updatesSeguros = await prepararUpdateSeguro(docRef, { ativo: false });
+    await updateDoc(docRef, updatesSeguros);
   } catch (error) {
     console.error(`🔥 Firestore: Erro ao deletar serviço ${id}:`, error);
     throw error;

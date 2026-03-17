@@ -137,6 +137,7 @@ export function useAutomaticNotifications({
     getCliente,
     type,
     isValid,
+    customNotifyDays,
   }: {
     items: T[];
     getDate: (item: T) => string;
@@ -146,6 +147,7 @@ export function useAutomaticNotifications({
     getCliente: (item: T) => string;
     type: NotificationType;
     isValid?: (item: T) => boolean;
+    customNotifyDays?: number[];
   }) => {
     for (const item of items) {
       // Se o item não for válido (ex: ativo: false), apaga todas as notificações desse item/tipo/usuário
@@ -180,7 +182,11 @@ export function useAutomaticNotifications({
       }
 
       const days = calcDays(getDate(item));
-      if (!shouldNotify(days)) continue;
+
+      const daysToNotify = customNotifyDays || NOTIFY_DAYS; 
+      const notify = days < 0 || daysToNotify.includes(days) || days < -30;
+
+      if (!notify) continue;
 
       const data = {
         userId: user.uid,
@@ -229,6 +235,7 @@ export function useAutomaticNotifications({
       getDate: (f: any) => f.dataVencimento,
       getCliente: (f: any) => f.clienteNome,
       isValid: (f: any) => f.ativo && f.status !== "Recebido",
+      customNotifyDays: [5, 1, 0],
       getTitle: (d) => (d < 0 ? "Pagamento Vencido" : "Pagamento a Vencer"),
       getMessage: (f: any, d) =>
         `R$ ${f.valorMensalidade?.toFixed?.(2) ?? f.valor} — ${
@@ -274,6 +281,7 @@ export function useAutomaticNotifications({
       getCliente: (s: any) => s.clienteNome,
       isValid: (s: any) => s.ativo && s.status === "Pendente",
       getTitle: (d) => (d < 0 ? "Sintegra Vencida" : "Sintegra Pendente"),
+      customNotifyDays: [10, 1, 0],
       getMessage: (s: any, d) =>
         `${s.clienteNome} — ${
           d < 0 ? `Vencida há ${Math.abs(d)} dias` : `Prazo em ${d} dias`

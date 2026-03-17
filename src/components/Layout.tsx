@@ -1,4 +1,4 @@
-import { ReactNode, useState, useEffect } from "react";
+import { ReactNode, useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useConfirmationDialog } from "@/components/ConfirmationDialog";
 import { NavLink } from "./NavLink";
@@ -30,6 +30,8 @@ import { ThemeToggle } from "./ThemeToggle";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { useTarefasVencendo } from "@/hooks/useTask";
+import { useCertificados } from "@/hooks/useCertificados";
+import { differenceInDays, isBefore, parseISO, startOfDay } from "date-fns";
 
 
 interface LayoutProps {
@@ -43,6 +45,7 @@ export function Layout({ children }: LayoutProps) {
   });
 
   const { tarefasAlertar, tarefasVencida } = useTarefasVencendo();
+  const { certificados } = useCertificados();
 
   const { logout } = useAuth();
   const navigate = useNavigate();
@@ -78,6 +81,33 @@ export function Layout({ children }: LayoutProps) {
       }
     );
   };
+
+const alertasCertificados = useMemo(() => {
+    if (!certificados) return { amarelo: 0, vermelho: 0 };
+    
+    const hoje = startOfDay(new Date());
+    let amarelo = 0;
+    let vermelho = 0;
+    
+    certificados.forEach(cert => {
+      // Ignora os que já foram renovados ou sem data
+      if (cert.status === "Renovado" || !cert.dataVencimento) return;
+      
+      const dataVenc = parseISO(cert.dataVencimento);
+      const diffDias = differenceInDays(dataVenc, hoje);
+      
+      // Menor ou igual a 10 dias (inclui os já vencidos que terão diferença negativa)
+      if (diffDias <= 10) {
+        vermelho++;
+      } 
+      // Entre 11 e 30 dias
+      else if (diffDias <= 30) {
+        amarelo++;
+      }
+    });
+
+    return { amarelo, vermelho };
+  }, [certificados]);
 
   return (
     <div className="flex min-h-screen w-full bg-background">
@@ -157,13 +187,40 @@ export function Layout({ children }: LayoutProps) {
               <Wallet className="h-5 w-5 flex-shrink-0" />
               {!collapsed && <span>Despesas</span>}
             </NavLink>
-            <NavLink
+           <NavLink
               to="/certificados"
-              className={collapsed ? "justify-center" : ""}
+              className={collapsed ? "justify-center" : "justify-between"}
               activeClassName="bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground"
             >
-              <FileCheck className="h-5 w-5 flex-shrink-0" />
-              {!collapsed && <span>Certificados</span>}
+              <div className="flex gap-3 items-center">
+                <FileCheck className="h-5 w-5 flex-shrink-0" />
+                {!collapsed && <span>Certificados</span>}
+              </div>
+
+              {!collapsed && 
+              <div className="flex gap-2">
+                {/* VENCENDO EM ATÉ 30 DIAS (Amarelo) */}
+                {alertasCertificados.amarelo > 0 && (
+                  <span 
+                    className="h-6 px-2 bg-yellow-500 rounded-full flex items-center justify-center text-white text-xs font-bold gap-1 shadow-sm"
+                    title="Certificados vencendo em até 30 dias"
+                  >
+                    <Clock className="w-3 h-3" />
+                    {alertasCertificados.amarelo}
+                  </span>
+                )}
+
+                {/* VENCIDOS OU VENCENDO EM ATÉ 10 DIAS (Vermelho) */}
+                {alertasCertificados.vermelho > 0 && (
+                  <span 
+                    className="h-6 px-2 bg-red-700 rounded-full flex items-center justify-center text-white text-xs font-bold gap-1 shadow-sm animate-pulse"
+                    title="Certificados vencidos ou vencendo em até 10 dias"
+                  >
+                    <AlertTriangle className="w-3 h-3" />
+                    {alertasCertificados.vermelho}
+                  </span>
+                )}
+              </div>}
             </NavLink>
             <NavLink
               to="/renovacao"
@@ -198,6 +255,7 @@ export function Layout({ children }: LayoutProps) {
               <Calendar className="h-5 w-5 flex-shrink-0" />
               {!collapsed && <span>Calendário</span>}
               </div>
+              {!collapsed && 
               <div className="flex gap-2">
                 {/* VENCENDO EM BREVE (Atenção - Laranja + Ícone de Relógio + Pulso) */}
                 {tarefasAlertar.length > 0 && (
@@ -220,7 +278,7 @@ export function Layout({ children }: LayoutProps) {
                     {tarefasVencida.length}
                   </span>
                 )}
-              </div>
+              </div>}
             </NavLink>
      
             <NavLink

@@ -294,7 +294,7 @@ export default function Clientes() {
     setIsDialogOpen(true);
   };
 
-  const handleDelete = async (id: string) => {
+const handleDelete = async (id: string) => {
     showConfirmation(
       "Excluir Cliente",
       "Tem certeza que deseja excluir este cliente? Esta ação não pode ser desfeita.",
@@ -304,6 +304,9 @@ export default function Clientes() {
           await refreshClientes(); 
           toast({ title: "Cliente excluído com sucesso! (Registros relacionados desativados, certificados mantidos)" });
         } catch (error) {
+          // ===> ADICIONE ESTA LINHA AQUI <===
+          console.error("ERRO AO EXCLUIR CLIENTE:", error); 
+          
           toast({
             title: "Erro ao excluir cliente",
             variant: "destructive",
