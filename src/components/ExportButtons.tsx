@@ -1,6 +1,9 @@
 import { Button } from "@/components/ui/button";
 import { Download, FileSpreadsheet } from "lucide-react";
-import { generateFinanceiroPDF, generateFinanceiroExcel } from "@/lib/pdfGenerator";
+import {
+  generateFinanceiroPDF,
+  generateFinanceiroExcel,
+} from "@/lib/pdfGenerator";
 import { Financeiro } from "@/types/crm";
 
 interface ExportButtonsProps {
@@ -9,16 +12,22 @@ interface ExportButtonsProps {
   filtroDataFim?: string;
 }
 
-export function ExportButtons({ data, filtroDataInicio, filtroDataFim }: ExportButtonsProps) {
-  // Função para gerar PDF
+export function ExportButtons({
+  data,
+  filtroDataInicio,
+  filtroDataFim,
+}: ExportButtonsProps) {
   const handleGeneratePDF = async () => {
     await generateFinanceiroPDF(data, {
       title: "Relatório Financeiro",
-      filename: `financeiro-${new Date().toISOString().split('T')[0]}.pdf`,
-      dateRange: filtroDataInicio && filtroDataFim ? {
-        start: filtroDataInicio,
-        end: filtroDataFim
-      } : undefined
+      filename: `financeiro-${new Date().toISOString().split("T")[0]}.pdf`,
+      dateRange:
+        filtroDataInicio && filtroDataFim
+          ? {
+              start: filtroDataInicio,
+              end: filtroDataFim,
+            }
+          : undefined,
     });
   };
 
@@ -26,11 +35,14 @@ export function ExportButtons({ data, filtroDataInicio, filtroDataFim }: ExportB
   const handleGenerateExcel = () => {
     generateFinanceiroExcel(data, {
       title: "Relatório Financeiro",
-      filename: `financeiro-${new Date().toISOString().split('T')[0]}.xlsx`,
-      dateRange: filtroDataInicio && filtroDataFim ? {
-        start: filtroDataInicio,
-        end: filtroDataFim
-      } : undefined
+      filename: `financeiro-${new Date().toISOString().split("T")[0]}.xlsx`,
+      dateRange:
+        filtroDataInicio && filtroDataFim
+          ? {
+              start: filtroDataInicio,
+              end: filtroDataFim,
+            }
+          : undefined,
     });
   };
 
