@@ -18,8 +18,8 @@ export interface Cliente {
   contabilidade: string;
   responsavel: string;
   observacoes: string;
-  isFiscal?: boolean;     // <-- Adicionado
-  isGerencial?: boolean;  // <-- Adicionado
+  isFiscal?: boolean; // <-- Adicionado
+  isGerencial?: boolean; // <-- Adicionado
   ativo: boolean;
   createdAt: string;
   updatedAt: string;
@@ -64,6 +64,13 @@ export interface Financeiro {
   nfceDatas?: string;
 }
 
+export interface HistoricoRenovacao {
+  id: string;
+  dataRenovacao: string;
+  vencimentoAnterior: string;
+  novoVencimento: string;
+}
+
 export interface Certificado {
   id: string;
   clienteId: string;
@@ -76,14 +83,16 @@ export interface Certificado {
   ativo: boolean;
   createdAt: string;
   updatedAt: string;
+  historicoRenovacoes?: HistoricoRenovacao[]; // <-- Nova propriedade adicionada aqui
 }
 
-export type StatusRenovacao = "Pendente"
-    | "Avisado"
-    | "Em Negociação"
-    | "Parcelado"
-    | "Renovado"
-    | "Cancelado";
+export type StatusRenovacao =
+  | "Pendente"
+  | "Avisado"
+  | "Em Negociação"
+  | "Parcelado"
+  | "Renovado"
+  | "Cancelado";
 
 export interface Renovacao {
   id: string;

@@ -7,13 +7,14 @@ import { useCertificados } from "@/hooks/useCertificados";
 import { useConfirmationDialog } from "@/components/ConfirmationDialog";
 import { NotificationButton } from "@/components/NotificationButton";
 import { NotificationPanel } from "@/components/NotificationPanel";
-import {Certificado } from "@/types/crm";
+import { Certificado } from "@/types/crm";
 import {
   Plus,
   Edit,
   Trash2,
   UserPlus,
   Users,
+  History, // <-- Importando ícone de Histórico
 } from "lucide-react";
 import {
   Dialog,
@@ -32,35 +33,14 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import {
-  normalizarCertificados,
-} from "@/lib/certificados";
+import { normalizarCertificados } from "@/lib/certificados";
 import { formatarDataBR } from "@/lib/utils";
 import { usePagination } from "@/hooks/usePagination";
 import { PaginationControls } from "@/components/PaginationControls";
 import { StatusSelect } from "@/components/StatusSelect";
 import { FiltersBar } from "@/components/FiltersBar";
 import { SelectClienteComBusca } from "@/components/SelectClienteComBusca";
-
-const adicionarAno = (data?: string) => {
-  const baseDate = data ? new Date(data) : new Date();
-  if (Number.isNaN(baseDate.getTime())) {
-    return new Date();
-  }
-  const novaData = new Date(baseDate);
-  novaData.setFullYear(novaData.getFullYear() + 1);
-  return novaData;
-};
-
-const removerAno = (data: string) => {
-  const baseDate = data ? new Date(data) : new Date();
-  if (Number.isNaN(baseDate.getTime())) {
-    return new Date();
-  }
-  const novaData = new Date(baseDate);
-  novaData.setFullYear(novaData.getFullYear() - 1);
-  return novaData;
-};
+import { HistoricoRenovacoesDialog } from "@/components/HistoricoRenovacoesDialog";
 
 export default function Certificados() {
   const { clientes } = useClientes();
@@ -71,7 +51,9 @@ export default function Certificados() {
     deleteCertificado,
     refresh,
   } = useCertificados();
-  const { showConfirmation, ConfirmationDialogComponent } = useConfirmationDialog();
+  const { showConfirmation, ConfirmationDialogComponent } =
+    useConfirmationDialog();
+
   const [searchTerm, setSearchTerm] = useState("");
   const [searchResponsavel, setSearchResponsavel] = useState("todos");
   const [filtroDataInicio, setFiltroDataInicio] = useState("");
@@ -83,31 +65,32 @@ export default function Certificados() {
     campo: "clienteNome" | "dataVencimento" | "tipoCertificado" | "status";
     direcao: "asc" | "desc";
   }>({ campo: "dataVencimento", direcao: "asc" });
+
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<Certificado | null>(null);
   const [modoCliente, setModoCliente] = useState<"existente" | "novo">(
-    "existente"
+    "existente",
   );
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+
+  // States para o Histórico de Renovações
+  const [historicoDialogOpen, setHistoricoDialogOpen] = useState(false);
+  const [selectedItemHistorico, setSelectedItemHistorico] =
+    useState<Certificado | null>(null);
+
   const { toast } = useToast();
 
   const responsaveisDisponiveis = useMemo(
-    () =>
-      Array.from(
-        new Set(clientes.map((cliente) => cliente.responsavel))
-      ).sort(),
-    [clientes]
+    () => Array.from(new Set(clientes.map((c) => c.responsavel))).sort(),
+    [clientes],
   );
-
   const certificadosNormalizados = useMemo(
     () => normalizarCertificados(certificadosRaw),
-    [certificadosRaw]
+    [certificadosRaw],
   );
-
-  // Lista de IDs de clientes que já têm certificados cadastrados
   const clientesComCertificado = useMemo(
     () => new Set(certificadosNormalizados.map((c) => c.clienteId)),
-    [certificadosNormalizados]
+    [certificadosNormalizados],
   );
 
   const [formData, setFormData] = useState({
@@ -131,10 +114,7 @@ export default function Certificados() {
       status: "Pendente",
       observacoes: "",
     });
-    setNovoClienteData({
-      nome: "",
-      cnpj: "",
-    });
+    setNovoClienteData({ nome: "", cnpj: "" });
     setModoCliente("existente");
     setEditingItem(null);
   };
@@ -146,7 +126,6 @@ export default function Certificados() {
     let clienteCNPJ = "";
     let clienteId = "";
 
-    // Se estiver no modo "novo cliente", usar os dados preenchidos manualmente
     if (modoCliente === "novo") {
       if (!novoClienteData.nome || !novoClienteData.cnpj) {
         toast({
@@ -156,13 +135,10 @@ export default function Certificados() {
         });
         return;
       }
-
-      // Usar dados preenchidos manualmente (não criar cliente na base)
       clienteNome = novoClienteData.nome;
       clienteCNPJ = novoClienteData.cnpj;
-      clienteId = `manual-${Date.now()}`; // ID temporário para identificar que não é um cliente cadastrado
+      clienteId = `manual-${Date.now()}`;
     } else {
-      // Modo cliente existente - buscar dados do cliente
       const cliente = clientes.find((c) => c.id === formData.clienteId);
       if (!cliente) {
         toast({ title: "Cliente não encontrado!", variant: "destructive" });
@@ -174,8 +150,9 @@ export default function Certificados() {
     }
 
     let dataVencimento = formData.dataVencimento;
+    let historicoAtual = editingItem?.historicoRenovacoes || [];
 
-    // Regra de negócio: quando status mudar para Renovado, adicionar 1 ano à data
+    // REGRA DE RENOVAÇÃO NO FORMULÁRIO
     if (
       editingItem &&
       formData.status === "Renovado" &&
@@ -184,45 +161,121 @@ export default function Certificados() {
       const currentDate = new Date(formData.dataVencimento);
       currentDate.setFullYear(currentDate.getFullYear() + 1);
       dataVencimento = currentDate.toISOString().split("T")[0];
+
+      const novaRenovacao = {
+        id: `renov-${Date.now()}`,
+        dataRenovacao: new Date().toISOString().split("T")[0],
+        vencimentoAnterior: formData.dataVencimento,
+        novoVencimento: dataVencimento,
+      };
+      historicoAtual = [...historicoAtual, novaRenovacao];
     }
 
     try {
       if (editingItem) {
         await updateCertificado(editingItem.id, {
-          clienteId: clienteId,
-          clienteNome: clienteNome,
-          clienteCNPJ: clienteCNPJ,
+          clienteId,
+          clienteNome,
+          clienteCNPJ,
           tipoCertificado: formData.tipoCertificado,
           dataVencimento,
           status: formData.status,
           observacoes: formData.observacoes,
+          historicoRenovacoes: historicoAtual,
         });
         toast({ title: "Certificado atualizado com sucesso!" });
       } else {
         await createCertificado({
-          clienteId: clienteId,
-          clienteNome: clienteNome,
-          clienteCNPJ: clienteCNPJ,
+          clienteId,
+          clienteNome,
+          clienteCNPJ,
           tipoCertificado: formData.tipoCertificado,
           dataVencimento,
           status: formData.status,
           observacoes: formData.observacoes,
           ativo: true,
         });
-        toast({
-          title: "Certificado adicionado com sucesso!",
-          description:
-            modoCliente === "novo"
-              ? "Certificado criado com dados informados manualmente."
-              : undefined,
-        });
+        toast({ title: "Certificado adicionado com sucesso!" });
       }
 
       resetForm();
       setIsDialogOpen(false);
+      refresh();
     } catch (error) {
       toast({ title: "Erro ao salvar certificado", variant: "destructive" });
     }
+  };
+
+  // REGRA DE RENOVAÇÃO DIRETO PELA TABELA (StatusSelect)
+  const handleUpdateStatusTable = async (
+    id: string,
+    updates: Partial<Certificado>,
+  ) => {
+    const item = certificadosRaw.find((c) => c.id === id);
+    if (!item) return;
+
+    let payload = { ...updates };
+
+    if (updates.status === "Renovado" && item.status !== "Renovado") {
+      const baseDate = new Date(item.dataVencimento);
+      baseDate.setFullYear(baseDate.getFullYear() + 1);
+      const novaData = baseDate.toISOString().split("T")[0];
+
+      payload.dataVencimento = novaData;
+      payload.historicoRenovacoes = [
+        ...(item.historicoRenovacoes || []),
+        {
+          id: `renov-${Date.now()}`,
+          dataRenovacao: new Date().toISOString().split("T")[0],
+          vencimentoAnterior: item.dataVencimento,
+          novoVencimento: novaData,
+        },
+      ];
+      toast({ title: "Certificado renovado! 1 ano adicionado." });
+    }
+
+    await updateCertificado(id, payload);
+    refresh();
+  };
+
+  // Funções para manipular histórico dentro do Dialog
+  const handleDeleteHistorico = async (
+    item: Certificado,
+    historicoId: string,
+  ) => {
+    const historico = item.historicoRenovacoes || [];
+    const renovacaoApagada = historico.find((h) => h.id === historicoId);
+    const historicoAtualizado = historico.filter((h) => h.id !== historicoId);
+
+    // Volta a data para antes da renovação
+    const dataVencimentoRevertida = renovacaoApagada
+      ? renovacaoApagada.vencimentoAnterior
+      : item.dataVencimento;
+
+    await updateCertificado(item.id, {
+      historicoRenovacoes: historicoAtualizado,
+      dataVencimento: dataVencimentoRevertida,
+      status: "Pendente", // Volta pra pendente para indicar que precisa renovar
+    });
+
+    toast({ title: "Renovação desfeita com sucesso!" });
+    refresh();
+    setHistoricoDialogOpen(false);
+  };
+
+  const handleEditHistorico = async (
+    item: Certificado,
+    historicoId: string,
+    novaDataRenovacao: string,
+  ) => {
+    const historico = item.historicoRenovacoes || [];
+    const historicoAtualizado = historico.map((h) =>
+      h.id === historicoId ? { ...h, dataRenovacao: novaDataRenovacao } : h,
+    );
+    await updateCertificado(item.id, {
+      historicoRenovacoes: historicoAtualizado,
+    });
+    refresh();
   };
 
   const handleEdit = (item: Certificado) => {
@@ -232,7 +285,7 @@ export default function Certificados() {
       tipoCertificado: item.tipoCertificado,
       dataVencimento: item.dataVencimento,
       status: item.status,
-      observacoes: item.observacoes,
+      observacoes: item.observacoes || "",
     });
     setIsDialogOpen(true);
   };
@@ -245,90 +298,73 @@ export default function Certificados() {
         try {
           await deleteCertificado(id);
           toast({ title: "Certificado excluído com sucesso!" });
+          refresh();
         } catch (error) {
-          toast({ title: "Erro ao excluir certificado", variant: "destructive" });
+          toast({
+            title: "Erro ao excluir certificado",
+            variant: "destructive",
+          });
         }
       },
       {
         confirmText: "Excluir",
         cancelText: "Cancelar",
-        variant: "destructive"
-      }
+        variant: "destructive",
+      },
     );
   };
 
-const filteredItems = useMemo(() => {
-  const parseDate = (dateStr?: string) => {
-    if (!dateStr) return null;
-    const [y, m, d] = dateStr.split("-");
-    return new Date(Number(y), Number(m) - 1, Number(d));
-  };
+  const filteredItems = useMemo(() => {
+    const parseDate = (dateStr?: string) => {
+      if (!dateStr) return null;
+      const [y, m, d] = dateStr.split("-");
+      return new Date(Number(y), Number(m) - 1, Number(d));
+    };
 
-  const clientesMap = new Map(clientes.map((c) => [c.id, c]));
+    const clientesMap = new Map(clientes.map((c) => [c.id, c]));
 
-  return certificadosNormalizados.filter((item) => {
-    const cliente = clientesMap.get(item.clienteId);
+    return certificadosNormalizados.filter((item) => {
+      const cliente = clientesMap.get(item.clienteId);
+      const termo = searchTerm.toLowerCase();
+      const matchesSearch =
+        (item.clienteNome?.toLowerCase() || "").includes(termo) ||
+        (item.clienteCNPJ || "").includes(searchTerm);
+      const matchesResponsavel =
+        searchResponsavel === "todos" ||
+        (cliente && cliente.responsavel === searchResponsavel);
 
-    // ======================
-    // BUSCA
-    // ======================
-    const nome = item.clienteNome?.toLowerCase() || "";
-    const cnpj = item.clienteCNPJ || "";
-    const termo = searchTerm.toLowerCase();
+      const itemData = parseDate(item.dataVencimento);
+      const dataInicio = parseDate(filtroDataInicio);
+      const dataFim = parseDate(filtroDataFim);
+      const matchesDataInicio =
+        !dataInicio || (itemData && itemData >= dataInicio);
+      const matchesDataFim = !dataFim || (itemData && itemData <= dataFim);
 
-    const matchesSearch =
-      nome.includes(termo) || cnpj.includes(searchTerm);
+      const matchesStatus =
+        filtroStatus === "todos" || item.status === filtroStatus;
 
-    // ======================
-    // RESPONSÁVEL
-    // ======================
-    const matchesResponsavel =
-      searchResponsavel === "todos" ||
-      (cliente && cliente.responsavel === searchResponsavel);
+      return (
+        matchesSearch &&
+        matchesResponsavel &&
+        matchesDataInicio &&
+        matchesDataFim &&
+        matchesStatus
+      );
+    });
+  }, [
+    certificadosNormalizados,
+    clientes,
+    searchTerm,
+    searchResponsavel,
+    filtroDataInicio,
+    filtroDataFim,
+    filtroStatus,
+  ]);
 
-    // ======================
-    // DATA
-    // ======================
-    const itemData = parseDate(item.dataVencimento);
-    const dataInicio = parseDate(filtroDataInicio);
-    const dataFim = parseDate(filtroDataFim);
-
-    const matchesDataInicio =
-      !dataInicio || (itemData && itemData >= dataInicio);
-
-    const matchesDataFim =
-      !dataFim || (itemData && itemData <= dataFim);
-
-    // ======================
-    // STATUS
-    // ======================
-    const matchesStatus =
-      filtroStatus === "todos" || item.status === filtroStatus;
-
-    return (
-      matchesSearch &&
-      matchesResponsavel &&
-      matchesDataInicio &&
-      matchesDataFim &&
-      matchesStatus
-    );
-  });
-}, [
-  certificadosNormalizados,
-  clientes,
-  searchTerm,
-  searchResponsavel,
-  filtroDataInicio,
-  filtroDataFim,
-  filtroStatus,
-]);
-
-  // Aplicar ordenação
   const itemsOrdenados = useMemo(() => {
     const items = [...filteredItems];
     items.sort((a, b) => {
       let comparacao = 0;
-
       switch (ordenacao.campo) {
         case "clienteNome":
           comparacao = a.clienteNome.localeCompare(b.clienteNome, "pt-BR", {
@@ -344,7 +380,7 @@ const filteredItems = useMemo(() => {
           comparacao = a.tipoCertificado.localeCompare(
             b.tipoCertificado,
             "pt-BR",
-            { sensitivity: "base" }
+            { sensitivity: "base" },
           );
           break;
         case "status":
@@ -353,7 +389,6 @@ const filteredItems = useMemo(() => {
           });
           break;
       }
-
       return ordenacao.direcao === "asc" ? comparacao : -comparacao;
     });
     return items;
@@ -382,7 +417,9 @@ const filteredItems = useMemo(() => {
   return (
     <Layout>
       <div className="p-8">
+        {/* ... (O cabeçalho e os filtros permanecem exatamente iguais) ... */}
         <div className="mb-8 flex items-center justify-between">
+          {/* OMITIDO PARA BREVIDADE (Seu JSX padrão) */}
           <div>
             <h1 className="text-3xl font-bold text-foreground">Certificados</h1>
             <p className="text-muted-foreground">
@@ -390,57 +427,64 @@ const filteredItems = useMemo(() => {
             </p>
           </div>
           <div className="flex w-auto gap-2 items-end">
-              <NotificationButton onClick={() => setNotificationsOpen(true)} filterBy={["certificado"]} />
-            
-          <Dialog
-            open={isDialogOpen}
-            onOpenChange={(open) => {
-              setIsDialogOpen(open);
-              if (!open) resetForm();
-            }}
-          >
-            <DialogTrigger asChild>
-              <Button>
-                <Plus className="mr-2 h-4 w-4" />
-                Novo Certificado
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-2xl" onCloseAutoFocus={e => e.preventDefault()}>
-              <DialogHeader>
-                <DialogTitle>
-                  {editingItem ? "Editar" : "Novo"} Certificado
-                </DialogTitle>
-              </DialogHeader>
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <Label htmlFor="clienteId">Cliente</Label>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() =>
-                        setModoCliente(
-                          modoCliente === "existente" ? "novo" : "existente"
-                        )
-                      }
-                      className="h-8"
-                    >
-                      {modoCliente === "existente" ? (
-                        <>
-                          <UserPlus className="mr-2 h-4 w-4" />
-                          Novo Cliente
-                        </>
-                      ) : (
-                        <>
-                          <Users className="mr-2 h-4 w-4" />
-                          Cliente Existente
-                        </>
-                      )}
-                    </Button>
-                  </div>
+            <NotificationButton
+              onClick={() => setNotificationsOpen(true)}
+              filterBy={["certificado"]}
+            />
 
-                  {modoCliente === "existente" ? (
+            <Dialog
+              open={isDialogOpen}
+              onOpenChange={(open) => {
+                setIsDialogOpen(open);
+                if (!open) resetForm();
+              }}
+            >
+              <DialogTrigger asChild>
+                <Button>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Novo Certificado
+                </Button>
+              </DialogTrigger>
+              <DialogContent
+                className="max-w-2xl"
+                onCloseAutoFocus={(e) => e.preventDefault()}
+              >
+                <DialogHeader>
+                  <DialogTitle>
+                    {editingItem ? "Editar" : "Novo"} Certificado
+                  </DialogTitle>
+                </DialogHeader>
+                <form onSubmit={handleSubmit} className="space-y-4">
+                  {/* ... (O Modal de Formulário continua o mesmo) ... */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="clienteId">Cliente</Label>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() =>
+                          setModoCliente(
+                            modoCliente === "existente" ? "novo" : "existente",
+                          )
+                        }
+                        className="h-8"
+                      >
+                        {modoCliente === "existente" ? (
+                          <>
+                            <UserPlus className="mr-2 h-4 w-4" />
+                            Novo Cliente
+                          </>
+                        ) : (
+                          <>
+                            <Users className="mr-2 h-4 w-4" />
+                            Cliente Existente
+                          </>
+                        )}
+                      </Button>
+                    </div>
+
+                    {modoCliente === "existente" ? (
                       <SelectClienteComBusca
                         clientes={(() => {
                           const clientesFiltrados = clientes.filter((c) => {
@@ -456,7 +500,7 @@ const filteredItems = useMemo(() => {
                           return [...clientesFiltrados].sort((a, b) =>
                             a.nome.localeCompare(b.nome, "pt-BR", {
                               sensitivity: "base",
-                            })
+                            }),
                           );
                         })()}
                         value={formData.clienteId}
@@ -466,127 +510,137 @@ const filteredItems = useMemo(() => {
                         placeholder="Selecione um cliente"
                       />
                     ) : (
-                    <div className="space-y-3 p-4 border rounded-md bg-muted/30">
-                      <div className="grid grid-cols-2 gap-3">
-                        <div className="space-y-2">
-                          <Label htmlFor="novo-cliente-nome">Nome *</Label>
-                          <Input
-                            id="novo-cliente-nome"
-                            value={novoClienteData.nome}
-                            onChange={(e) =>
-                              setNovoClienteData({
-                                ...novoClienteData,
-                                nome: e.target.value,
-                              })
-                            }
-                            required
-                            placeholder="Nome do cliente/pessoa"
-                          />
+                      <div className="space-y-3 p-4 border rounded-md bg-muted/30">
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="space-y-2">
+                            <Label htmlFor="novo-cliente-nome">Nome *</Label>
+                            <Input
+                              id="novo-cliente-nome"
+                              value={novoClienteData.nome}
+                              onChange={(e) =>
+                                setNovoClienteData({
+                                  ...novoClienteData,
+                                  nome: e.target.value,
+                                })
+                              }
+                              required
+                              placeholder="Nome do cliente/pessoa"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="novo-cliente-cnpj">
+                              CNPJ/CPF *
+                            </Label>
+                            <Input
+                              id="novo-cliente-cnpj"
+                              value={novoClienteData.cnpj}
+                              onChange={(e) =>
+                                setNovoClienteData({
+                                  ...novoClienteData,
+                                  cnpj: e.target.value,
+                                })
+                              }
+                              required
+                              placeholder="00.000.000/0000-00 ou 000.000.000-00"
+                            />
+                          </div>
                         </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="novo-cliente-cnpj">CNPJ/CPF *</Label>
-                          <Input
-                            id="novo-cliente-cnpj"
-                            value={novoClienteData.cnpj}
-                            onChange={(e) =>
-                              setNovoClienteData({
-                                ...novoClienteData,
-                                cnpj: e.target.value,
-                              })
-                            }
-                            required
-                            placeholder="00.000.000/0000-00 ou 000.000.000-00"
-                          />
-                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          * Apenas os campos Nome e CNPJ/CPF são obrigatórios.
+                          Os demais campos são opcionais e não serão salvos como
+                          cliente.
+                        </p>
                       </div>
-                      <p className="text-xs text-muted-foreground">
-                        * Apenas os campos Nome e CNPJ/CPF são obrigatórios. Os
-                        demais campos são opcionais e não serão salvos como
-                        cliente.
-                      </p>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="tipoCertificado">
+                        Tipo de Certificado
+                      </Label>
+                      <Select
+                        value={formData.tipoCertificado}
+                        onValueChange={(
+                          value: Certificado["tipoCertificado"],
+                        ) =>
+                          setFormData({ ...formData, tipoCertificado: value })
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="A1">A1</SelectItem>
+                          <SelectItem value="A3">A3</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </div>
-                  )}
-                </div>
-                <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="dataVencimento">Data de Vencimento</Label>
+                      <Input
+                        id="dataVencimento"
+                        type="date"
+                        value={formData.dataVencimento}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            dataVencimento: e.target.value,
+                          })
+                        }
+                        required
+                      />
+                    </div>
+                  </div>
                   <div className="space-y-2">
-                    <Label htmlFor="tipoCertificado">Tipo de Certificado</Label>
+                    <Label htmlFor="status">Status</Label>
                     <Select
-                      value={formData.tipoCertificado}
-                      onValueChange={(value: Certificado["tipoCertificado"]) =>
-                        setFormData({ ...formData, tipoCertificado: value })
+                      value={formData.status}
+                      onValueChange={(value: Certificado["status"]) =>
+                        setFormData({ ...formData, status: value })
                       }
                     >
                       <SelectTrigger>
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="A1">A1</SelectItem>
-                        <SelectItem value="A3">A3</SelectItem>
+                        <SelectItem value="Pendente">Pendente</SelectItem>
+                        <SelectItem value="Avisado">Avisado</SelectItem>
+                        <SelectItem value="Renovado">Renovado</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="dataVencimento">Data de Vencimento</Label>
-                    <Input
-                      id="dataVencimento"
-                      type="date"
-                      value={formData.dataVencimento}
+                    <Label htmlFor="observacoes">Observações</Label>
+                    <Textarea
+                      id="observacoes"
+                      value={formData.observacoes}
                       onChange={(e) =>
                         setFormData({
                           ...formData,
-                          dataVencimento: e.target.value,
+                          observacoes: e.target.value,
                         })
                       }
-                      required
+                      rows={3}
                     />
                   </div>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="status">Status</Label>
-                  <Select
-                    value={formData.status}
-                    onValueChange={(value: Certificado["status"]) =>
-                      setFormData({ ...formData, status: value })
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Pendente">Pendente</SelectItem>
-                      <SelectItem value="Avisado">Avisado</SelectItem>
-                      <SelectItem value="Renovado">Renovado</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="observacoes">Observações</Label>
-                  <Textarea
-                    id="observacoes"
-                    value={formData.observacoes}
-                    onChange={(e) =>
-                      setFormData({ ...formData, observacoes: e.target.value })
-                    }
-                    rows={3}
-                  />
-                </div>
-                <div className="flex justify-end gap-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => setIsDialogOpen(false)}
-                  >
-                    Cancelar
-                  </Button>
-                  <Button type="submit">Salvar</Button>
-                </div>
-              </form>
-            </DialogContent>
-          </Dialog>
+                  <div className="flex justify-end gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setIsDialogOpen(false)}
+                    >
+                      Cancelar
+                    </Button>
+                    <Button type="submit">Salvar</Button>
+                  </div>
+                </form>
+              </DialogContent>
+            </Dialog>
           </div>
         </div>
 
         <FiltersBar
+          // ... (Filtros permanecem os mesmos) ...
           searchTerm={searchTerm}
           onSearchTermChange={setSearchTerm}
           searchPlaceholder="Buscar por cliente..."
@@ -624,7 +678,7 @@ const filteredItems = useMemo(() => {
           onOrderChange={(value) => {
             const [campo, direcao] = value.split("-") as [
               "clienteNome" | "dataVencimento" | "tipoCertificado" | "status",
-              "asc" | "desc"
+              "asc" | "desc",
             ];
             setOrdenacao({ campo, direcao });
           }}
@@ -670,9 +724,9 @@ const filteredItems = useMemo(() => {
                   <td className="p-3">{formatarDataBR(item.dataVencimento)}</td>
                   <td className="p-3">
                     <div className="flex gap-2">
-                    <StatusSelect
+                      <StatusSelect
                         item={item}
-                        onUpdateStatus={updateCertificado}
+                        onUpdateStatus={handleUpdateStatusTable} // <-- Modificado aqui para chamar a função que trata renovação
                         onStatusChange={refresh}
                         statusOptions={STATUS_OPTIONS}
                       />
@@ -680,6 +734,19 @@ const filteredItems = useMemo(() => {
                   </td>
                   <td className="p-3">
                     <div className="flex gap-2">
+                      {/* BOTÃO DE HISTÓRICO NOVO AQUI */}
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => {
+                          setSelectedItemHistorico(item);
+                          setHistoricoDialogOpen(true);
+                        }}
+                        title="Ver histórico de renovações"
+                      >
+                        <History className="h-4 w-4" />
+                      </Button>
+
                       <Button
                         size="sm"
                         variant="ghost"
@@ -723,6 +790,16 @@ const filteredItems = useMemo(() => {
           filterBy={["certificado"]}
         />
       </div>
+
+      {/* DIALOG DE HISTÓRICO AQUI EMBAIXO */}
+      <HistoricoRenovacoesDialog
+        isOpen={historicoDialogOpen}
+        onOpenChange={setHistoricoDialogOpen}
+        item={selectedItemHistorico}
+        onDeleteHistorico={handleDeleteHistorico}
+        onEditHistorico={handleEditHistorico}
+      />
+
       {ConfirmationDialogComponent}
     </Layout>
   );

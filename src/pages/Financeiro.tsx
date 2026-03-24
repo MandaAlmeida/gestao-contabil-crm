@@ -54,13 +54,16 @@ export default function FinanceiroPage() {
     deleteFinanceiro,
     refresh: refreshFinanceiros,
   } = useFinanceiro();
-  const { showConfirmation, ConfirmationDialogComponent } = useConfirmationDialog();
+  const { showConfirmation, ConfirmationDialogComponent } =
+    useConfirmationDialog();
 
   const [searchTerm, setSearchTerm] = useState("");
   const [searchResponsavel, setSearchResponsavel] = useState("todos");
   const [filtroDataInicio, setFiltroDataInicio] = useState("");
   const [filtroDataFim, setFiltroDataFim] = useState("");
-  const [filtroStatus, setFiltroStatus] = useState<Financeiro["status"] | "todos">("todos");
+  const [filtroStatus, setFiltroStatus] = useState<
+    Financeiro["status"] | "todos"
+  >("todos");
   const [ordenacao, setOrdenacao] = useState<{
     campo: "clienteNome" | "dataVencimento" | "valorMensalidade" | "status";
     direcao: "asc" | "desc";
@@ -70,8 +73,11 @@ export default function FinanceiroPage() {
   const { toast } = useToast();
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [historicoDialogOpen, setHistoricoDialogOpen] = useState(false);
-  const [selectedItemHistorico, setSelectedItemHistorico] = useState<Financeiro | null>(null);
-  const { removeNotificationItem, fetchNotifications } = useNotifications(user.uid);
+  const [selectedItemHistorico, setSelectedItemHistorico] =
+    useState<Financeiro | null>(null);
+  const { removeNotificationItem, fetchNotifications } = useNotifications(
+    user.uid,
+  );
 
   const [formData, setFormData] = useState({
     clienteId: "",
@@ -99,9 +105,21 @@ export default function FinanceiroPage() {
   };
 
   const STATUS_META: Record<"Pago" | "Pendente" | "Vencido", StatusMeta> = {
-    Pago: { label: "Pago", icon: CheckCircle, className: "bg-green-600/40 text-white" },
-    Pendente: { label: "Pendente", icon: Clock3, className: "bg-yellow-600/40 text-white" },
-    Vencido: { label: "Vencido", icon: AlertTriangle, className: "bg-red-600/40 text-white" },
+    Pago: {
+      label: "Pago",
+      icon: CheckCircle,
+      className: "bg-green-600/40 text-white",
+    },
+    Pendente: {
+      label: "Pendente",
+      icon: Clock3,
+      className: "bg-yellow-600/40 text-white",
+    },
+    Vencido: {
+      label: "Vencido",
+      icon: AlertTriangle,
+      className: "bg-red-600/40 text-white",
+    },
   };
 
   const alterarMes = (dataString: string, delta: number): string => {
@@ -113,8 +131,13 @@ export default function FinanceiroPage() {
     let mes = parseInt(mesStr, 10) + delta;
     const dia = parseInt(diaStr, 10);
 
-    if (mes > 12) { mes = 1; ano++; } 
-    else if (mes < 1) { mes = 12; ano--; }
+    if (mes > 12) {
+      mes = 1;
+      ano++;
+    } else if (mes < 1) {
+      mes = 12;
+      ano--;
+    }
 
     const ultimoDia = new Date(ano, mes, 0).getDate();
     const novoDia = Math.min(dia, ultimoDia);
@@ -136,18 +159,30 @@ export default function FinanceiroPage() {
           if (!p.dataVencimento) return true;
           const dataHist = new Date(p.dataVencimento + "T00:00:00");
           const dataItem = new Date();
-          const mesmoMes = dataHist.getMonth() === dataItem.getMonth() && dataHist.getFullYear() === dataItem.getFullYear();
+          const mesmoMes =
+            dataHist.getMonth() === dataItem.getMonth() &&
+            dataHist.getFullYear() === dataItem.getFullYear();
           return !mesmoMes;
         });
 
         const statusAjustado = calcularStatusFinanceiro({
-          status: "Pendente", dataPagamento: null, dataVencimento: item.dataVencimento, historicoPagamentos: historicoAtualizado,
+          status: "Pendente",
+          dataPagamento: null,
+          dataVencimento: item.dataVencimento,
+          historicoPagamentos: historicoAtualizado,
         });
 
         const novoVencimento = removerMes(item.dataVencimento);
-        await updateFinanceiro(item.id, { historicoPagamentos: historicoAtualizado, status: statusAjustado, dataVencimento: novoVencimento });
+        await updateFinanceiro(item.id, {
+          historicoPagamentos: historicoAtualizado,
+          status: statusAjustado,
+          dataVencimento: novoVencimento,
+        });
         await refreshFinanceiros();
-        toast({ title: "Pagamento desfeito.", description: `${item.clienteNome} voltou para pendente.` });
+        toast({
+          title: "Pagamento desfeito.",
+          description: `${item.clienteNome} voltou para pendente.`,
+        });
         return;
       }
 
@@ -157,18 +192,27 @@ export default function FinanceiroPage() {
 
       const novoPagamento = {
         id: `${item.id}-${item.dataVencimento}-${Date.now()}`,
-        dataVencimento: item.dataVencimento, dataPagamento: hojeStr, emDia, meioPagamento: item.meioPagamento || "Pix",
+        dataVencimento: item.dataVencimento,
+        dataPagamento: hojeStr,
+        emDia,
+        meioPagamento: item.meioPagamento || "Pix",
       };
 
       const historicoAtualizado = [...historico, novoPagamento];
       const novoVencimento = adicionarMes(item.dataVencimento);
 
-      await updateFinanceiro(item.id, { historicoPagamentos: historicoAtualizado, status: "Pago", dataVencimento: novoVencimento });
+      await updateFinanceiro(item.id, {
+        historicoPagamentos: historicoAtualizado,
+        status: "Pago",
+        dataVencimento: novoVencimento,
+      });
       await excluirNotificacoesItem(item.id, "pagamento");
       await refreshFinanceiros();
 
       toast({
-        title: emDia ? "Pagamento em dia registrado!" : "Pagamento atrasado registrado!",
+        title: emDia
+          ? "Pagamento em dia registrado!"
+          : "Pagamento atrasado registrado!",
         description: `${item.clienteNome} foi marcado como pago.`,
       });
     } catch (error) {
@@ -186,76 +230,133 @@ export default function FinanceiroPage() {
   const handleEdit = (item: Financeiro) => {
     setEditingItem(item);
     setFormData({
-      clienteId: item.clienteId, dataVencimento: item.dataVencimento, valorMensalidade: String(item.valorMensalidade),
-      status: item.status, meioPagamento: item.meioPagamento, observacoes: item.observacoes || "",
-      valorServico: Number(item.valorServico) || 0, servicoId: item.servicoId || null,
+      clienteId: item.clienteId,
+      dataVencimento: item.dataVencimento,
+      valorMensalidade: String(item.valorMensalidade),
+      status: item.status,
+      meioPagamento: item.meioPagamento,
+      observacoes: item.observacoes || "",
+      valorServico: Number(item.valorServico) || 0,
+      servicoId: item.servicoId || null,
     });
     setIsDialogOpen(true);
   };
 
-  const handleDelete = async (id: string, clientName: string, serviceId?: string) => {
-    await showConfirmation("Excluir financeiro?", "Esta ação não pode ser desfeita.", async () => {
-      await removeNotificationItem(user.uid, clientName, "pagamento");
-      await removeNotificationItem(user.uid, clientName, "servico");
-      await deleteFinanceiro(id);
-      if (serviceId) await deleteServico(serviceId);
-      toast({ title: "Financeiro excluído com sucesso!" });
-      setTimeout(() => fetchNotifications(), 300);
-      refreshFinanceiros();
-    });
+  const handleDelete = async (
+    id: string,
+    clientName: string,
+    serviceId?: string,
+  ) => {
+    await showConfirmation(
+      "Excluir financeiro?",
+      "Esta ação não pode ser desfeita.",
+      async () => {
+        await removeNotificationItem(user.uid, clientName, "pagamento");
+        await removeNotificationItem(user.uid, clientName, "servico");
+        await deleteFinanceiro(id);
+        if (serviceId) await deleteServico(serviceId);
+        toast({ title: "Financeiro excluído com sucesso!" });
+        setTimeout(() => fetchNotifications(), 300);
+        refreshFinanceiros();
+      },
+    );
   };
 
-  const handleDeleteHistorico = async (financeiroItem: Financeiro, historicoId: string) => {
-    const pagamentoMaisRecente = (financeiroItem.historicoPagamentos || []).reduce((ultimo, atual) => {
-      const dataUltimo = new Date(ultimo.dataVencimento); const dataAtual = new Date(atual.dataVencimento);
+  const handleDeleteHistorico = async (
+    financeiroItem: Financeiro,
+    historicoId: string,
+  ) => {
+    const pagamentoMaisRecente = (
+      financeiroItem.historicoPagamentos || []
+    ).reduce((ultimo, atual) => {
+      const dataUltimo = new Date(ultimo.dataVencimento);
+      const dataAtual = new Date(atual.dataVencimento);
       return dataAtual > dataUltimo ? atual : ultimo;
     });
 
     if (historicoId !== pagamentoMaisRecente.id) {
-      toast({ title: "Não é possível apagar este pagamento", description: "Você deve apagar os pagamentos mais recentes primeiro.", variant: "destructive" });
+      toast({
+        title: "Não é possível apagar este pagamento",
+        description: "Você deve apagar os pagamentos mais recentes primeiro.",
+        variant: "destructive",
+      });
       return;
     }
 
-    const historicoAtualizado = (financeiroItem.historicoPagamentos || []).filter(h => h.id !== historicoId);
-    const pagamentoApagado = financeiroItem.historicoPagamentos?.find(h => h.id === historicoId);
-    const dataVencimentoAnterior = pagamentoApagado?.dataVencimento || financeiroItem.dataVencimento;
+    const historicoAtualizado = (
+      financeiroItem.historicoPagamentos || []
+    ).filter((h) => h.id !== historicoId);
+    const pagamentoApagado = financeiroItem.historicoPagamentos?.find(
+      (h) => h.id === historicoId,
+    );
+    const dataVencimentoAnterior =
+      pagamentoApagado?.dataVencimento || financeiroItem.dataVencimento;
 
     const statusAjustado = calcularStatusFinanceiro({
-      status: "Pendente", dataPagamento: null, dataVencimento: dataVencimentoAnterior, historicoPagamentos: historicoAtualizado,
+      status: "Pendente",
+      dataPagamento: null,
+      dataVencimento: dataVencimentoAnterior,
+      historicoPagamentos: historicoAtualizado,
     });
 
     try {
-      await updateFinanceiro(financeiroItem.id, { historicoPagamentos: historicoAtualizado, dataVencimento: dataVencimentoAnterior, status: statusAjustado });
+      await updateFinanceiro(financeiroItem.id, {
+        historicoPagamentos: historicoAtualizado,
+        dataVencimento: dataVencimentoAnterior,
+        status: statusAjustado,
+      });
       await refreshFinanceiros();
-      toast({ title: "Pagamento removido do histórico.", description: `Data de vencimento voltou para ${formatarDataBR(dataVencimentoAnterior)}.` });
-      setHistoricoDialogOpen(false); setSelectedItemHistorico(null);
+      toast({
+        title: "Pagamento removido do histórico.",
+        description: `Data de vencimento voltou para ${formatarDataBR(dataVencimentoAnterior)}.`,
+      });
+      setHistoricoDialogOpen(false);
+      setSelectedItemHistorico(null);
     } catch (error) {
       toast({ title: "Erro ao remover do histórico", variant: "destructive" });
     }
   };
 
-  const handleEditHistorico = async (financeiroItem: Financeiro, historicoId: string, novaData: string, novoMeio: "Pix" | "Boleto") => {
-    const historicoAtualizado = (financeiroItem.historicoPagamentos || []).map(h => {
-      if (h.id === historicoId) {
-        const vencimento = new Date(h.dataVencimento + "T00:00:00"); const dataPagamento = new Date(novaData + "T00:00:00");
-        vencimento.setHours(0, 0, 0, 0); dataPagamento.setHours(0, 0, 0, 0);
-        return { ...h, dataPagamento: novaData, meioPagamento: novoMeio, emDia: dataPagamento <= vencimento };
-      }
-      return h;
-    });
+  const handleEditHistorico = async (
+    financeiroItem: Financeiro,
+    historicoId: string,
+    novaData: string,
+    novoMeio: "Pix" | "Boleto",
+  ) => {
+    const historicoAtualizado = (financeiroItem.historicoPagamentos || []).map(
+      (h) => {
+        if (h.id === historicoId) {
+          const vencimento = new Date(h.dataVencimento + "T00:00:00");
+          const dataPagamento = new Date(novaData + "T00:00:00");
+          vencimento.setHours(0, 0, 0, 0);
+          dataPagamento.setHours(0, 0, 0, 0);
+          return {
+            ...h,
+            dataPagamento: novaData,
+            meioPagamento: novoMeio,
+            emDia: dataPagamento <= vencimento,
+          };
+        }
+        return h;
+      },
+    );
 
     try {
-      await updateFinanceiro(financeiroItem.id, { historicoPagamentos: historicoAtualizado });
+      await updateFinanceiro(financeiroItem.id, {
+        historicoPagamentos: historicoAtualizado,
+      });
       await refreshFinanceiros();
       toast({ title: "Histórico atualizado." });
-      const financeiroAtualizado = financeirosRaw.find(f => f.id === financeiroItem.id);
+      const financeiroAtualizado = financeirosRaw.find(
+        (f) => f.id === financeiroItem.id,
+      );
       if (financeiroAtualizado) setSelectedItemHistorico(financeiroAtualizado);
     } catch (error) {
       toast({ title: "Erro ao atualizar histórico", variant: "destructive" });
     }
   };
 
-const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const cliente = clientes.find((c) => c.id === formData.clienteId);
     if (!cliente) return;
@@ -263,8 +364,17 @@ const handleSubmit = async (e: React.FormEvent) => {
     try {
       const hoje = new Date();
       const vencimento = ajustarDataLocal(formData.dataVencimento);
-      const mesmoMes = hoje.getMonth() === vencimento.getMonth() && hoje.getFullYear() === vencimento.getFullYear();
-      let statusValid: Financeiro["status"] = formData.status === "Pago" ? "Pago" : mesmoMes ? "Pendente" : vencimento < hoje ? "Vencido" : "Pendente";
+      const mesmoMes =
+        hoje.getMonth() === vencimento.getMonth() &&
+        hoje.getFullYear() === vencimento.getFullYear();
+      let statusValid: Financeiro["status"] =
+        formData.status === "Pago"
+          ? "Pago"
+          : mesmoMes
+            ? "Pendente"
+            : vencimento < hoje
+              ? "Vencido"
+              : "Pendente";
 
       let currentServicoId = formData.servicoId;
 
@@ -281,7 +391,7 @@ const handleSubmit = async (e: React.FormEvent) => {
           status: statusValid,
           meioPagamento: formData.meioPagamento,
           observacoes: formData.observacoes || "",
-          ativo: true
+          ativo: true,
         });
       }
 
@@ -298,7 +408,7 @@ const handleSubmit = async (e: React.FormEvent) => {
         meioPagamento: formData.meioPagamento,
         observacoes: formData.observacoes || "",
         updatedAt: new Date().toISOString(),
-        ativo: true
+        ativo: true,
       };
 
       if (editingItem) {
@@ -313,7 +423,7 @@ const handleSubmit = async (e: React.FormEvent) => {
         // Para criação, o hasValidTimestamps exige createdAt
         const newPayload = {
           ...payload,
-          createdAt: new Date().toISOString()
+          createdAt: new Date().toISOString(),
         };
         await createFinanceiro(newPayload);
         toast({ title: "Financeiro criado!" });
@@ -324,42 +434,93 @@ const handleSubmit = async (e: React.FormEvent) => {
       refreshFinanceiros();
     } catch (error) {
       console.error("Erro no Firebase:", error);
-      toast({ title: "Erro de permissão ou validação", variant: "destructive" });
+      toast({
+        title: "Erro de permissão ou validação",
+        variant: "destructive",
+      });
     }
-};
+  };
 
   const parseDate = (date: string) => {
     if (!date) return null;
-    const d = new Date(date + "T00:00:00"); d.setHours(0, 0, 0, 0); return d;
+    const d = new Date(date + "T00:00:00");
+    d.setHours(0, 0, 0, 0);
+    return d;
   };
 
   const filteredItems = useMemo(() => {
     return financeirosRaw.filter((item) => {
       const cliente = clientes.find((c) => c.id === item.clienteId);
-      const matchesSearch = item.clienteNome?.toLowerCase().includes(searchTerm.toLowerCase()) || item.clienteCNPJ?.includes(searchTerm);
-      const matchesResponsavel = searchResponsavel === "todos" || (cliente && cliente.responsavel === searchResponsavel);
+      const matchesSearch =
+        item.clienteNome?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        item.clienteCNPJ?.includes(searchTerm);
+      const matchesResponsavel =
+        searchResponsavel === "todos" ||
+        (cliente && cliente.responsavel === searchResponsavel);
+
       let matchesData = true;
       if (filtroDataInicio && filtroDataFim) {
-        const inicio = new Date(filtroDataInicio + "T00:00:00"); const fim = new Date(filtroDataFim + "T23:59:59");
-        if (item.historicoPagamentos && item.historicoPagamentos.length > 0) {
-          matchesData = item.historicoPagamentos.some((p) => {
-            if (!p.dataPagamento) return false;
-            const dataPag = new Date(p.dataPagamento + "T00:00:00"); return dataPag >= inicio && dataPag <= fim;
-          });
-        } else {
-          const dataVenc = new Date(item.dataVencimento + "T00:00:00"); matchesData = dataVenc >= inicio && dataVenc <= fim;
-        }
-      }
-      const matchesStatus = filtroStatus === "todos" || item.status === filtroStatus;
-      return matchesSearch && matchesResponsavel && matchesData && matchesStatus;
-    });
-  }, [financeirosRaw, clientes, searchTerm, searchResponsavel, filtroDataInicio, filtroDataFim, filtroStatus]);
+        const inicio = new Date(filtroDataInicio + "T00:00:00");
+        const fim = new Date(filtroDataFim + "T23:59:59");
 
-  const responsaveisDisponiveis = useMemo(() => Array.from(new Set(clientes.map((c) => c.responsavel))).sort(), [clientes]);
-  const clientesComFinanceiro = useMemo(() => new Set(filteredItems.map((f) => f.clienteId)), [filteredItems]);
+        // 1. Verifica se a data de vencimento atual está dentro do período
+        const dataVencAtual = new Date(item.dataVencimento + "T00:00:00");
+        let dataNoPeriodo = dataVencAtual >= inicio && dataVencAtual <= fim;
+
+        // 2. Se a data atual não estiver no período, verifica se existe alguma parcela no histórico cujo vencimento caia no período
+        if (
+          !dataNoPeriodo &&
+          item.historicoPagamentos &&
+          item.historicoPagamentos.length > 0
+        ) {
+          dataNoPeriodo = item.historicoPagamentos.some((p) => {
+            const dataVencHist = new Date(
+              (p.dataVencimento || item.dataVencimento) + "T00:00:00",
+            );
+            return dataVencHist >= inicio && dataVencHist <= fim;
+          });
+        }
+
+        matchesData = dataNoPeriodo;
+      }
+
+      const matchesStatus =
+        filtroStatus === "todos" || item.status === filtroStatus;
+
+      return (
+        matchesSearch && matchesResponsavel && matchesData && matchesStatus
+      );
+    });
+  }, [
+    financeirosRaw,
+    clientes,
+    searchTerm,
+    searchResponsavel,
+    filtroDataInicio,
+    filtroDataFim,
+    filtroStatus,
+  ]);
+
+  const responsaveisDisponiveis = useMemo(
+    () => Array.from(new Set(clientes.map((c) => c.responsavel))).sort(),
+    [clientes],
+  );
+  const clientesComFinanceiro = useMemo(
+    () => new Set(filteredItems.map((f) => f.clienteId)),
+    [filteredItems],
+  );
   const clientesDisponiveisFormulario = useMemo(() => {
-    let lista = !editingItem ? clientes.filter((c) => !clientesComFinanceiro.has(c.id)) : clientes.filter((c) => !clientesComFinanceiro.has(c.id) || c.id === editingItem.clienteId);
-    return [...lista].sort((a, b) => a.nome.trim().localeCompare(b.nome.trim(), "pt-BR", { sensitivity: "base" }));
+    let lista = !editingItem
+      ? clientes.filter((c) => !clientesComFinanceiro.has(c.id))
+      : clientes.filter(
+          (c) =>
+            !clientesComFinanceiro.has(c.id) || c.id === editingItem.clienteId,
+        );
+    return [...lista].sort((a, b) =>
+      a.nome
+        .trim()
+        .localeCompare(b.nome.trim(), "pt-BR", { sensitivity: "base" }),
+    );
   }, [clientes, clientesComFinanceiro, editingItem]);
 
   const itemsOrdenados = useMemo(() => {
@@ -367,17 +528,39 @@ const handleSubmit = async (e: React.FormEvent) => {
     items.sort((a, b) => {
       let comp = 0;
       switch (ordenacao.campo) {
-        case "clienteNome": comp = a.clienteNome.localeCompare(b.clienteNome, "pt-BR"); break;
-        case "dataVencimento": comp = parseDate(a.dataVencimento)!.getTime() - parseDate(b.dataVencimento)!.getTime(); break;
-        case "valorMensalidade": comp = a.valorMensalidade - b.valorMensalidade; break;
-        case "status": comp = a.status.localeCompare(b.status); break;
+        case "clienteNome":
+          comp = a.clienteNome.localeCompare(b.clienteNome, "pt-BR");
+          break;
+        case "dataVencimento":
+          comp =
+            parseDate(a.dataVencimento)!.getTime() -
+            parseDate(b.dataVencimento)!.getTime();
+          break;
+        case "valorMensalidade":
+          comp = a.valorMensalidade - b.valorMensalidade;
+          break;
+        case "status":
+          comp = a.status.localeCompare(b.status);
+          break;
       }
       return ordenacao.direcao === "asc" ? comp : -comp;
     });
     return items;
   }, [filteredItems, ordenacao]);
 
-  const { currentPage, totalPages, paginatedItems: pagination, nextPage, previousPage, goToPage, startIndex, endIndex, totalItems, itemsPerPage, setItemsPerPage } = usePagination(itemsOrdenados, 10);
+  const {
+    currentPage,
+    totalPages,
+    paginatedItems: pagination,
+    nextPage,
+    previousPage,
+    goToPage,
+    startIndex,
+    endIndex,
+    totalItems,
+    itemsPerPage,
+    setItemsPerPage,
+  } = usePagination(itemsOrdenados, 10);
 
   // ==========================================
   // LÓGICA DE TOTAIS (MANTENDO A REGRA CORRETA)
@@ -397,10 +580,14 @@ const handleSubmit = async (e: React.FormEvent) => {
     hoje.setHours(0, 0, 0, 0);
 
     // Se o usuário aplicar filtro, usa a data. Senão, usa o mês atual.
-    const inicio = filtroDataInicio ? ajustarDataLocal(filtroDataInicio) : new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+    const inicio = filtroDataInicio
+      ? ajustarDataLocal(filtroDataInicio)
+      : new Date(hoje.getFullYear(), hoje.getMonth(), 1);
     inicio.setHours(0, 0, 0, 0);
-    
-    const fim = filtroDataFim ? ajustarDataLocal(filtroDataFim) : new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0);
+
+    const fim = filtroDataFim
+      ? ajustarDataLocal(filtroDataFim)
+      : new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0);
     fim.setHours(23, 59, 59, 999);
 
     filteredItems.forEach((item) => {
@@ -413,13 +600,19 @@ const handleSubmit = async (e: React.FormEvent) => {
       if (item.historicoPagamentos && item.historicoPagamentos.length > 0) {
         item.historicoPagamentos.forEach((hp) => {
           if (!hp.dataPagamento) return;
-          const dPag = ajustarDataLocal(hp.dataPagamento); dPag.setHours(0,0,0,0);
-          const dVenc = ajustarDataLocal(hp.dataVencimento || item.dataVencimento); dVenc.setHours(0,0,0,0);
+          const dPag = ajustarDataLocal(hp.dataPagamento);
+          dPag.setHours(0, 0, 0, 0);
+          const dVenc = ajustarDataLocal(
+            hp.dataVencimento || item.dataVencimento,
+          );
+          dVenc.setHours(0, 0, 0, 0);
 
           if (dPag >= inicio && dPag <= fim) {
             pagouNoPeriodo = true;
-            const mesmoMes = dPag.getMonth() === dVenc.getMonth() && dPag.getFullYear() === dVenc.getFullYear();
-            
+            const mesmoMes =
+              dPag.getMonth() === dVenc.getMonth() &&
+              dPag.getFullYear() === dVenc.getFullYear();
+
             if (!mesmoMes && dPag > dVenc) {
               financeiroAtraso += valorFin;
               servicoAtraso += valorServ;
@@ -430,16 +623,24 @@ const handleSubmit = async (e: React.FormEvent) => {
           }
         });
       } else if (item.status === "Pago") {
-        const dPag = ajustarDataLocal(item.dataPagamento || item.dataVencimento); dPag.setHours(0,0,0,0);
-        const dVenc = ajustarDataLocal(item.dataVencimento); dVenc.setHours(0,0,0,0);
-        
+        const dPag = ajustarDataLocal(
+          item.dataPagamento || item.dataVencimento,
+        );
+        dPag.setHours(0, 0, 0, 0);
+        const dVenc = ajustarDataLocal(item.dataVencimento);
+        dVenc.setHours(0, 0, 0, 0);
+
         if (dPag >= inicio && dPag <= fim) {
           pagouNoPeriodo = true;
-          const mesmoMes = dPag.getMonth() === dVenc.getMonth() && dPag.getFullYear() === dVenc.getFullYear();
+          const mesmoMes =
+            dPag.getMonth() === dVenc.getMonth() &&
+            dPag.getFullYear() === dVenc.getFullYear();
           if (!mesmoMes && dPag > dVenc) {
-            financeiroAtraso += valorFin; servicoAtraso += valorServ;
+            financeiroAtraso += valorFin;
+            servicoAtraso += valorServ;
           } else {
-            financeiroRecebido += valorFin; servicoRecebido += valorServ;
+            financeiroRecebido += valorFin;
+            servicoRecebido += valorServ;
           }
         }
       }
@@ -455,7 +656,7 @@ const handleSubmit = async (e: React.FormEvent) => {
           financeiroAReceber += valorFin;
           servicoAReceber += valorServ;
         }
-        
+
         // Se a data já passou de hoje, é Vencido
         if (vencimentoBase < hoje) {
           financeiroVencido += valorFin;
@@ -486,7 +687,6 @@ const handleSubmit = async (e: React.FormEvent) => {
     };
   }, [filteredItems, filtroDataInicio, filtroDataFim]);
 
-
   return (
     <Layout>
       <div className="p-8">
@@ -498,26 +698,29 @@ const handleSubmit = async (e: React.FormEvent) => {
             </p>
           </div>
           <div className="flex gap-2 items-end">
-          <NotificationButton onClick={() => setNotificationsOpen(true)} filterBy={["pagamento"]} />
-          <ExportButtons
-            data={filteredItems}
-            filtroDataInicio={filtroDataInicio}
-            filtroDataFim={filtroDataFim}
-          />
-           <CreateFinancer
-            isDialogOpen={isDialogOpen}
-            setIsDialogOpen={setIsDialogOpen}
-            resetForm={resetForm}
-            editingItem={editingItem}
-            formData={formData}
-            setFormData={setFormData}
-            handleSubmit={handleSubmit}
-            clientesDisponiveisFormulario={clientesDisponiveisFormulario}
-            servicos={servicos}
-          />
+            <NotificationButton
+              onClick={() => setNotificationsOpen(true)}
+              filterBy={["pagamento"]}
+            />
+            <ExportButtons
+              data={filteredItems}
+              filtroDataInicio={filtroDataInicio}
+              filtroDataFim={filtroDataFim}
+            />
+            <CreateFinancer
+              isDialogOpen={isDialogOpen}
+              setIsDialogOpen={setIsDialogOpen}
+              resetForm={resetForm}
+              editingItem={editingItem}
+              formData={formData}
+              setFormData={setFormData}
+              handleSubmit={handleSubmit}
+              clientesDisponiveisFormulario={clientesDisponiveisFormulario}
+              servicos={servicos}
+            />
           </div>
         </div>
-          
+
         <FiltersBar
           searchTerm={searchTerm}
           onSearchTermChange={setSearchTerm}
@@ -556,7 +759,7 @@ const handleSubmit = async (e: React.FormEvent) => {
           onOrderChange={(value) => {
             const [campo, direcao] = value.split("-") as [
               "clienteNome" | "dataVencimento" | "valorMensalidade" | "status",
-              "asc" | "desc"
+              "asc" | "desc",
             ];
             setOrdenacao({ campo, direcao });
           }}
@@ -580,37 +783,83 @@ const handleSubmit = async (e: React.FormEvent) => {
         />
 
         <div className="mb-4 grid gap-4 md:grid-cols-2">
-          
           {/* Banner Amarelo (Recebidas / A Receber) */}
           <div className="rounded-lg bg-primary p-4 text-primary-foreground">
             <div className="text-lg font-semibold mb-1">
-              Recebidas: R$ {totaisCalculados.total.recebido.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+              Recebidas: R${" "}
+              {totaisCalculados.total.recebido.toLocaleString("pt-BR", {
+                minimumFractionDigits: 2,
+              })}
             </div>
             <div className="text-sm mb-4">
-              A receber: R$ {totaisCalculados.total.aReceber.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+              A receber: R${" "}
+              {totaisCalculados.total.aReceber.toLocaleString("pt-BR", {
+                minimumFractionDigits: 2,
+              })}
             </div>
-                        
+
             <div className="mt-3 pt-3 border-t border-primary-foreground/20 text-xs space-y-1">
-              <p>Financeiros: Recebidas: R$ {totaisCalculados.financeiro.recebido.toLocaleString("pt-BR", { minimumFractionDigits: 2 })} | A receber: R$ {totaisCalculados.financeiro.aReceber.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</p>
-              <p>Serviços: Recebidas: R$ {totaisCalculados.servico.recebido.toLocaleString("pt-BR", { minimumFractionDigits: 2 })} | A receber: R$ {totaisCalculados.servico.aReceber.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</p>
+              <p>
+                Financeiros: Recebidas: R${" "}
+                {totaisCalculados.financeiro.recebido.toLocaleString("pt-BR", {
+                  minimumFractionDigits: 2,
+                })}{" "}
+                | A receber: R${" "}
+                {totaisCalculados.financeiro.aReceber.toLocaleString("pt-BR", {
+                  minimumFractionDigits: 2,
+                })}
+              </p>
+              <p>
+                Serviços: Recebidas: R${" "}
+                {totaisCalculados.servico.recebido.toLocaleString("pt-BR", {
+                  minimumFractionDigits: 2,
+                })}{" "}
+                | A receber: R${" "}
+                {totaisCalculados.servico.aReceber.toLocaleString("pt-BR", {
+                  minimumFractionDigits: 2,
+                })}
+              </p>
             </div>
           </div>
 
           {/* Banner Vermelho (Vencidos / Pagos em Atraso) */}
           <div className="rounded-lg bg-destructive p-4 text-destructive-foreground">
             <div className="text-lg font-semibold mb-1">
-              Vencidos: R$ {totaisCalculados.servico.recebido.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+              Vencidos: R${" "}
+              {totaisCalculados.servico.recebido.toLocaleString("pt-BR", {
+                minimumFractionDigits: 2,
+              })}
             </div>
             <div className="text-sm mb-4">
-              Pagos em atraso: R$ {totaisCalculados.total.atraso.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+              Pagos em atraso: R${" "}
+              {totaisCalculados.total.atraso.toLocaleString("pt-BR", {
+                minimumFractionDigits: 2,
+              })}
             </div>
-                        
+
             <div className="mt-3 pt-3 border-t border-destructive-foreground/20 text-xs space-y-1">
-              <p>Financeiros: R$ {totaisCalculados.financeiro.vencido.toLocaleString("pt-BR", { minimumFractionDigits: 2 })} | Pagos em atraso: R$ {totaisCalculados.financeiro.atraso.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</p>
-              <p>Serviços: R$ {totaisCalculados.servico.vencido.toLocaleString("pt-BR", { minimumFractionDigits: 2 })} | Pagos em atraso: R$ {totaisCalculados.servico.atraso.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</p>
+              <p>
+                Financeiros: R${" "}
+                {totaisCalculados.financeiro.vencido.toLocaleString("pt-BR", {
+                  minimumFractionDigits: 2,
+                })}{" "}
+                | Pagos em atraso: R${" "}
+                {totaisCalculados.financeiro.atraso.toLocaleString("pt-BR", {
+                  minimumFractionDigits: 2,
+                })}
+              </p>
+              <p>
+                Serviços: R${" "}
+                {totaisCalculados.servico.vencido.toLocaleString("pt-BR", {
+                  minimumFractionDigits: 2,
+                })}{" "}
+                | Pagos em atraso: R${" "}
+                {totaisCalculados.servico.atraso.toLocaleString("pt-BR", {
+                  minimumFractionDigits: 2,
+                })}
+              </p>
             </div>
           </div>
-
         </div>
 
         <div className="rounded-md border">
@@ -635,23 +884,24 @@ const handleSubmit = async (e: React.FormEvent) => {
                   <td className="p-3">{item.clienteNome}</td>
                   <td className="p-3">{item.clienteCNPJ}</td>
                   <td className="p-3">{formatarDataBR(item.dataVencimento)}</td>
-                  <td className="p-3">           
-                    R${" "}                    
+                  <td className="p-3">
+                    R${" "}
                     {item.valorMensalidade.toLocaleString("pt-BR", {
                       minimumFractionDigits: 2,
-                    })}                  
-                    </td>
+                    })}
+                  </td>
                   <td className="p-3">
                     <span className="text-sm text-muted-foreground">
                       {item.servicoId
                         ? (() => {
-                            const servico = servicos.find(s => s.id === item.servicoId);
+                            const servico = servicos.find(
+                              (s) => s.id === item.servicoId,
+                            );
                             return servico
                               ? `R$ ${servico.valorMensalidade.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`
                               : "Serviço não encontrado";
                           })()
-                        : "Nenhum serviço vinculado"
-                      }
+                        : "Nenhum serviço vinculado"}
                     </span>
                   </td>
                   <td className="p-3">
@@ -690,7 +940,13 @@ const handleSubmit = async (e: React.FormEvent) => {
                       <Button
                         size="sm"
                         variant="ghost"
-                        onClick={() => handleDelete(item.id, item.clienteNome, item.servicoId)}
+                        onClick={() =>
+                          handleDelete(
+                            item.id,
+                            item.clienteNome,
+                            item.servicoId,
+                          )
+                        }
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
@@ -754,7 +1010,7 @@ const handleSubmit = async (e: React.FormEvent) => {
                         );
                       }
                       return null;
-                    }
+                    },
                   )}
                   <PaginationItem>
                     <PaginationNext
@@ -774,10 +1030,10 @@ const handleSubmit = async (e: React.FormEvent) => {
       </div>
       {ConfirmationDialogComponent}
       <NotificationPanel
-          isOpen={notificationsOpen}
-          onToggle={() => setNotificationsOpen(!notificationsOpen)}
-          filterBy={["pagamento"]}
-        />
+        isOpen={notificationsOpen}
+        onToggle={() => setNotificationsOpen(!notificationsOpen)}
+        filterBy={["pagamento"]}
+      />
       <HistoricoPagamentosDialog
         isOpen={historicoDialogOpen}
         onOpenChange={setHistoricoDialogOpen}

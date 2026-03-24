@@ -122,7 +122,9 @@ service cloud.firestore {
                       request.resource.data.observacoes is string &&
                       request.resource.data.clienteId.size() > 0 &&
                       request.resource.data.tipoCertificado in ['A1', 'A3'] &&
-                      request.resource.data.status in ['Pendente', 'Avisado', 'Renovado'];
+                      request.resource.data.status in ['Pendente', 'Avisado', 'Renovado'] &&
+                      (!('historicoRenovacoes' in request.resource.data) || request.resource.data.historicoRenovacoes is list) &&
+                      (!('ativo' in request.resource.data) || request.resource.data.ativo is bool);
       
       allow update: if isAuthenticated() &&
                       request.resource.data.updatedAt is string &&
@@ -136,7 +138,9 @@ service cloud.firestore {
                       request.resource.data.observacoes is string &&
                       request.resource.data.clienteId.size() > 0 &&
                       request.resource.data.tipoCertificado in ['A1', 'A3'] &&
-                      request.resource.data.status in ['Pendente', 'Avisado', 'Renovado'];
+                      request.resource.data.status in ['Pendente', 'Avisado', 'Renovado'] &&
+                      (!('historicoRenovacoes' in request.resource.data) || request.resource.data.historicoRenovacoes is list) &&
+                      (!('ativo' in request.resource.data) || request.resource.data.ativo is bool);
       
       allow delete: if isAuthenticated();
     }
