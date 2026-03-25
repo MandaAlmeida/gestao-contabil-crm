@@ -7,20 +7,28 @@ import {
   updateDoc,
   query,
   orderBy,
+  writeBatch,
 } from "firebase/firestore";
 import { db } from "../firebase";
 import type { Financeiro } from "@/types/crm";
+import { normalizarFinanceiros } from "../financeiro";
 
-const COLLECTION_NAME = "financeiro";
+export const COLLECTION_NAME = "financeiro";
 
 export async function getFinanceiros(): Promise<Financeiro[]> {
-  const q = query(collection(db, COLLECTION_NAME), orderBy("dataVencimento", "desc"));
+  const q = query(
+    collection(db, COLLECTION_NAME),
+    orderBy("dataVencimento", "desc"),
+  );
   const querySnapshot = await getDocs(q);
   return querySnapshot.docs
-    .map((doc) => ({
-      id: doc.id,
-      ...doc.data(),
-    } as Financeiro))
+    .map(
+      (doc) =>
+        ({
+          id: doc.id,
+          ...doc.data(),
+        }) as Financeiro,
+    )
     .filter((financeiro) => financeiro.ativo !== false);
 }
 
@@ -35,7 +43,7 @@ export async function getFinanceiro(id: string): Promise<Financeiro | null> {
 }
 
 export async function createFinanceiro(
-  financeiro: Omit<Financeiro, "id" | "createdAt" | "updatedAt">
+  financeiro: Omit<Financeiro, "id" | "createdAt" | "updatedAt">,
 ): Promise<string> {
   const now = new Date().toISOString();
   const docRef = await addDoc(collection(db, COLLECTION_NAME), {
@@ -49,7 +57,7 @@ export async function createFinanceiro(
 
 export async function updateFinanceiro(
   id: string,
-  updates: Partial<Omit<Financeiro, "id" | "createdAt">>
+  updates: Partial<Omit<Financeiro, "id" | "createdAt">>,
 ): Promise<void> {
   const docRef = doc(db, COLLECTION_NAME, id);
   await updateDoc(docRef, {
@@ -65,4 +73,3 @@ export async function deleteFinanceiro(id: string): Promise<void> {
     updatedAt: new Date().toISOString(),
   });
 }
-

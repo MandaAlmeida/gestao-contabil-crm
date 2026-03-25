@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Layout } from "@/components/Layout";
 import { Button } from "@/components/ui/button";
 import { useClientes } from "@/hooks/useClientes";
@@ -6,10 +6,13 @@ import { useFinanceiro } from "@/hooks/useFinanceiro";
 import { useServicos } from "@/hooks/useServicos";
 import { useConfirmationDialog } from "@/components/ConfirmationDialog";
 import { Financeiro } from "@/types/crm";
-import { Edit, Trash2, History } from "lucide-react";
+import { Edit, Trash2, History, RefreshCw } from "lucide-react";
 
 import { useToast } from "@/hooks/use-toast";
-import { calcularStatusFinanceiro } from "@/lib/financeiro";
+import {
+  calcularStatusFinanceiro,
+  sincronizarStatusFinanceiros,
+} from "@/lib/financeiro";
 import { formatarDataBR } from "@/lib/utils";
 import { StatusButton, type StatusMeta } from "@/components/StatusButton";
 import { ExportButtons } from "@/components/ExportButtons";
@@ -32,6 +35,7 @@ import { CreateFinancer } from "@/components/CreateFinancer";
 import { useNotifications } from "@/hooks/useNotificacoesAutomaticas";
 import { useAuth } from "@/contexts/AuthContext";
 import { excluirNotificacoesItem } from "@/utils/notificacoes";
+import { db } from "@/lib/firebase";
 
 /* =========================
    UTIL — DATAS LOCAL
@@ -579,7 +583,6 @@ export default function FinanceiroPage() {
     const hoje = new Date();
     hoje.setHours(0, 0, 0, 0);
 
-    // Se o usuário aplicar filtro, usa a data. Senão, usa o mês atual.
     const inicio = filtroDataInicio
       ? ajustarDataLocal(filtroDataInicio)
       : new Date(hoje.getFullYear(), hoje.getMonth(), 1);
@@ -594,7 +597,11 @@ export default function FinanceiroPage() {
       const valorFin = Number(item.valorMensalidade) || 0;
       const valorServ = Number(item.valorServico) || 0;
 
-      let pagouNoPeriodo = false;
+      const vencimentoBase = ajustarDataLocal(item.dataVencimento);
+      vencimentoBase.setHours(0, 0, 0, 0);
+
+      // Variável para saber especificamente se a parcela atual do item foi paga
+      let vencimentoAtualPago = false;
 
       // 1. Processa Entradas Reais (Histórico e Fallback)
       if (item.historicoPagamentos && item.historicoPagamentos.length > 0) {
@@ -607,13 +614,19 @@ export default function FinanceiroPage() {
           );
           dVenc.setHours(0, 0, 0, 0);
 
+          // Verifica se ESSE registro no histórico é a quitação do vencimento atual
+          if (dVenc.getTime() === vencimentoBase.getTime()) {
+            vencimentoAtualPago = true;
+          }
+
+          // Se o pagamento caiu dentro do mês do filtro (Março, por exemplo)
           if (dPag >= inicio && dPag <= fim) {
-            pagouNoPeriodo = true;
-            const mesmoMes =
+            const mesmoMesEAno =
               dPag.getMonth() === dVenc.getMonth() &&
               dPag.getFullYear() === dVenc.getFullYear();
 
-            if (!mesmoMes && dPag > dVenc) {
+            // Se for um pagamento feito no mês do filtro, mas o vencimento era de antes
+            if (!mesmoMesEAno && dPag > dVenc) {
               financeiroAtraso += valorFin;
               servicoAtraso += valorServ;
             } else {
@@ -623,6 +636,7 @@ export default function FinanceiroPage() {
           }
         });
       } else if (item.status === "Pago") {
+        // Fallback antigo
         const dPag = ajustarDataLocal(
           item.dataPagamento || item.dataVencimento,
         );
@@ -630,8 +644,9 @@ export default function FinanceiroPage() {
         const dVenc = ajustarDataLocal(item.dataVencimento);
         dVenc.setHours(0, 0, 0, 0);
 
+        vencimentoAtualPago = true;
+
         if (dPag >= inicio && dPag <= fim) {
-          pagouNoPeriodo = true;
           const mesmoMes =
             dPag.getMonth() === dVenc.getMonth() &&
             dPag.getFullYear() === dVenc.getFullYear();
@@ -646,19 +661,16 @@ export default function FinanceiroPage() {
       }
 
       // 2. Processa os Valores Em Aberto (A Receber e Vencido)
-      const vencimentoBase = ajustarDataLocal(item.dataVencimento);
-      vencimentoBase.setHours(0, 0, 0, 0);
-
-      // Só conta como dívida se não foi pago no período E o status ainda acusa pendência/vencido.
-      if (!pagouNoPeriodo && item.status !== "Pago") {
-        // Se a data cai na janela filtrada, é A Receber
+      // Só entra aqui se o VENCIMENTO DESTE MÊS não foi pago
+      // 2. Processa os Valores Em Aberto (A Receber e Vencido)
+      if (!vencimentoAtualPago && item.status !== "Pago") {
+        // Se a data cai dentro da janela filtrada (ex: mês atual), soma APENAS no A Receber
         if (vencimentoBase >= inicio && vencimentoBase <= fim) {
           financeiroAReceber += valorFin;
           servicoAReceber += valorServ;
         }
-
-        // Se a data já passou de hoje, é Vencido
-        if (vencimentoBase < hoje) {
+        // Se a data for ANTERIOR ao início do filtro (ex: meses passados), é Vencido
+        else if (vencimentoBase < inicio) {
           financeiroVencido += valorFin;
           servicoVencido += valorServ;
         }
@@ -718,6 +730,14 @@ export default function FinanceiroPage() {
               clientesDisponiveisFormulario={clientesDisponiveisFormulario}
               servicos={servicos}
             />
+            <Button
+              onClick={sincronizarStatusFinanceiros}
+              title="Sincronizar e atualizar status no banco de dados"
+              variant="outline" // Opcional: deixa o botão com estilo secundário
+              size="icon" // Opcional: se usar shadcn, isso deixa o botão quadrado
+            >
+              <RefreshCw className="h-4 w-4" />
+            </Button>
           </div>
         </div>
 
@@ -826,7 +846,7 @@ export default function FinanceiroPage() {
           <div className="rounded-lg bg-destructive p-4 text-destructive-foreground">
             <div className="text-lg font-semibold mb-1">
               Vencidos: R${" "}
-              {totaisCalculados.servico.recebido.toLocaleString("pt-BR", {
+              {totaisCalculados.total.vencido.toLocaleString("pt-BR", {
                 minimumFractionDigits: 2,
               })}
             </div>
