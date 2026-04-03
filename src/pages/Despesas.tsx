@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Layout } from "@/components/Layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -110,12 +110,19 @@ export default function DespesasPage() {
     campo: "descricao" | "data" | "valor" | "status";
     direcao: "asc" | "desc";
   }>({ campo: "data", direcao: "desc" });
+  const [agora, setAgora] = useState(() => new Date());
 
   // Hooks customizados
   const { toast } = useToast();
   const { despesas, createDespesa, updateDespesa, deleteDespesa } = useDespesas();
   const { clientes } = useClientes();
   const { showConfirmation, ConfirmationDialogComponent } = useConfirmationDialog();
+
+  useEffect(() => {
+    // Mantem status sincronizado com virada de dia/mes mesmo sem interacao do usuario.
+    const interval = setInterval(() => setAgora(new Date()), 60 * 1000);
+    return () => clearInterval(interval);
+  }, []);
 
   // Função auxiliar para determinar o status real da despesa baseado no histórico
   const obterStatusDespesa = (
@@ -124,27 +131,36 @@ export default function DespesasPage() {
 
     const historico = despesa.historicoPagamentos || [];
 
-    const dataAtual = new Date();
-    const mesAtual = dataAtual.getMonth();
-    const anoAtual = dataAtual.getFullYear();
+    const ultimoPagamento = [...historico]
+      .filter((p) => p.dataVencimento)
+      .sort((a, b) => {
+        const dataA = new Date((a.dataVencimento || "") + "T00:00:00").getTime();
+        const dataB = new Date((b.dataVencimento || "") + "T00:00:00").getTime();
+        return dataB - dataA;
+      })[0];
 
-    const pagamentoNoMes = historico.some((p) => {
-      if (!p.dataVencimento) return false;
-      const dataHist = new Date(p.dataVencimento + "T00:00:00");
+    const hoje = new Date(agora);
+    hoje.setHours(0, 0, 0, 0);
 
-      return (
-        dataHist.getMonth() === mesAtual &&
-        dataHist.getFullYear() === anoAtual
-      );
-    });
+    const ultimoVencimento = ultimoPagamento?.dataVencimento
+      ? new Date(ultimoPagamento.dataVencimento + "T00:00:00")
+      : null;
 
-    if (pagamentoNoMes || despesa.pago) {
+    const mesmoMesDoUltimoVencimento =
+      !!ultimoVencimento &&
+      ultimoVencimento.getMonth() === hoje.getMonth() &&
+      ultimoVencimento.getFullYear() === hoje.getFullYear();
+
+    // Mantem como pago enquanto estivermos no mesmo mes da ultima competencia paga.
+    if (mesmoMesDoUltimoVencimento) {
       return "pago";
     }
 
-    const hoje = new Date();
-    hoje.setHours(0, 0, 0, 0);
-    
+    // Fallback para despesas nao fixas antigas (sem historico), que devem continuar pagas.
+    if (!despesa.fixo && despesa.pago) {
+      return "pago";
+    }
+
     // Verifica a data da despesa
     const despesaData = new Date(despesa.data + "T00:00:00");
     despesaData.setHours(0, 0, 0, 0);
@@ -185,7 +201,7 @@ export default function DespesasPage() {
 
       return matchesDataInicio && matchesDataFim && matchesStatus;
     });
-  }, [despesas, filtroDataInicio, filtroDataFim, filtroStatus]);
+  }, [despesas, filtroDataInicio, filtroDataFim, filtroStatus, agora]);
 
   const despesasOrdenadas = useMemo(() => {
     const items = [...despesasFiltradas];
