@@ -32,6 +32,7 @@ export function useClientes() {
       return id;
     } catch (err) {
       setError(err instanceof Error ? err : new Error("Erro ao criar cliente"));
+      console.error("Erro ao criar cliente:", err);
       throw err;
     }
   };
@@ -42,6 +43,7 @@ export function useClientes() {
       await loadClientes();
     } catch (err) {
       setError(err instanceof Error ? err : new Error("Erro ao atualizar cliente"));
+      console.error("Erro ao atualizar cliente:", err);
       throw err;
     }
   };
@@ -52,6 +54,7 @@ export function useClientes() {
       await loadClientes();
     } catch (err) {
       setError(err instanceof Error ? err : new Error("Erro ao deletar cliente"));
+      console.error("Erro ao deletar cliente:", err);
       throw err;
     }
   };

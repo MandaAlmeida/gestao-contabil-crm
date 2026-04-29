@@ -59,9 +59,6 @@ service cloud.firestore {
                       request.resource.data.responsavel is string &&
                       request.resource.data.observacoes is string &&
                       request.resource.data.nome.size() > 0 &&
-                      request.resource.data.cnpj.size() > 0 &&
-                      request.resource.data.cidade.size() > 0 &&
-                      request.resource.data.contato.size() > 0 &&
                       request.resource.data.responsavel.size() > 0 &&
                       (!('isFiscal' in request.resource.data) || request.resource.data.isFiscal is bool) &&
                       (!('isGerencial' in request.resource.data) || request.resource.data.isGerencial is bool);
@@ -77,9 +74,6 @@ service cloud.firestore {
                       request.resource.data.responsavel is string &&
                       request.resource.data.observacoes is string &&
                       request.resource.data.nome.size() > 0 &&
-                      request.resource.data.cnpj.size() > 0 &&
-                      request.resource.data.cidade.size() > 0 &&
-                      request.resource.data.contato.size() > 0 &&
                       request.resource.data.responsavel.size() > 0 &&
                       (!('isFiscal' in request.resource.data) || request.resource.data.isFiscal is bool) &&
                       (!('isGerencial' in request.resource.data) || request.resource.data.isGerencial is bool);

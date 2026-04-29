@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import * as financeiroService from "@/lib/firestore/financeiro";
+import * as servicoService from "@/lib/firestore/servicos";
 import { excluirNotificacoesItem } from "@/utils/notificacoes";
 import { normalizarFinanceiros } from "@/lib/financeiro";
 import type { Financeiro } from "@/types/crm";
@@ -62,6 +63,13 @@ export function useFinanceiro() {
       try {
         const id = await financeiroService.createFinanceiro(financeiro);
 
+        // Mantém o vencimento do serviço sempre igual ao financeiro quando houver vínculo.
+        if (financeiro.servicoId && financeiro.dataVencimento) {
+          await servicoService.updateServico(financeiro.servicoId, {
+            dataVencimento: financeiro.dataVencimento,
+          });
+        }
+
         await loadFinanceiros();
 
         return id;
@@ -82,11 +90,20 @@ export function useFinanceiro() {
       updates: Partial<Omit<Financeiro, "id" | "createdAt">>
     ) => {
       try {
+        const financeiroAtual = financeirosRaw.find((f) => f.id === id);
+
         if (updates.status === "Pago") {
           await excluirNotificacoesItem(id, "pagamento");
         }
 
         await financeiroService.updateFinanceiro(id, updates);
+
+        const servicoVinculadoId = updates.servicoId ?? financeiroAtual?.servicoId;
+        if (servicoVinculadoId && updates.dataVencimento) {
+          await servicoService.updateServico(servicoVinculadoId, {
+            dataVencimento: updates.dataVencimento,
+          });
+        }
 
         await loadFinanceiros();
       } catch (err) {
@@ -94,7 +111,7 @@ export function useFinanceiro() {
         throw err;
       }
     },
-    [loadFinanceiros]
+    [financeirosRaw, loadFinanceiros]
   );
 
   // =============================

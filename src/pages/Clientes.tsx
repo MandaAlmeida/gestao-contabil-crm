@@ -83,6 +83,9 @@ export default function Clientes() {
   const { toast } = useToast();
   const [isMigrating, setIsMigrating] = useState(false);
 
+  const getErrorMessage = (error: unknown): string =>
+    error instanceof Error ? error.message : "Erro desconhecido ao salvar cliente.";
+
   const handleMigrarParaFiscal = async () => {
     showConfirmation(
       "Migração em Lote",
@@ -257,22 +260,51 @@ export default function Clientes() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    const nome = formData.nome.trim();
+    const cnpj = formData.cnpj.trim();
+    const cidade = formData.cidade.trim();
+    const contato = formData.contato.trim();
+    const responsavel = formData.responsavel.trim();
+    const contabilidade = formData.contabilidade.trim();
+    const observacoes = formData.observacoes.trim();
+
+    if (!nome || !responsavel) {
+      toast({
+        title: "Campos obrigatórios não preenchidos",
+        description: "Preencha Nome e Responsável.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const payload = {
+      nome,
+      cnpj,
+      cidade,
+      contato,
+      contabilidade,
+      responsavel,
+      observacoes,
+      isFiscal: formData.isFiscal,
+      isGerencial: formData.isGerencial,
+      ativo: true,
+    };
+
     try {
       if (editingCliente) {
-        await updateCliente(editingCliente.id, formData);
+        await updateCliente(editingCliente.id, payload);
         toast({ title: "Cliente atualizado com sucesso!" });
       } else {
-        await createCliente({
-          ...formData,
-          ativo: true,
-        });
+        await createCliente(payload);
         toast({ title: "Cliente adicionado com sucesso!" });
       }
       resetForm();
       setIsDialogOpen(false);
     } catch (error) {
+      console.error("Erro ao salvar cliente:", error);
       toast({
         title: "Erro ao salvar cliente",
+        description: getErrorMessage(error),
         variant: "destructive",
       });
     }
@@ -579,7 +611,6 @@ const handleDelete = async (id: string) => {
                         id="cnpj"
                         value={formData.cnpj}
                         onChange={(e) => setFormData({ ...formData, cnpj: e.target.value })}
-                        required
                       />
                     </div>
                   </div>
@@ -590,7 +621,6 @@ const handleDelete = async (id: string) => {
                         id="cidade"
                         value={formData.cidade}
                         onChange={(e) => setFormData({ ...formData, cidade: e.target.value })}
-                        required
                       />
                     </div>
                     <div className="space-y-2">
