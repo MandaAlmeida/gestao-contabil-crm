@@ -155,34 +155,17 @@ export default function SintegraPage() {
 
   const indiceMes = (data: Date) => data.getFullYear() * 12 + data.getMonth();
 
-  const periodoContemMes = (datas?: string, dataReferencia?: string) => {
+  // Não limpa quando o início do período cadastrado é de um mês futuro
+  // em relação ao prazo do Sintegra concluído (nota ainda não é devida).
+  const periodoEhMesFuturo = (datas?: string, dataReferencia?: string) => {
     const ref = parseDataLocal(dataReferencia);
     if (!datas || !ref) return false;
 
-    const [inicioStr, fimStr] = datas.split("|");
+    const [inicioStr] = datas.split("|");
     const inicio = parseDataLocal(inicioStr);
     if (!inicio) return false;
 
-    if (!fimStr) {
-      return (
-        inicio.getMonth() === ref.getMonth() &&
-        inicio.getFullYear() === ref.getFullYear()
-      );
-    }
-
-    const fim = parseDataLocal(fimStr);
-    if (!fim) {
-      return (
-        inicio.getMonth() === ref.getMonth() &&
-        inicio.getFullYear() === ref.getFullYear()
-      );
-    }
-
-    const inicioMes = Math.min(indiceMes(inicio), indiceMes(fim));
-    const fimMes = Math.max(indiceMes(inicio), indiceMes(fim));
-    const refMes = indiceMes(ref);
-
-    return refMes >= inicioMes && refMes <= fimMes;
+    return indiceMes(inicio) > indiceMes(ref);
   };
 
   const limparNotasFiscaisDoMesNoServico = async (item: Sintegra) => {
@@ -191,10 +174,10 @@ export default function SintegraPage() {
 
     const limparNfe =
       !!servicoCliente.nfe &&
-      periodoContemMes(servicoCliente.nfeDatas, item.dataPrazo);
+      !periodoEhMesFuturo(servicoCliente.nfeDatas, item.dataPrazo);
     const limparNfce =
       !!servicoCliente.nfce &&
-      periodoContemMes(servicoCliente.nfceDatas, item.dataPrazo);
+      !periodoEhMesFuturo(servicoCliente.nfceDatas, item.dataPrazo);
 
     if (!limparNfe && !limparNfce) return false;
 
