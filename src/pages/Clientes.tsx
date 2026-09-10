@@ -29,7 +29,7 @@ import {
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox"; // <-- NOVO: Import do Checkbox
 import { useToast } from "@/hooks/use-toast";
-import { formatarTelefone } from "@/lib/utils";
+import { formatarTelefone, matchesClienteSearch } from "@/lib/utils";
 import { usePagination } from "@/hooks/usePagination";
 import {
   Pagination,
@@ -355,9 +355,7 @@ const handleDelete = async (id: string) => {
 
   const filteredClientes = useMemo(() => {
     return clientes.filter((cliente) => {
-      const matchesSearch =
-        cliente.nome?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (cliente.cnpj && cliente.cnpj.includes(searchTerm));
+      const matchesSearch = matchesClienteSearch(cliente.nome, cliente.cnpj, searchTerm);
 
       const matchesResponsavel =
         searchResponsavel === "todos" ||

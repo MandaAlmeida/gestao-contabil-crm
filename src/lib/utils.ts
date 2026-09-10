@@ -75,3 +75,28 @@ export function formatarTelefone(telefone: string): string {
 
   return telefone;
 }
+
+/**
+ * Verifica se um nome ou CNPJ correspondem a um termo de busca.
+ * O CNPJ é comparado ignorando pontuação (pontos, barra, hífen),
+ * então buscar só números encontra CNPJs salvos com ou sem máscara.
+ */
+export function matchesClienteSearch(
+  nome: string | undefined | null,
+  cnpj: string | undefined | null,
+  termo: string
+): boolean {
+  const termoLimpo = termo.trim().toLowerCase();
+  if (!termoLimpo) return true;
+
+  const nomeCorresponde = (nome ?? "").toLowerCase().includes(termoLimpo);
+  if (nomeCorresponde) return true;
+
+  const cnpjSoDigitos = (cnpj ?? "").replace(/\D/g, "");
+  const termoSoDigitos = termo.replace(/\D/g, "");
+  if (termoSoDigitos) {
+    return cnpjSoDigitos.includes(termoSoDigitos);
+  }
+
+  return (cnpj ?? "").toLowerCase().includes(termoLimpo);
+}

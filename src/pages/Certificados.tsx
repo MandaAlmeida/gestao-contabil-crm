@@ -34,7 +34,7 @@ import {
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { normalizarCertificados } from "@/lib/certificados";
-import { formatarDataBR } from "@/lib/utils";
+import { formatarDataBR, matchesClienteSearch } from "@/lib/utils";
 import { usePagination } from "@/hooks/usePagination";
 import { PaginationControls } from "@/components/PaginationControls";
 import { StatusSelect } from "@/components/StatusSelect";
@@ -325,10 +325,7 @@ export default function Certificados() {
 
     return certificadosNormalizados.filter((item) => {
       const cliente = clientesMap.get(item.clienteId);
-      const termo = searchTerm.toLowerCase();
-      const matchesSearch =
-        (item.clienteNome?.toLowerCase() || "").includes(termo) ||
-        (item.clienteCNPJ || "").includes(searchTerm);
+      const matchesSearch = matchesClienteSearch(item.clienteNome, item.clienteCNPJ, searchTerm);
       const matchesResponsavel =
         searchResponsavel === "todos" ||
         (cliente && cliente.responsavel === searchResponsavel);

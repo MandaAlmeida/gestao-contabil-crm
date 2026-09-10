@@ -28,7 +28,7 @@ import { NotificationButton } from "@/components/NotificationButton";
 import { NotificationPanel } from "@/components/NotificationPanel";
 import { usePagination } from "@/hooks/usePagination";
 import { PaginationControls } from "@/components/PaginationControls";
-import { formatarDataBR } from "@/lib/utils";
+import { formatarDataBR, matchesClienteSearch } from "@/lib/utils";
 import { StatusSelect } from "@/components/StatusSelect";
 import { FiltersBar } from "@/components/FiltersBar";
 import { useConfirmationDialog } from "@/components/ConfirmationDialog";
@@ -97,11 +97,7 @@ export default function RenovacoesPage() {
     return renovacoes.filter((item) => {
       const cliente = clientesMap.get(item.clienteId);
 
-      const nome = item.clienteNome?.toLowerCase() || "";
-      const cnpj = item.clienteCNPJ || "";
-      const termo = searchTerm.toLowerCase();
-
-      const matchesSearch = nome.includes(termo) || cnpj.includes(searchTerm);
+      const matchesSearch = matchesClienteSearch(item.clienteNome, item.clienteCNPJ, searchTerm);
 
       const matchesResponsavel =
         searchResponsavel === "todos" ||

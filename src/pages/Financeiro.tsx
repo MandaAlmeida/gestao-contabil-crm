@@ -13,7 +13,7 @@ import {
   calcularStatusFinanceiro,
   sincronizarStatusFinanceiros,
 } from "@/lib/financeiro";
-import { formatarDataBR } from "@/lib/utils";
+import { formatarDataBR, matchesClienteSearch } from "@/lib/utils";
 import { StatusButton, type StatusMeta } from "@/components/StatusButton";
 import { ExportButtons } from "@/components/ExportButtons";
 import { CheckCircle, Clock3, AlertTriangle } from "lucide-react";
@@ -455,9 +455,7 @@ export default function FinanceiroPage() {
   const filteredItems = useMemo(() => {
     return financeirosRaw.filter((item) => {
       const cliente = clientes.find((c) => c.id === item.clienteId);
-      const matchesSearch =
-        item.clienteNome?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        item.clienteCNPJ?.includes(searchTerm);
+      const matchesSearch = matchesClienteSearch(item.clienteNome, item.clienteCNPJ, searchTerm);
       const matchesResponsavel =
         searchResponsavel === "todos" ||
         (cliente && cliente.responsavel === searchResponsavel);

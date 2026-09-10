@@ -101,6 +101,7 @@ export default function DespesasPage() {
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [historicoDialogOpen, setHistoricoDialogOpen] = useState(false);
   const [selectedItemHistorico, setSelectedItemHistorico] = useState<Despesa | null>(null);
+  const [searchTerm, setSearchTerm] = useState("");
   const [filtroDataInicio, setFiltroDataInicio] = useState("");
   const [filtroDataFim, setFiltroDataFim] = useState("");
   const [filtroStatus, setFiltroStatus] = useState<
@@ -179,14 +180,23 @@ export default function DespesasPage() {
   );
 
   const despesasFiltradas = useMemo(() => {
+    const termo = searchTerm.trim().toLowerCase();
+
     return despesas.filter((despesa) => {
+      // Filtro por busca (descrição, contabilidade ou recebedor)
+      const matchesSearch =
+        !termo ||
+        despesa.descricao?.toLowerCase().includes(termo) ||
+        despesa.contabilidade?.toLowerCase().includes(termo) ||
+        despesa.recebedor?.toLowerCase().includes(termo);
+
       // Filtro por data
       const despesaData = new Date(despesa.data + "T00:00:00");
       despesaData.setHours(0,0,0,0);
-      
+
       const matchesDataInicio =
         !filtroDataInicio || despesaData >= new Date(filtroDataInicio + "T00:00:00");
-      
+
       const dataFimLimit = filtroDataFim ? new Date(filtroDataFim + "T23:59:59") : null;
       const matchesDataFim =
         !dataFimLimit || despesaData <= dataFimLimit;
@@ -199,9 +209,9 @@ export default function DespesasPage() {
         filtroStatus === "todos" ||
         filtroStatus === status;
 
-      return matchesDataInicio && matchesDataFim && matchesStatus;
+      return matchesSearch && matchesDataInicio && matchesDataFim && matchesStatus;
     });
-  }, [despesas, filtroDataInicio, filtroDataFim, filtroStatus, agora]);
+  }, [despesas, searchTerm, filtroDataInicio, filtroDataFim, filtroStatus, agora]);
 
   const despesasOrdenadas = useMemo(() => {
     const items = [...despesasFiltradas];
@@ -840,6 +850,21 @@ export default function DespesasPage() {
           <div className="flex gap-4 p-4 border-b border-border flex-wrap">
             <div className="space-y-1">
               <Label
+                htmlFor="filtro-busca"
+                className="text-xs text-muted-foreground"
+              >
+                Buscar
+              </Label>
+              <Input
+                id="filtro-busca"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Descrição, contabilidade ou recebedor..."
+                className="w-64"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label
                 htmlFor="filtro-data-inicio"
                 className="text-xs text-muted-foreground"
               >
@@ -953,7 +978,8 @@ export default function DespesasPage() {
                 </Select>
               </div>
             )}
-            {(filtroDataInicio ||
+            {(searchTerm ||
+              filtroDataInicio ||
               filtroDataFim ||
               filtroStatus !== "todos") && (
               <div className="flex items-end pb-1">
@@ -961,6 +987,7 @@ export default function DespesasPage() {
                   variant="outline"
                   size="sm"
                   onClick={() => {
+                    setSearchTerm("");
                     setFiltroDataInicio("");
                     setFiltroDataFim("");
                     setFiltroStatus("todos");

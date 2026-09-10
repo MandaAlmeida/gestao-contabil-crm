@@ -38,7 +38,7 @@ import { NotificationButton } from "@/components/NotificationButton";
 import { NotificationPanel } from "@/components/NotificationPanel";
 import { usePagination } from "@/hooks/usePagination";
 import { PaginationControls } from "@/components/PaginationControls";
-import { cn, formatarDataBR } from "@/lib/utils";
+import { cn, formatarDataBR, matchesClienteSearch } from "@/lib/utils";
 import { FiltersBar } from "@/components/FiltersBar";
 import { HistoricoAtividadesDialog } from "@/components/HistoricoAtividadesDialog";
 import { calcularStatusSintegra } from "@/lib/sintegra";
@@ -491,10 +491,12 @@ export default function SintegraPage() {
     return sintegras.filter((item) => {
       const cliente = clientes.find((c) => c.id === item.clienteId);
 
-      // 🔎 Busca por nome
-      const matchesSearch = item.clienteNome
-        ?.toLowerCase()
-        .includes(searchTerm.toLowerCase());
+      // 🔎 Busca por nome ou CNPJ
+      const matchesSearch = matchesClienteSearch(
+        item.clienteNome,
+        cliente?.cnpj,
+        searchTerm
+      );
 
       // 👤 Responsável
       const matchesResponsavel =
@@ -726,7 +728,7 @@ export default function SintegraPage() {
         <FiltersBar
           searchTerm={searchTerm}
           onSearchTermChange={setSearchTerm}
-          searchPlaceholder="Buscar por cliente..."
+          searchPlaceholder="Buscar por nome ou CNPJ..."
           responsavelOptions={responsaveisDisponiveis}
           responsavelValue={searchResponsavel}
           onResponsavelChange={setSearchResponsavel}

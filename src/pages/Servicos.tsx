@@ -33,7 +33,7 @@ import { useToast } from "@/hooks/use-toast";
 import { NotificationButton } from "@/components/NotificationButton";
 import { NotificationPanel } from "@/components/NotificationPanel";
 import { useServicos } from "@/hooks/useServicos";
-import { formatarDataBR } from "@/lib/utils";
+import { formatarDataBR, matchesClienteSearch } from "@/lib/utils";
 import { usePagination } from "@/hooks/usePagination";
 import {
   Pagination,
@@ -408,11 +408,7 @@ export default function ServicosPage() {
     };
 
     return servicosNormalizados.filter((item) => {
-      const nome = item.clienteNome?.toLowerCase() || "";
-      const cnpj = item.clienteCNPJ || "";
-      const termo = searchTerm.toLowerCase();
-
-      const matchesSearch = nome.includes(termo) || cnpj.includes(searchTerm);
+      const matchesSearch = matchesClienteSearch(item.clienteNome, item.clienteCNPJ, searchTerm);
       const matchesResponsavel =
         searchResponsavel === "todos" || item.responsavel === searchResponsavel;
 
