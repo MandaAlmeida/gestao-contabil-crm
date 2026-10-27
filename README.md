@@ -10,6 +10,10 @@ Sistema web (CRM/ERP) para escritórios de contabilidade e prestadores de servi�
 </p>
 
 <p align="center">
+  <a href="https://gestao-contabil-crm.vercel.app/"><strong>🌐 Ver site publicado</strong></a>
+</p>
+
+<p align="center">
   <a href="#-demonstração">Demonstração</a> •
   <a href="#-funcionalidades">Funcionalidades</a> •
   <a href="#-telas">Telas</a> •
@@ -22,7 +26,7 @@ Sistema web (CRM/ERP) para escritórios de contabilidade e prestadores de servi�
 
 ## 🌐 Demonstração
 
-🔗 **Acesse:** _[coloque aqui o link do site publicado]_
+🔗 **Acesse:** [gestao-contabil-crm.vercel.app](https://gestao-contabil-crm.vercel.app/)
 
 - Não precisa criar conta nem fazer login.
 - Na primeira visita, o sistema carrega **2 registros de exemplo em cada módulo**.
@@ -343,10 +347,8 @@ Funciona em qualquer hospedagem de sites estáticos, como **Vercel**, **Netlify*
 
 **Amanda Almeida**
 
-<!-- Troque pelos seus links -->
-- 💼 LinkedIn: _[seu-linkedin]_
-- 🐙 GitHub: _[seu-github]_
-- 📧 E-mail: _[seu-email]_
+- 💼 LinkedIn: [amanda-almeida-bab4541ab](https://www.linkedin.com/in/amanda-almeida-bab4541ab/)
+- 📧 E-mail: [almeidafonseca14@gmail.com](mailto:almeidafonseca14@gmail.com)
 
 ---
 
