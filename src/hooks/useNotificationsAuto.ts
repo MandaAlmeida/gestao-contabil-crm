@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { collection, doc, getDocs, setDoc, deleteDoc } from "firebase/firestore";
+import { collection, doc, getDocs, setDoc, deleteDoc } from "@/lib/localDb";
 import { db } from "@/lib/firebase";
 import { PersistentNotification } from "@/types/notifications";
 import { NotificationType } from "@/components/NotificationPanel";

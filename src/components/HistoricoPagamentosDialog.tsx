@@ -33,7 +33,8 @@ export function HistoricoPagamentosDialog<T extends Financeiro | Sintegra | Desp
   const [novaData, setNovaData] = useState("");
   const [novoMeio, setNovoMeio] = useState<"Pix" | "Boleto">("Pix");
   
-  const clienteNome = item?.id || "";
+  const clienteNome =
+    (item as any)?.clienteNome || (item as any)?.descricao || item?.id || "";
   // Verifica se é Financeiro, Servico, Despesa, Renovacao ou Sintegra para pegar o histórico correto
   const historico = ('historicoPagamentos' in (item || {})) 
     ? (item as any)?.historicoPagamentos || [] 
@@ -42,13 +43,9 @@ export function HistoricoPagamentosDialog<T extends Financeiro | Sintegra | Desp
   const pagamentosEmDia = historico.filter(p => p.emDia).length;
   const pagamentosAtrasados = historico.filter(p => !p.emDia).length;
   
-  // Encontra o pagamento mais recente (baseado na data de vencimento)
-  const pagamentoMaisRecente = historico.length > 0 
-    ? historico.reduce((ultimo, atual) => {
-        const dataUltimo = new Date(ultimo.dataVencimento);
-        const dataAtual = new Date(atual.dataVencimento);
-        return dataAtual > dataUltimo ? atual : ultimo;
-      })
+  // O pagamento mais recente é o último adicionado ao histórico
+  const pagamentoMaisRecente = historico.length > 0
+    ? historico[historico.length - 1]
     : null;
 
   const handleEditar = (pag: HistoricoPagamento) => {

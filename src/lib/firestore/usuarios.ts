@@ -10,7 +10,7 @@ import {
   orderBy,
   where,
   type Firestore,
-} from "firebase/firestore";
+} from "@/lib/localDb";
 import { db } from "../firebase";
 import type { Usuario } from "@/types/usuario";
 

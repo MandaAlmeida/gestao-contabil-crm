@@ -1,5 +1,4 @@
 import { ReactNode, useState, useEffect, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
 import { useConfirmationDialog } from "@/components/ConfirmationDialog";
 import { NavLink } from "./NavLink";
 import {
@@ -14,7 +13,6 @@ import {
   ChevronLeft,
   Settings,
   HelpCircle,
-  LogOut,
   Sun,
   Moon,
   Wrench,
@@ -27,8 +25,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { useTheme } from "next-themes";
 import { ThemeToggle } from "./ThemeToggle";
-import { useAuth } from "@/contexts/AuthContext";
-import { useToast } from "@/hooks/use-toast";
 import { useTarefasVencendo } from "@/hooks/useTask";
 import { useCertificados } from "@/hooks/useCertificados";
 import { differenceInDays, isBefore, parseISO, startOfDay } from "date-fns";
@@ -47,40 +43,12 @@ export function Layout({ children }: LayoutProps) {
   const { tarefasAlertar, tarefasVencida } = useTarefasVencendo();
   const { certificados } = useCertificados();
 
-  const { logout } = useAuth();
-  const navigate = useNavigate();
-  const { toast } = useToast();
-  const { showConfirmation, ConfirmationDialogComponent } = useConfirmationDialog();
+  const { ConfirmationDialogComponent } = useConfirmationDialog();
 
 
   useEffect(() => {
     localStorage.setItem("sidebar-collapsed", JSON.stringify(collapsed));
   }, [collapsed]);
-
-
-  const handleLogout = async () => {
-    showConfirmation(
-      "Sair do Sistema",
-      "Tem certeza que deseja sair da sua conta?",
-      async () => {
-        try {
-          await logout();
-          toast({ title: "Logout realizado com sucesso!" });
-          navigate("/login");
-        } catch (error) {
-          toast({
-            title: "Erro ao fazer logout",
-            variant: "destructive",
-          });
-        }
-      },
-      {
-        confirmText: "Sair",
-        cancelText: "Cancelar",
-        variant: "warning"
-      }
-    );
-  };
 
 const alertasCertificados = useMemo(() => {
     if (!certificados) return { amarelo: 0, vermelho: 0 };
@@ -294,16 +262,7 @@ const alertasCertificados = useMemo(() => {
           {/* Footer Navigation */}
           <div className="border-t border-border p-4 space-y-1">
             <ThemeToggle collapsed={collapsed} />
-            <Button
-              variant="ghost"
-              onClick={handleLogout}
-              className={`flex items-center gap-3 rounded-lg px-3 py-2 text-destructive transition-colors hover:bg-destructive/10 hover:text-destructive w-full ${
-                collapsed ? "justify-center" : "justify-start"
-              }`}
-            >
-              <LogOut className="h-5 w-5 flex-shrink-0" />
-              {!collapsed && <span>Sair</span>}
-            </Button>
+            {/* Ambiente de teste: sem login, então não há botão de sair */}
           </div>
         </div>
       </aside>

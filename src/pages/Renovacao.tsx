@@ -511,11 +511,8 @@ const handleToggleRenovacao = async (item: Renovacao, acao: "concluir" | "desfaz
 
   try {
     if (acao === "desfazer") {
-      const historicoAtualizado = [...historico];
-      if (historicoAtualizado.length > 0) {
-        historicoAtualizado.sort((a, b) => new Date(b.dataVencimento).getTime() - new Date(a.dataVencimento).getTime());
-        historicoAtualizado.shift(); 
-      }
+      // Remove apenas o último pagamento adicionado
+      const historicoAtualizado = historico.slice(0, -1);
 
       const novoVencimento = removerAno(item.dataRenovacao);
       
@@ -561,12 +558,11 @@ const handleToggleRenovacao = async (item: Renovacao, acao: "concluir" | "desfaz
 };
 
 const handleDeleteHistorico = async (renovacaoItem: Renovacao, historicoId: string) => {
-  const pagamentoMaisRecente = (renovacaoItem.historicoPagamentos || []).reduce((ultimo, atual) => {
-      const dataUltimo = new Date(ultimo.dataVencimento); const dataAtual = new Date(atual.dataVencimento);
-      return dataAtual > dataUltimo ? atual : ultimo;
-    });
+  // O pagamento mais recente é o último adicionado ao histórico
+  const historicoAtual = renovacaoItem.historicoPagamentos || [];
+  const pagamentoMaisRecente = historicoAtual[historicoAtual.length - 1];
 
-  if (historicoId !== pagamentoMaisRecente.id) {
+  if (historicoId !== pagamentoMaisRecente?.id) {
       toast({ title: "Não é possível apagar este pagamento", description: "Você deve apagar os pagamentos mais recentes primeiro.", variant: "destructive" });
       return;
   }

@@ -24,6 +24,7 @@ import { NotificationProvider } from "@/contexts/NotificationContext";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { PublicRoute } from "@/components/PublicRoute";
+import { AmbienteTesteBanner } from "@/components/AmbienteTesteBanner";
 import Registro from "./pages/Registro";
 import { useAutomaticNotifications } from "./hooks/useNotificationsAuto";
 import { useCertificados } from "./hooks/useCertificados";
@@ -58,6 +59,7 @@ function AppContent() {
 
 
   return (    <BrowserRouter>
+      <AmbienteTesteBanner />
       <Routes>
         {/* Rotas públicas */}
         <Route

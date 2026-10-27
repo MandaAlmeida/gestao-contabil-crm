@@ -2,7 +2,7 @@
 import { NotificationView, PersistentNotification } from "@/types/notifications";
 import { useEffect, useMemo, useState } from "react";
 import { NotificationType } from "@/components/NotificationPanel";
-import { collection, getDocs, query, where, orderBy, setDoc, doc } from "firebase/firestore";
+import { collection, getDocs, query, where, orderBy, setDoc, doc } from "@/lib/localDb";
 import { db } from "@/lib/firebase";
 
 export function useNotifications(

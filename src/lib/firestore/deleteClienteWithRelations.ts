@@ -1,4 +1,4 @@
-import { getDocs, getDoc, updateDoc, deleteDoc, doc, collection, query, where } from "firebase/firestore";
+import { getDocs, getDoc, updateDoc, deleteDoc, doc, collection, query, where } from "@/lib/localDb";
 import { db } from "../firebase";
 import { deleteCliente } from "./clientes";
 

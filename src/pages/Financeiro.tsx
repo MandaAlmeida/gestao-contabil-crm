@@ -159,24 +159,21 @@ export default function FinanceiroPage() {
 
     try {
       if (item.status === "Pago") {
-        const historicoAtualizado = historico.filter((p) => {
-          if (!p.dataVencimento) return true;
-          const dataHist = new Date(p.dataVencimento + "T00:00:00");
-          const dataItem = new Date();
-          const mesmoMes =
-            dataHist.getMonth() === dataItem.getMonth() &&
-            dataHist.getFullYear() === dataItem.getFullYear();
-          return !mesmoMes;
-        });
+        // Remove apenas o último pagamento adicionado
+        const ultimoPagamento = historico[historico.length - 1];
+        const historicoAtualizado = historico.slice(0, -1);
+
+        // Volta o vencimento para o do pagamento removido
+        const novoVencimento =
+          ultimoPagamento?.dataVencimento || removerMes(item.dataVencimento);
 
         const statusAjustado = calcularStatusFinanceiro({
           status: "Pendente",
           dataPagamento: null,
-          dataVencimento: item.dataVencimento,
+          dataVencimento: novoVencimento,
           historicoPagamentos: historicoAtualizado,
         });
 
-        const novoVencimento = removerMes(item.dataVencimento);
         await updateFinanceiro(item.id, {
           historicoPagamentos: historicoAtualizado,
           status: statusAjustado,
@@ -270,15 +267,11 @@ export default function FinanceiroPage() {
     financeiroItem: Financeiro,
     historicoId: string,
   ) => {
-    const pagamentoMaisRecente = (
-      financeiroItem.historicoPagamentos || []
-    ).reduce((ultimo, atual) => {
-      const dataUltimo = new Date(ultimo.dataVencimento);
-      const dataAtual = new Date(atual.dataVencimento);
-      return dataAtual > dataUltimo ? atual : ultimo;
-    });
+    // O pagamento mais recente é o último adicionado ao histórico
+    const historicoAtual = financeiroItem.historicoPagamentos || [];
+    const pagamentoMaisRecente = historicoAtual[historicoAtual.length - 1];
 
-    if (historicoId !== pagamentoMaisRecente.id) {
+    if (historicoId !== pagamentoMaisRecente?.id) {
       toast({
         title: "Não é possível apagar este pagamento",
         description: "Você deve apagar os pagamentos mais recentes primeiro.",

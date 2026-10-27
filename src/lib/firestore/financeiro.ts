@@ -8,7 +8,7 @@ import {
   query,
   orderBy,
   writeBatch,
-} from "firebase/firestore";
+} from "@/lib/localDb";
 import { db } from "../firebase";
 import type { Financeiro } from "@/types/crm";
 import { normalizarFinanceiros } from "../financeiro";

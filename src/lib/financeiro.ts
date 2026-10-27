@@ -1,5 +1,5 @@
 import { Financeiro } from "@/types/crm";
-import { doc, writeBatch } from "firebase/firestore";
+import { doc, writeBatch } from "@/lib/localDb";
 import { db } from "./firebase";
 import { COLLECTION_NAME, getFinanceiros } from "./firestore/financeiro";
 
@@ -98,15 +98,11 @@ export const normalizarFinanceiros = (lista: Financeiro[]) => {
     let statusFinal = statusCalculado;
 
     if (historicoPagamentos.length > 0) {
-      // Pega o pagamento mais recente
-      const ultimoPagamento = historicoPagamentos.reduce((ultimo, atual) => {
-        const dataUltimo = new Date(ultimo.dataVencimento);
-        const dataAtual = new Date(atual.dataVencimento);
-        return dataAtual > dataUltimo ? atual : ultimo;
-      });
+      // Pega o pagamento mais recente (o último adicionado ao histórico)
+      const ultimoPagamento = historicoPagamentos[historicoPagamentos.length - 1];
 
-      const dataPagamentoUltimo = startOfDay(
-        new Date(ultimoPagamento.dataVencimento),
+      const dataPagamentoUltimo = parseDate(
+        ultimoPagamento.dataPagamento || ultimoPagamento.dataVencimento,
       );
 
       // Se a data de PAGAMENTO do último pagamento foi no mês/ano atual, status = Pago
@@ -116,12 +112,11 @@ export const normalizarFinanceiros = (lista: Financeiro[]) => {
       } else {
         const vencimento = parseDate(item.dataVencimento);
         statusFinal = vencimento < hoje ? "Vencido" : "Pendente";
-        houveAlteracao = true;
       }
     }
 
     if (
-      statusCalculado !== item.status ||
+      statusFinal !== item.status ||
       dataPagamento !== item.dataPagamento ||
       historicoPagamentos !== item.historicoPagamentos
     ) {

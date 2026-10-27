@@ -40,7 +40,7 @@ import { SelectClienteComBusca } from "@/components/SelectClienteComBusca";
 import { useRenovacao } from "@/hooks/useRenovacao";
 import { toast } from "@/hooks/use-toast";
 import { addYears, subYears, parseISO } from "date-fns";
-import { Timestamp } from "firebase/firestore";
+import { Timestamp } from "@/lib/localDb";
 
 export default function Calendario() {
 // Dentro da função Calendario, logo após useClientes:

@@ -10,7 +10,7 @@ import {
   where,
   writeBatch,
   type Firestore,
-} from "firebase/firestore";
+} from "@/lib/localDb";
 import { db } from "../firebase";
 import type { Cliente } from "@/types/crm";
 

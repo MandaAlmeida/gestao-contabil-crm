@@ -8,7 +8,7 @@ import {
   query as firestoreQuery,
   where,
   Timestamp,
-} from "firebase/firestore";
+} from "@/lib/localDb";
 import { db } from "../firebase";
 
 export interface Anotacao {

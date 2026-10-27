@@ -7,7 +7,7 @@ import {
   updateDoc,
   query,
   orderBy,
-} from "firebase/firestore";
+} from "@/lib/localDb";
 import { db } from "../firebase";
 import type { Contabilidade } from "@/types/crm";
 

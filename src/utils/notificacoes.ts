@@ -19,14 +19,11 @@ import { NotificationType } from "@/components/NotificationPanel";
  */
 export async function excluirNotificacoesItem(itemId: string, itemType: NotificationType): Promise<void> {
   try {
-    const { collection, query, where, getDocs, deleteDoc, or } = await import("firebase/firestore");
+    const { collection, query, where, getDocs, deleteDoc } = await import("@/lib/localDb");
     const { db } = await import("@/lib/firebase");
-    const { getAuth } = await import("firebase/auth");
+    const { getUsuarioLocal } = await import("@/lib/localAuth");
 
-    const auth = getAuth();
-    const user = auth.currentUser;
-
-    if (!user) return;
+    const user = getUsuarioLocal();
 
     // Criamos os dois padrões possíveis para garantir que encontre
     const patternComPrefixo = `${itemType}-${itemId}`;

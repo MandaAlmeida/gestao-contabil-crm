@@ -10,7 +10,7 @@ import {
   where,
   orderBy,
   Timestamp,
-} from "firebase/firestore";
+} from "@/lib/localDb";
 import { db } from "@/lib/firebase";
 import { Tarefa } from "@/types/tarefas";
 import { useAuth } from "@/contexts/AuthContext";

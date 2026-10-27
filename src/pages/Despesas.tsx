@@ -132,28 +132,25 @@ export default function DespesasPage() {
 
     const historico = despesa.historicoPagamentos || [];
 
-    const ultimoPagamento = [...historico]
-      .filter((p) => p.dataVencimento)
-      .sort((a, b) => {
-        const dataA = new Date((a.dataVencimento || "") + "T00:00:00").getTime();
-        const dataB = new Date((b.dataVencimento || "") + "T00:00:00").getTime();
-        return dataB - dataA;
-      })[0];
+    // Último pagamento adicionado ao histórico
+    const ultimoPagamento = historico[historico.length - 1];
 
     const hoje = new Date(agora);
     hoje.setHours(0, 0, 0, 0);
 
-    const ultimoVencimento = ultimoPagamento?.dataVencimento
-      ? new Date(ultimoPagamento.dataVencimento + "T00:00:00")
+    const dataUltimoPagamento =
+      ultimoPagamento?.dataPagamento || ultimoPagamento?.dataVencimento;
+    const ultimaDataPaga = dataUltimoPagamento
+      ? new Date(dataUltimoPagamento + "T00:00:00")
       : null;
 
-    const mesmoMesDoUltimoVencimento =
-      !!ultimoVencimento &&
-      ultimoVencimento.getMonth() === hoje.getMonth() &&
-      ultimoVencimento.getFullYear() === hoje.getFullYear();
+    const pagoNoMesAtual =
+      !!ultimaDataPaga &&
+      ultimaDataPaga.getMonth() === hoje.getMonth() &&
+      ultimaDataPaga.getFullYear() === hoje.getFullYear();
 
-    // Mantem como pago enquanto estivermos no mesmo mes da ultima competencia paga.
-    if (mesmoMesDoUltimoVencimento) {
+    // Mantem como pago enquanto estivermos no mesmo mes em que o ultimo pagamento foi feito.
+    if (pagoNoMesAtual) {
       return "pago";
     }
 
@@ -447,7 +444,6 @@ export default function DespesasPage() {
     const hojeStr = hoje.toISOString().split("T")[0];
 
     const historico = despesa.historicoPagamentos || [];
-    const dataItem = new Date();
 
     try {
       const statusAtual = obterStatusDespesa(despesa);
@@ -456,20 +452,14 @@ export default function DespesasPage() {
       // DESFAZER PAGAMENTO
       // ==========================
       if (statusAtual === "pago") {
-        // REMOVE HISTÓRICO DO MÊS ATUAL
-        const historicoAtualizado = historico.filter((p) => {
-          const dataHist = new Date(p.dataVencimento + "T00:00:00");
-          const mesmoMes =
-            dataHist.getMonth() === dataItem.getMonth() &&
-            dataHist.getFullYear() === dataItem.getFullYear();
+        // REMOVE APENAS O ÚLTIMO PAGAMENTO ADICIONADO
+        const ultimoPagamento = historico[historico.length - 1];
+        const historicoAtualizado = historico.slice(0, -1);
 
-          return !mesmoMes;
-        });
-
-        // VOLTA DATA SE FOR FIXO
+        // VOLTA DATA SE FOR FIXO (para o vencimento do pagamento removido)
         let novaData = despesa.data;
         if (despesa.fixo) {
-          novaData = removerMes(despesa.data);
+          novaData = ultimoPagamento?.dataVencimento || removerMes(despesa.data);
         }
 
         await updateDespesa(despesa.id, {
@@ -539,13 +529,11 @@ export default function DespesasPage() {
   };
 
   const handleDeleteHistorico = async (despesaItem: Despesa, historicoId: string) => {
-    const pagamentoMaisRecente = (despesaItem.historicoPagamentos || []).reduce((ultimo, atual) => {
-      const dataUltimo = new Date(ultimo.dataVencimento);
-      const dataAtual = new Date(atual.dataVencimento);
-      return dataAtual > dataUltimo ? atual : ultimo;
-    });
+    // O pagamento mais recente é o último adicionado ao histórico
+    const historicoAtual = despesaItem.historicoPagamentos || [];
+    const pagamentoMaisRecente = historicoAtual[historicoAtual.length - 1];
 
-    if (historicoId !== pagamentoMaisRecente.id) {
+    if (historicoId !== pagamentoMaisRecente?.id) {
       toast({
         title: "Não é possível apagar este pagamento",
         description: "Você deve apagar os pagamentos mais recentes primeiro.",
